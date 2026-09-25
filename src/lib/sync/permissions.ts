@@ -103,6 +103,7 @@ function actionDenyReason(game: GameState, ops: Op[], own: string | null): strin
       if (x.characterId !== own) return "You can only plan tasks for your own character.";
       if (x.status !== "planned") return "Only the GM can resolve tasks.";
     }
+    if (a?.roll || b?.roll) return "That task has been rolled. The dice decide it now.";
   }
   return null;
 }

@@ -2,12 +2,12 @@ import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_
 import { TRAINING, trainingBand } from "@/data/training";
 import { fabricate, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { attributeValue, skillLevel } from "./derive";
-import { d, uid } from "./dice";
+import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
-import { changeStress, gainXp, rest } from "./mechanics";
+import { changePressure, changeStress, gainXp, rest } from "./mechanics";
 import { moveShip } from "./power";
 import { haveInStorage, spend, stockItem } from "./stock";
-import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
+import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { ActionStatus, Character, GameState, SegmentAction, SpaceTile, StarMap } from "./types";
 
@@ -392,6 +392,75 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     }
   }
   return out;
+}
+
+/** Dice for rolling a task: Attribute + Skill, Pressure dice, each assistant's skill (up to +4d6), and the unscanned-tile penalty. */
+export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts: string[] } {
+  const c = g.characters.find((x) => x.id === a.characterId);
+  const terms = taskTerms(g, a);
+  let dice = terms.dice;
+  const parts = [terms.poolLabel];
+  const pressure = c ? PRESSURE_STATES[c.pressure] : null;
+  if (pressure?.dice) {
+    dice += pressure.dice;
+    parts.push(`${pressure.name} ${pressure.dice}`);
+  }
+  for (const x of g.actions) {
+    if (x.assists !== a.id || x.status === "cancelled") continue;
+    const helper = g.characters.find((h) => h.id === x.characterId);
+    const level = helper && terms.skill ? Math.min(4, skillLevel(helper, terms.skill)) : 0;
+    if (level > 0) {
+      dice += level;
+      parts.push(`${helper!.name} assists ${level}`);
+    }
+  }
+  const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
+  if (a.task === "Plot Unsafe Course" && map && a.target && !map.tiles[cellKey(a.target.x, a.target.y)]) {
+    dice -= 3;
+    parts.push("unscanned −3");
+  }
+  return { dice: Math.max(0, dice), parts };
+}
+
+/** A Push rerolls failed dice once, and costs Energy an exhausted survivor doesn't have. */
+export function canPush(g: GameState, a: SegmentAction) {
+  const c = g.characters.find((x) => x.id === a.characterId);
+  return !!a.roll && !a.roll.pushed && a.roll.dice.some((v) => v !== 6) && !!c && c.energy > 0;
+}
+
+/** The result a task roll earns. Routine work can't fail on the dice. */
+export function rolledStatus(roll: NonNullable<SegmentAction["roll"]>, routine: boolean): "failed" | "success" | "strong" {
+  const n = sixes(roll.dice);
+  return n >= 2 ? "strong" : n === 1 || routine ? "success" : "failed";
+}
+
+const rollText = (dice: number[]) => {
+  const n = sixes(dice);
+  return `[${dice.join(", ")}] — ${n === 0 ? "failure" : n === 1 ? "success" : `${n} successes`}`;
+};
+
+export function rollTask(g: GameState, id: string): string[] {
+  const a = g.actions.find((x) => x.id === id);
+  const c = a && g.characters.find((x) => x.id === a.characterId);
+  if (!a || !c) return [];
+  const pool = taskPool(g, a);
+  a.roll = { dice: rollPool(pool.dice), pushed: false };
+  return [`${c.name} rolls for ${describe(g, a)} (${pool.dice}d6): ${rollText(a.roll.dice)}.`];
+}
+
+/** Push: −1 Energy and +1 Pressure, then reroll every die that isn't a 6, plus any new Pressure dice. */
+export function pushTask(g: GameState, id: string): string[] {
+  const a = g.actions.find((x) => x.id === id);
+  const c = a && g.characters.find((x) => x.id === a.characterId);
+  if (!a?.roll || !c || !canPush(g, a)) return [];
+  const out: string[] = [];
+  const before = PRESSURE_STATES[c.pressure].dice;
+  c.energy = Math.max(0, c.energy - 1);
+  changePressure(g, c, 1, out);
+  const kept = a.roll.dice.filter((v) => v === 6);
+  const extra = Math.max(0, PRESSURE_STATES[c.pressure].dice - before);
+  a.roll = { dice: [...kept, ...rollPool(a.roll.dice.length - kept.length + extra)], pushed: true };
+  return [`${c.name} Pushes (−1 Energy).`, ...out, `Reroll: ${rollText(a.roll.dice)}.`];
 }
 
 export function newAction(g: GameState, c: Character, task: string): SegmentAction {

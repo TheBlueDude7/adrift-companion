@@ -64,7 +64,7 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
   }
 
   function push() {
-    if (!result || result.pushed) return;
+    if (!result || result.pushed || character.energy <= 0) return;
     const before = character.pressure;
     const out: string[] = [];
     let newPressure = before;
@@ -222,11 +222,13 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
-                {!result.pushed && successes < result.dice.length && (
+                {!result.pushed && successes < result.dice.length && (character.energy > 0 ? (
                   <Button size="sm" variant="outline" onClick={push}>
-                    <FlameIcon /> Push (+1 Energy, +1 Pressure)
+                    <FlameIcon /> Push (−1 Energy, +1 Pressure)
                   </Button>
-                )}
+                ) : (
+                  <span className="self-center text-xs text-muted-foreground">Exhausted: {character.name} can&apos;t Push.</span>
+                ))}
                 {successes === 0 && character.pressure > 0 && (
                   <Button size="sm" variant="destructive" onClick={applyFailure}>
                     Apply failure consequence

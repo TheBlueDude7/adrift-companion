@@ -197,14 +197,16 @@ export function joinCampaign(c: string, gmKey?: string) {
   connect(c);
 }
 
-/** Resolve one of your own planned tasks. The server applies the result and broadcasts it. */
-export async function resolveOwnTask(actionId: string, r: Omit<Resolution, "energy">) {
+export type TaskStep = "roll" | "push" | "accept" | "routine" | "cancel";
+
+/** Roll, Push, or resolve one of your own planned tasks. The server rolls, applies the result, and broadcasts it. */
+export async function resolveOwnTask(actionId: string, step: TaskStep, r: Pick<Resolution, "outcome" | "scan" | "crafted"> = { outcome: "" }) {
   const { session } = useGame.getState();
   if (!session) return;
   const res = await fetch(`/api/campaigns/${session.code}/resolve`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-adrift-key": keyFor() },
-    body: JSON.stringify({ client: clientId, opId: uid(), actionId, ...r }),
+    body: JSON.stringify({ client: clientId, opId: uid(), actionId, step, ...r }),
   }).catch(() => null);
   if (!res) return toast.error("Could not reach the server. Try again in a moment.");
   if (!res.ok) toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The server couldn't resolve that task.");

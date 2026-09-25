@@ -320,6 +320,8 @@ export type SegmentAction = {
   trainSkill?: SkillKey;
   /** A Master Pilot's once-a-day move that burned no Power Cell. */
   freeCell?: boolean;
+  /** A player's roll for this task, made by the server. Once rolled, the dice decide the result. */
+  roll?: { dice: number[]; pushed: boolean };
   status: ActionStatus;
   /** The GM's note on how it went. */
   outcome?: string;

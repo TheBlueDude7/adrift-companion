@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ClipboardListIcon, DicesIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ClipboardListIcon, DicesIcon, FlameIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,19 +12,20 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, craftList, masterPilotReady, newAction, overdueActions, playerResolves, scanRadius, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, canPush, craftList, masterPilotReady, newAction, overdueActions, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { sixes } from "@/lib/dice";
 import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
-import { SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
+import { PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
-import { resolveOwnTask } from "@/lib/sync/client";
+import { resolveOwnTask, type TaskStep } from "@/lib/sync/client";
 import type { Character, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
-import { EmptyState, Pill, Stepper } from "./common";
+import { Dice, EmptyState, Pill, Stepper } from "./common";
 import { DiceRoller } from "./dice-roller";
 import { PowerCells } from "./power";
 
@@ -322,20 +323,56 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
   );
 }
 
-/** The GM resolves locally; a player's resolution runs on the server so its effects follow the rules. */
-function useResolve() {
-  const act = useGame((s) => s.act);
-  const { isGM } = usePerms();
-  return (a: SegmentAction, r: Resolution) => {
-    if (isGM) act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, r), r.status === "failed" ? "danger" : "info");
-    else void resolveOwnTask(a.id, { status: r.status, outcome: r.outcome, scan: r.scan, crafted: r.crafted });
+const RESULT_LABEL = { failed: "Failure", success: "Success", strong: "Strong Success" } as const;
+const RESULT_TONE = { failed: "danger", success: "good", strong: "info" } as const;
+
+/** A player's server-side roll for their task: the pool, then the dice, a Push, and the result they earn. */
+function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onStep: (s: TaskStep) => Promise<unknown> }) {
+  const game = useGame((s) => s.game);
+  const terms = taskTerms(game, a);
+  const pool = taskPool(game, a);
+  const [busy, setBusy] = useState(false);
+  const step = async (s: TaskStep) => {
+    setBusy(true);
+    await onStep(s);
+    setBusy(false);
   };
+  if (!a.roll) {
+    return (
+      <div className="grid gap-2 rounded-lg bg-muted/40 p-3">
+        <p className="font-mono text-xs text-muted-foreground">{pool.parts.join(" + ")}</p>
+        <Button disabled={busy || pool.dice <= 0} onClick={() => step("roll")}><DicesIcon /> {pool.dice > 0 ? `Roll ${pool.dice}d6` : "No dice: this can't succeed"}</Button>
+        <p className="text-[11px] text-muted-foreground">
+          Each 6 is a success; two or more earn the Strong Result. The dice decide the task as they land. If any fail, you can Push once{c.energy > 0 ? "" : ", but not while exhausted"}.
+        </p>
+      </div>
+    );
+  }
+  const result = rolledStatus(a.roll, terms.routine);
+  const pushable = canPush(game, a);
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="flex items-center justify-between">
+        <Pill tone={RESULT_TONE[result]} className="text-sm">{RESULT_LABEL[result]}{result === "success" && terms.routine && sixes(a.roll.dice) === 0 ? " (Routine)" : ""}</Pill>
+        {a.roll.pushed && <Pill tone="warn">Pushed</Pill>}
+      </div>
+      <Dice dice={a.roll.dice} />
+      {result === "failed" && c.pressure > 0 && (
+        <p className="text-xs text-muted-foreground"><span className="text-amber-300">{PRESSURE_STATES[c.pressure].name}:</span> {PRESSURE_STATES[c.pressure].failure}</p>
+      )}
+      {pushable && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => step("push")} className="justify-self-start">
+          <FlameIcon /> Push: reroll the failed dice (−1 Energy, +1 Pressure)
+        </Button>
+      )}
+    </div>
+  );
 }
 
 function ResolveDialog({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
   const { isGM } = usePerms();
-  const resolveTask = useResolve();
   const [open, setOpen] = useState(false);
   const terms = taskTerms(game, a);
   const [energy, setEnergy] = useState(terms.energy);
@@ -349,7 +386,13 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
 
   function resolve(status: Resolution["status"]) {
     const ok = status === "success" || status === "strong";
-    resolveTask(a, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined });
+    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined }), status === "failed" ? "danger" : "info");
+    setOpen(false);
+  }
+
+  const playerStep = (step: TaskStep) => resolveOwnTask(a.id, step, { outcome: note, scan: scan === "none" ? null : scan, crafted: made });
+  function finish(step: TaskStep) {
+    void playerStep(step);
     setOpen(false);
   }
 
@@ -371,9 +414,9 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
             </p>
           )}
           {def.effect === "course" && c && masterPilotReady(game, c, a) && <p className="text-[11px] text-emerald-300">Master Pilot: this move burns no Power Cell (once per day).</p>}
-          {terms.skill && c && (
-            <DiceRoller character={c} initialSkill={terms.skill} trigger={<Button size="sm" variant="outline"><DicesIcon /> Open the dice roller</Button>} />
-          )}
+          {isGM
+            ? terms.skill && c && <DiceRoller character={c} initialSkill={terms.skill} trigger={<Button size="sm" variant="outline"><DicesIcon /> Open the dice roller</Button>} />
+            : c && <TaskRollPanel a={a} c={c} onStep={playerStep} />}
           {map && a.target && def.effect === "course" && <MovePreview map={map} to={a.target} />}
           {def.effect === "craft" && crafts.length > 0 && (
             <div className="grid gap-1.5">
@@ -396,7 +439,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
           )}
           {def.effect === "scan" && (
             <div className="grid gap-1.5">
-              <Label>Scan result for {targetName(game, a.target)}</Label>
+              <Label>{isGM ? "Scan result" : "If the scan succeeds, record"} for {targetName(game, a.target)}</Label>
               <Select value={scan} onValueChange={(v) => setScan(v as SpaceTile | "none")}>
                 <SelectTrigger className="w-full"><SelectValue>{scan === "none" ? "Don't record" : SPACE_TILE_BY_KEY[scan].name}</SelectValue></SelectTrigger>
                 <SelectContent>
@@ -415,14 +458,25 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
             <Input id="task-outcome" placeholder="Optional: what happened" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
         </div>
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="ghost" onClick={() => resolve("cancelled")}>Call off</Button>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => resolve("failed")}><XIcon /> Failed</Button>
-            <Button variant="outline" onClick={() => resolve("strong")}>Strong</Button>
-            <Button onClick={() => resolve("success")}><CheckIcon /> Success</Button>
-          </div>
-        </DialogFooter>
+        {isGM ? (
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="ghost" onClick={() => resolve("cancelled")}>Call off</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => resolve("failed")}><XIcon /> Failed</Button>
+              <Button variant="outline" onClick={() => resolve("strong")}>Strong</Button>
+              <Button onClick={() => resolve("success")}><CheckIcon /> Success</Button>
+            </div>
+          </DialogFooter>
+        ) : (
+          <DialogFooter className="gap-2 sm:justify-between">
+            {a.roll ? <span /> : <Button variant="ghost" onClick={() => finish("cancel")}>Call off</Button>}
+            {a.roll ? (
+              <Button onClick={() => finish("accept")}><CheckIcon /> Keep the result: {RESULT_LABEL[rolledStatus(a.roll, terms.routine)]}</Button>
+            ) : (
+              terms.routine && <Button variant="outline" onClick={() => finish("routine")}><CheckIcon /> {terms.expert ? "Expert: Strong Result" : "Routine: succeed without rolling"}</Button>
+            )}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -432,15 +486,19 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const { isGM, canEditCharacter, myCharacterId } = usePerms();
-  const resolveTask = useResolve();
   const c = game.characters.find((x) => x.id === a.characterId);
   const project = game.ship.projects.find((p) => p.id === a.projectId);
   const assisted = game.actions.find((x) => x.id === a.assists);
   const where = targetName(game, a.target);
   const terms = taskTerms(game, a);
   const planned = a.status === "planned";
-  const canEdit = planned && canEditCharacter(a.characterId);
+  const canEdit = planned && canEditCharacter(a.characterId) && (isGM || !a.roll);
   const canResolve = isGM || playerResolves(a, myCharacterId);
+  function routine() {
+    const status = terms.expert ? "strong" : "success";
+    if (isGM) act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: terms.energy, outcome: "" }));
+    else void resolveOwnTask(a.id, "routine");
+  }
 
   return (
     <div className={cn("grid gap-1.5 rounded-lg border p-2.5", planned ? "bg-background/40" : "bg-muted/20")}>
@@ -465,13 +523,20 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
         </p>
       )}
       {a.detail && <p className="text-xs">“{a.detail}”</p>}
+      {a.roll && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Dice dice={a.roll.dice} />
+          {a.roll.pushed && <Pill tone="warn">Pushed</Pill>}
+          {planned && <Pill tone={RESULT_TONE[rolledStatus(a.roll, terms.routine)]}>{RESULT_LABEL[rolledStatus(a.roll, terms.routine)]} so far</Pill>}
+        </div>
+      )}
       {planned ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <TermsPills a={a} />
           {canResolve ? (
             <span className="ml-auto flex gap-1.5">
-              {terms.routine && (
-                <Button size="xs" onClick={() => resolveTask(a, { status: terms.expert ? "strong" : "success", energy: terms.energy, outcome: "" })}><CheckIcon /> {terms.expert ? "Expert" : "Routine"}</Button>
+              {terms.routine && !a.roll && (
+                <Button size="xs" onClick={routine}><CheckIcon /> {terms.expert ? "Expert" : "Routine"}</Button>
               )}
               <ResolveDialog a={a} />
             </span>
