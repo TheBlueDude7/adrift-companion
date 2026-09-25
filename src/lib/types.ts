@@ -337,6 +337,8 @@ export type SegmentAction = {
   freeCell?: boolean;
   /** A player's roll for this task, made by the server. Once rolled, the dice decide the result. */
   roll?: { dice: number[]; pushed: boolean };
+  /** The one extra task a survivor Pushed for this segment (paid 1 Energy and 1 Pressure). */
+  extra?: boolean;
   /** A player asked the GM to allow a task they lack the Energy for, and whether the GM has. */
   approval?: "pending" | "granted";
   status: ActionStatus;

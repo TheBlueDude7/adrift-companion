@@ -56,6 +56,19 @@ export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !=
 
 export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment);
 
+/** A survivor's tasks in one segment, not counting ones called off. */
+export const segmentTasks = (g: GameState, characterId: string, day = g.day, segment = g.segment) =>
+  g.actions.filter((a) => a.characterId === characterId && a.day === day && a.segment === segment && a.status !== "cancelled");
+
+/** Each survivor takes one task per segment. Pushing (1 Energy, 1 Pressure) buys one extra. */
+export function extraTaskBlocker(g: GameState, c: Character): string | null {
+  const tasks = segmentTasks(g, c.id);
+  if (tasks.length === 0) return "No task planned yet";
+  if (tasks.length > 1 || tasks.some((a) => a.extra)) return "Already took the extra task this segment";
+  if (c.energy <= 0) return "Exhausted survivors can't Push for an extra task";
+  return null;
+}
+
 /** Planned tasks from segments that have already passed. */
 export const overdueActions = (g: GameState) => g.actions.filter((a) => a.status === "planned" && (a.day < g.day || (a.day === g.day && a.segment < g.segment)));
 

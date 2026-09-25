@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { uid } from "@/lib/dice";
 import { NODE_STATUSES, NODE_TYPES, SPACE_TILES, SPACE_TILE_BY_KEY, STAR_SIZES, STATUS_COLOR, cellKey, lineCells, newGridMap, resizeStarMap, tileDistance, tileLabel } from "@/lib/maps";
-import { newAction } from "@/lib/actions";
+import { newAction, segmentTasks } from "@/lib/actions";
 import { moveShip as moveShipOnMap, planMove, type MovePlan } from "@/lib/power";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
@@ -249,6 +249,11 @@ export function StarMapView({ map, onOpenMap }: { map: StarMap; onOpenMap: (id: 
   }
 
   function planCourse(to: TilePos) {
+    const mine = myCharacterId ? segmentTasks(game, myCharacterId) : [];
+    if (mine.length && !mine.some((a) => a.status === "planned" && (a.task === "Plot Safe Course" || a.task === "Plot Unsafe Course"))) {
+      toast.error("You already have a task this segment. Change it on the Actions tab, or Push there for an extra task.");
+      return;
+    }
     act("Plan a course", (g) => {
       const c = g.characters.find((x) => x.id === myCharacterId);
       if (!c) return undefined;

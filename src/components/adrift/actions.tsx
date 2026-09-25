@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, canPush, craftList, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, canPush, craftList, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
+import { changePressure } from "@/lib/mechanics";
 import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
@@ -215,14 +216,16 @@ function TrainPicker({ c, value, onChange }: { c: Character; value: SkillKey | u
   );
 }
 
-function PlanDialog({ c, existing, trigger }: { c: Character; existing?: SegmentAction; trigger: React.ReactElement }) {
+function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; existing?: SegmentAction; extra?: boolean; trigger: React.ReactElement }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<SegmentAction>(() => existing ?? newAction(game, c, "Rest"));
   const def = taskFor(draft);
-  const reasons = permissionReasons(game, draft);
+  // An extra task is judged after the Push's 1 Energy is spent.
+  const view = extra ? { ...game, characters: game.characters.map((x) => (x.id === c.id ? { ...x, energy: Math.max(0, x.energy - 1) } : x)) } : game;
+  const reasons = permissionReasons(view, draft);
   const projects = game.ship.projects.filter((p) => !p.done);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
@@ -238,14 +241,26 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
     if (def.effect !== "assist") d.assists = null;
     if (def.effect !== "craft") delete d.crafts;
     if (def.effect !== "train") delete d.trainSkill;
-    act(existing ? "Edit task" : "Plan task", (g) => {
+    const pushing = extra && !existing;
+    if (pushing) d.extra = true;
+    act(existing ? "Edit task" : pushing ? "Push for an extra task" : "Plan task", (g) => {
+      const out: string[] = [];
+      if (pushing) {
+        const who = g.characters.find((x) => x.id === c.id);
+        if (who) {
+          who.energy = Math.max(0, who.energy - 1);
+          out.push(`${who.name} Pushes for an extra task this segment (−1 Energy, ${who.energy} left).`);
+          changePressure(g, who, 1, out);
+        }
+      }
       const i = g.actions.findIndex((a) => a.id === d.id);
       if (i >= 0) g.actions[i] = d;
       else g.actions.push(d);
       const where = targetName(g, d.target);
       const project = g.ship.projects.find((p) => p.id === d.projectId);
-      return `${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They ask the GM for permission (${reasons.join("; ").toLowerCase()}).` : ""}`;
-    });
+      out.unshift(`${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They ask the GM for permission (${reasons.join("; ").toLowerCase()}).` : ""}`);
+      return out;
+    }, pushing ? "danger" : "info");
     setOpen(false);
   }
 
@@ -254,8 +269,10 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
       <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{existing ? "Change task" : "Plan a task"}: {c.name}</DialogTitle>
-          <DialogDescription>{whenLabel(draft)}. Each survivor normally takes one task per segment. The GM resolves Routine tasks first, then rolls for Skilled and Crisis ones.</DialogDescription>
+          <DialogTitle>{existing ? "Change task" : extra ? "Push for an extra task" : "Plan a task"}: {c.name}</DialogTitle>
+          <DialogDescription>
+            {whenLabel(draft)}. {extra && !existing ? `Submitting costs ${c.name.split(" ")[0]} 1 Energy and 1 Pressure right away, even if the task is withdrawn later.` : "Each survivor takes one task per segment; Pushing buys one extra."}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
@@ -604,6 +621,7 @@ function CrewPlanCard({ c }: { c: Character }) {
   const { canEditCharacter } = usePerms();
   const mine = actionsNow(game).filter((a) => a.characterId === c.id);
   const busy = mine.filter((a) => a.status !== "cancelled").length;
+  const noExtra = extraTaskBlocker(game, c);
   return (
     <Card size="sm">
       <CardHeader>
@@ -618,10 +636,14 @@ function CrewPlanCard({ c }: { c: Character }) {
       <CardContent className="grid gap-2">
         {mine.length === 0 && <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">No task planned yet.</p>}
         {mine.map((a) => <ActionRow key={a.id} a={a} />)}
-        {busy > 1 && <p className="text-[11px] text-amber-300">More than one task this segment. Only Pushing grants an extra task, once per segment.</p>}
-        {canEditCharacter(c.id) && (
-          <PlanDialog c={c} trigger={<Button size="xs" variant={mine.length ? "ghost" : "outline"} className="justify-self-start"><PlusIcon /> {mine.length ? "Another task" : "Plan a task"}</Button>} />
-        )}
+        {canEditCharacter(c.id) &&
+          (busy === 0 ? (
+            <PlanDialog c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a task</Button>} />
+          ) : !noExtra ? (
+            <PlanDialog c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task (−1 Energy, +1 Pressure)</Button>} />
+          ) : (
+            busy === 1 && <p className="text-[11px] text-muted-foreground">{noExtra}.</p>
+          ))}
       </CardContent>
     </Card>
   );
