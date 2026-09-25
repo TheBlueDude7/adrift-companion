@@ -82,12 +82,17 @@ export function missingReqs(c: Character, def: CyberDef) {
 
 export const isUnlocked = (g: GameState, def: CyberDef) => def.tier === 1 || g.research.cybernetics.includes(def.key);
 
-/** Free Tier I locations for a definition. Sided locations list each free side. */
-export function freeLocations(c: Character, def: CyberDef) {
+/** Every Tier I location for a definition, taken or not. Sided locations list each side. */
+export function bodyLocations(def: CyberDef) {
   if (!def.location) return [];
   const loc = CYBER_LOCATIONS[def.location];
+  return loc.sides ?? [loc.name];
+}
+
+/** Free Tier I locations for a definition. Sided locations list each free side. */
+export function freeLocations(c: Character, def: CyberDef) {
   const taken = new Set((c.cybernetics ?? []).map((i) => i.location));
-  return (loc.sides ?? [loc.name]).filter((s) => !taken.has(s));
+  return bodyLocations(def).filter((s) => !taken.has(s));
 }
 
 /** Why this implant can't be installed on this character right now, or null. */

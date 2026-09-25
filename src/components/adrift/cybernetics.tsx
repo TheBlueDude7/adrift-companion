@@ -25,6 +25,7 @@ import {
   type CyberSystem,
 } from "@/data/cybernetics";
 import {
+  bodyLocations,
   cyberAttr,
   cyberLoad,
   dampening,
@@ -190,7 +191,9 @@ function InstallDialog({ c }: { c: Character }) {
   const def = key ? CYBER_BY_KEY[key] : null;
   const defs = CYBERNETICS.filter((d) => d.system === system);
   const blocker = def ? installBlocker(game, c, def) : null;
-  const sides = def ? freeLocations(c, def) : [];
+  const force = isGM && !!blocker;
+  const free = def ? freeLocations(c, def) : [];
+  const sides = def && force && free.length === 0 ? bodyLocations(def) : free;
   const targets = def ? upgradeTargets(c, def) : [];
   const recipe = def ? IMPLANT_RECIPES[replacement ? "replacement" : def.tier] : [];
   const itemName = def ? implantName(def, replacement) : "";
@@ -201,11 +204,10 @@ function InstallDialog({ c }: { c: Character }) {
     setKey(d.key);
     setReplacement(false);
     setChoice("");
-    const free = freeLocations(c, d);
-    setLocation(free[0] ?? "");
+    setLocation(freeLocations(c, d)[0] ?? bodyLocations(d)[0] ?? "");
     const t = upgradeTargets(c, d);
     setReplaceId(t[0]?.inst.id ?? "none");
-    setSource(haveInStorage(game, implantName(d)) > 0 ? "storage" : "fabricate");
+    setSource(haveInStorage(game, implantName(d)) > 0 ? "storage" : isGM && installBlocker(game, c, d) ? "untracked" : "fabricate");
   }
 
   function install() {
@@ -221,6 +223,7 @@ function InstallDialog({ c }: { c: Character }) {
         { id: uid(), key: def.key, location: plan.location, replacement, damaged: false, lineage: plan.lineage, choice: choice.trim() },
       ];
       out.push(`${who.name} receives a ${replacement ? "Replacement " : ""}${def.name} (${TIER_LABEL[def.tier]}, ${plan.location}) through Surgery.`);
+      if (force) out.push(`The GM forced the install (${blocker}).`);
       if (absorbed.length) out.push(`It ${def.tier === 3 ? "integrates" : "replaces"} ${absorbed.map((i) => CYBER_BY_KEY[i.key]?.name ?? i.key).join(", ")}.`);
       if (source === "storage") out.push(`Used the ${itemName} from the hold.`);
       if (source === "fabricate") out.push(`Fabricated from ${recipeText(recipe)}.`);
@@ -230,7 +233,7 @@ function InstallDialog({ c }: { c: Character }) {
   }
 
   const short = shortfalls(game, recipe);
-  const canInstall = !!def && !blocker && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0) && (source !== "fabricate" || short.length === 0) && (source !== "untracked" || isGM);
+  const canInstall = !!def && (!blocker || force) && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0) && (source !== "fabricate" || short.length === 0) && (source !== "untracked" || isGM);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setKey(null); }}>
@@ -279,7 +282,8 @@ function InstallDialog({ c }: { c: Character }) {
                   {def.requires && <p className="mt-1.5 text-xs">Requires: {def.requires.map((r) => r.label).join(" and ")}</p>}
                   {def.note && <p className="mt-1 text-xs text-amber-200/80">{def.note}</p>}
                 </div>
-                {blocker ? (
+                {force && <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-100">{blocker}. As GM you can force install it anyway.</p>}
+                {blocker && !force ? (
                   <p className="rounded-md bg-rose-500/10 p-2 text-xs text-rose-200">{blocker}.{blocker === "Not researched yet" && " Record the discovery under Cybernetic research on the Ship tab."}</p>
                 ) : (
                   <>
@@ -347,7 +351,7 @@ function InstallDialog({ c }: { c: Character }) {
           </div>
         </div>
         <DialogFooter>
-          <Button disabled={!canInstall} onClick={install}>Install {def?.name ?? "cybernetic"}</Button>
+          <Button disabled={!canInstall} onClick={install}>{force ? "Force install" : "Install"} {def?.name ?? "cybernetic"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
