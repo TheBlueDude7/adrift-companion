@@ -26,6 +26,8 @@ export type ShipboardTask = {
   expertAt?: number;
   /** What a "yield" task stocks in ship storage. */
   yields?: { name: string; qty: number };
+  /** Only the GM resolves it. Players roll and resolve every other task of their own. */
+  gmResolves?: boolean;
 };
 
 /** Mastery: levels above a Routine Threshold that cut the task's Energy by 1. */
@@ -35,7 +37,7 @@ export const EXPERT_MARGIN = 6;
 /** Mastery: levels above a Project's threshold that add 2 Progress per Routine segment. */
 export const PROJECT_MARGIN = 4;
 
-type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields">;
+type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves">;
 
 const t = (name: string, group: string, energy: number, skills: SkillKey[], threshold: number, result: string, mode: TaskMode = "routine", effect: TaskEffect = null, extra: Extra = {}): ShipboardTask => ({ name, group, energy, skills, threshold, mode, result, effect, ...extra });
 
@@ -51,7 +53,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Repair Ordinary Ship Damage", "Ship", 2, ["mechTech"], 5, "Repair a stable module or restore Hull HP if materials allow.", "routine", "project", { strong: "Regain the Energy spent." }),
   t("Fabricate Common Item", "Ship", 2, ["mechTech"], 3, "Create up to two items from known recipes, in any combination. Each uses its recipe's skill: Mechanical Technician 3 for Tier I, 6 for Tier II, 9 for Tier III.", "routine", "craft"),
   t("Deconstruct Common Item", "Ship", 1, ["scavenging"], 2, "Recover the item's listed salvage. Scavenging 2 for Tier I, 4 for Tier II, 6 for Tier III, 7+ for alien equipment.", "routine", null, { strong: "Recover another 25% of the materials." }),
-  t("Salvage Ship", "Ship", 2, ["scavenging"], 4, "Scavenge a ship using the scavenge rules.", "routine", null, { strong: "Find additional or higher-quality materials." }),
+  t("Salvage Ship", "Ship", 2, ["scavenging"], 4, "Scavenge a ship using the scavenge rules.", "routine", null, { strong: "Find additional or higher-quality materials.", gmResolves: true }),
   t("Tune the Reactor", "Ship", 1, ["engineering"], 6, "+1 Power Unit until the end of the day. Needs a Large reactor (Engineering 6), or Voltaic and up (Engineering 8).", "routine", "tune", { facility: { modules: ["Fusion Reactor"], level: 3, label: "a Large reactor or better" } }),
   t("Plot Safe Course", "Navigation", 1, ["piloting"], 4, "Move through scanned, stable space. Piloting 4 for 1 tile, 6 for 2, 8 for 3–4. Burns one Power Cell; Piloting 8 skips the cell once per day.", "routine", "course", { strong: "No Power Cell consumed." }),
   t("Plot Unsafe Course", "Navigation", 1, ["piloting"], 0, "Move through unscanned, unknown space. Unscanned tiles are Crisis work at −3d6. Burns one Power Cell.", "skilled", "course", { strong: "Avoid the hazard, collision, or ambush." }),
@@ -82,7 +84,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
   t("Assist", "Crew", 0, [], 0, "Help another character. Adds your Skill Level as dice (up to +4d6), or your own Progress on a Project.", "routine", "assist"),
   t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The expedition plays out at the table."),
-  t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled"),
+  t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true }),
 ];
 
 export const TASK_BY_NAME = Object.fromEntries(SHIPBOARD_TASKS.map((x) => [x.name, x])) as Record<string, ShipboardTask>;

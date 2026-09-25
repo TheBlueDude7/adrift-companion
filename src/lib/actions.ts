@@ -13,6 +13,9 @@ import type { ActionStatus, Character, GameState, SegmentAction, SpaceTile, Star
 
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
 
+/** Players roll and resolve their own planned tasks, except the ones the GM keeps. */
+export const playerResolves = (a: SegmentAction, characterId: string | null) => a.status === "planned" && a.characterId === characterId && !taskFor(a).gmResolves;
+
 export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment);
 
 /** Planned tasks from segments that have already passed. */

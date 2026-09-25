@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, craftList, masterPilotReady, newAction, overdueActions, scanRadius, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, craftList, masterPilotReady, newAction, overdueActions, playerResolves, scanRadius, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
@@ -20,6 +20,7 @@ import { planMove, shipMap } from "@/lib/power";
 import { SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
+import { resolveOwnTask } from "@/lib/sync/client";
 import type { Character, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
@@ -321,9 +322,20 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
   );
 }
 
+/** The GM resolves locally; a player's resolution runs on the server so its effects follow the rules. */
+function useResolve() {
+  const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
+  return (a: SegmentAction, r: Resolution) => {
+    if (isGM) act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, r), r.status === "failed" ? "danger" : "info");
+    else void resolveOwnTask(a.id, { status: r.status, outcome: r.outcome, scan: r.scan, crafted: r.crafted });
+  };
+}
+
 function ResolveDialog({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);
-  const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
+  const resolveTask = useResolve();
   const [open, setOpen] = useState(false);
   const terms = taskTerms(game, a);
   const [energy, setEnergy] = useState(terms.energy);
@@ -337,7 +349,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
 
   function resolve(status: Resolution["status"]) {
     const ok = status === "success" || status === "strong";
-    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined }), status === "failed" ? "danger" : "info");
+    resolveTask(a, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined });
     setOpen(false);
   }
 
@@ -396,7 +408,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
           )}
           <div className="flex items-center justify-between">
             <Label>Energy spent</Label>
-            <Stepper value={energy} onChange={setEnergy} min={0} max={10} label="energy" />
+            {isGM ? <Stepper value={energy} onChange={setEnergy} min={0} max={10} label="energy" /> : <span className="font-mono text-sm">{terms.energy}</span>}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="task-outcome">Outcome note</Label>
@@ -419,7 +431,8 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
 function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
-  const { isGM, canEditCharacter } = usePerms();
+  const { isGM, canEditCharacter, myCharacterId } = usePerms();
+  const resolveTask = useResolve();
   const c = game.characters.find((x) => x.id === a.characterId);
   const project = game.ship.projects.find((p) => p.id === a.projectId);
   const assisted = game.actions.find((x) => x.id === a.assists);
@@ -427,6 +440,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const terms = taskTerms(game, a);
   const planned = a.status === "planned";
   const canEdit = planned && canEditCharacter(a.characterId);
+  const canResolve = isGM || playerResolves(a, myCharacterId);
 
   return (
     <div className={cn("grid gap-1.5 rounded-lg border p-2.5", planned ? "bg-background/40" : "bg-muted/20")}>
@@ -454,13 +468,15 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
       {planned ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <TermsPills a={a} />
-          {isGM && (
+          {canResolve ? (
             <span className="ml-auto flex gap-1.5">
               {terms.routine && (
-                <Button size="xs" onClick={() => act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status: terms.expert ? "strong" : "success", energy: terms.energy, outcome: "" }))}><CheckIcon /> {terms.expert ? "Expert" : "Routine"}</Button>
+                <Button size="xs" onClick={() => resolveTask(a, { status: terms.expert ? "strong" : "success", energy: terms.energy, outcome: "" })}><CheckIcon /> {terms.expert ? "Expert" : "Routine"}</Button>
               )}
               <ResolveDialog a={a} />
             </span>
+          ) : (
+            canEdit && <span className="ml-auto text-[11px] text-muted-foreground">The GM resolves this one.</span>
           )}
         </div>
       ) : (
@@ -531,7 +547,7 @@ export function ActionsTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ClipboardListIcon className="size-4 text-primary" /> {SEGMENTS[game.segment]}, Day {game.day}: crew tasks</CardTitle>
           <CardDescription>
-            Plan together, then commit one task per survivor. {isGM ? "Resolve Routine tasks automatically, roll for Skilled and Crisis ones, then move to the next segment." : "The GM resolves tasks once everyone has submitted."}
+            Plan together, then commit one task per survivor. {isGM ? "Resolve Routine tasks automatically, roll for Skilled and Crisis ones, then move to the next segment." : "Roll and resolve your own tasks, Pushing if you dare. The GM resolves Salvage Ship and Other tasks."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">

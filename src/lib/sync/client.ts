@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { uid } from "../dice";
 import { normalizeGame } from "../maps";
 import { useGame, type Person } from "../store";
+import type { Resolution } from "../actions";
 import type { GameState } from "../types";
 import { applyOps, type Op } from "./ops";
 import { outbox } from "./outbox";
@@ -194,6 +195,19 @@ export function joinCampaign(c: string, gmKey?: string) {
   disconnect();
   useGame.setState({ session: gmKey ? { code: c, gmKey } : { code: c }, past: [] });
   connect(c);
+}
+
+/** Resolve one of your own planned tasks. The server applies the result and broadcasts it. */
+export async function resolveOwnTask(actionId: string, r: Omit<Resolution, "energy">) {
+  const { session } = useGame.getState();
+  if (!session) return;
+  const res = await fetch(`/api/campaigns/${session.code}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-adrift-key": keyFor() },
+    body: JSON.stringify({ client: clientId, opId: uid(), actionId, ...r }),
+  }).catch(() => null);
+  if (!res) return toast.error("Could not reach the server. Try again in a moment.");
+  if (!res.ok) toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The server couldn't resolve that task.");
 }
 
 /** Pick a character to play, or (as GM) assign one to another player. `null` releases it. */

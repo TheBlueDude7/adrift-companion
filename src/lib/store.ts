@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { uid } from "./dice";
+import { pushLog } from "./log";
 import { normalizeGame } from "./maps";
 import { createInitialState } from "./seed";
 import { applyOps, diff, type Op } from "./sync/ops";
@@ -38,11 +38,6 @@ export function actorOf(s: Pick<Store, "session" | "me" | "people">): Actor {
   if (!s.session) return { role: "gm", characterId: null };
   const role = s.me?.role ?? (s.session.gmKey ? "gm" : "player");
   return { role, characterId: role === "gm" ? null : (s.people.find((p) => p.id === s.me?.id)?.characterId ?? null) };
-}
-
-export function pushLog(g: GameState, text: string, kind: LogEntry["kind"] = "info") {
-  g.log.unshift({ id: uid(), at: Date.now(), day: g.day, segment: g.segment, text, kind });
-  if (g.log.length > 500) g.log.length = 500;
 }
 
 export const useGame = create<Store>()(
