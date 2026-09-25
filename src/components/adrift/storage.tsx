@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { carrySlots, supplyCount, usedSlots } from "@/lib/derive";
+import { carrySlots, foodCount, supplyCount, usedSlots } from "@/lib/derive";
 import { ITEM_CATEGORIES } from "@/lib/rules";
 import { cellCount } from "@/lib/power";
 import { useGame } from "@/lib/store";
@@ -23,7 +23,7 @@ export function SupplyStrip() {
   return (
     <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
       {KEY_SUPPLIES.map((n) => {
-        const count = supplyCount(game, n);
+        const count = n === "Food Unit" ? foodCount(game) : supplyCount(game, n);
         const perDay = n === "Food Unit" || n === "Water Unit" ? alive : 0;
         const days = perDay ? Math.floor(count / perDay) : null;
         return (

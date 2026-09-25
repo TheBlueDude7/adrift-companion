@@ -170,6 +170,11 @@ export function supplyCount(state: GameState, name: string, location = "ship") {
   return state.items.filter((i) => i.name === name && (location === "*" || i.location === location)).reduce((s, i) => s + i.qty, 0);
 }
 
+/** Items that feed a survivor for a day. */
+const FOOD_ITEMS = ["Prepared Meal", "Food Unit"] as const;
+
+export const foodCount = (state: GameState, location = "ship") => FOOD_ITEMS.reduce((s, n) => s + supplyCount(state, n, location), 0);
+
 export function characterAlerts(state: GameState, c: Character) {
   const alerts: { text: string; tone: "danger" | "warn"; tip: string }[] = [];
   if (c.dead) return [{ text: "Dead", tone: "danger" as const, tip: "This survivor has died. They take no tasks and are skipped at End of Day." }];

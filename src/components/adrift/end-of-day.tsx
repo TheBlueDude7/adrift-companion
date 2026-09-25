@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supplyCount } from "@/lib/derive";
+import { foodCount, supplyCount } from "@/lib/derive";
 import { endOfDay, type EndOfDayInput } from "@/lib/mechanics";
 import { useGame } from "@/lib/store";
 import type { FoodIntake, GameState } from "@/lib/types";
@@ -35,7 +35,7 @@ export function EndOfDayDialog() {
 
   function init() {
     setReport(null);
-    const food = supplyCount(game, "Food Unit");
+    const food = foodCount(game);
     const water = supplyCount(game, "Water Unit");
     setInput(
       Object.fromEntries(
@@ -55,7 +55,7 @@ export function EndOfDayDialog() {
   const foodSaved = game.ship.rationsStretched ? Math.floor(foodEaten / 4) : 0;
   const foodNeeded = foodEaten - foodSaved;
   const waterNeeded = Object.values(input).filter((i) => i.water).length;
-  const foodHave = supplyCount(game, "Food Unit");
+  const foodHave = foodCount(game);
   const waterHave = supplyCount(game, "Water Unit");
 
   function run() {
@@ -63,9 +63,10 @@ export function EndOfDayDialog() {
     act(`End of Day ${game.day}`, (g) => {
       const out: string[] = [];
       if (draw) {
-        const f = consume(g, "Food Unit", foodNeeded);
+        const meals = consume(g, "Prepared Meal", foodNeeded);
+        const f = meals + consume(g, "Food Unit", foodNeeded - meals);
         const w = consume(g, "Water Unit", waterNeeded);
-        if (f || w) out.push(`Drew ${f} Food and ${w} Water from ship storage${foodSaved ? `; stretched rations saved ${foodSaved} Food` : ""}.`);
+        if (f || w) out.push(`Drew ${f} Food${meals ? ` (${meals} Prepared Meal${meals > 1 ? "s" : ""})` : ""} and ${w} Water from ship storage${foodSaved ? `; stretched rations saved ${foodSaved} Food` : ""}.`);
       }
       out.push(...endOfDay(g, input));
       lines = out;
