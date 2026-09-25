@@ -29,11 +29,17 @@ type Saved = Pick<Room, "version" | "game" | "gmKeyHash" | "members">;
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const CODE_RE = /^[A-Z2-9]{6}$/;
-const DATA_DIR = process.env.ADRIFT_DATA_DIR ?? path.join(process.cwd(), "data", "campaigns");
+// On Railway, anything outside the attached volume is wiped on every deploy.
+const volume = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+const DATA_DIR = process.env.ADRIFT_DATA_DIR ?? (volume ? path.join(volume, "campaigns") : path.join(process.cwd(), "data", "campaigns"));
 
 // Route handlers can be loaded as separate module instances (and are re-evaluated on
 // hot reload), so the live rooms live on globalThis to stay shared.
 const g = globalThis as unknown as { __adriftRooms?: Map<string, Room> };
+if (!g.__adriftRooms) {
+  console.log(`[adrift] saving shared campaigns to ${DATA_DIR}`);
+  if (process.env.RAILWAY_ENVIRONMENT && !volume) console.warn("[adrift] no Railway volume attached: shared campaigns will be lost on every deploy");
+}
 const rooms = (g.__adriftRooms ??= new Map());
 
 const file = (code: string) => path.join(DATA_DIR, `${code}.json`);
