@@ -437,6 +437,7 @@ function BuildFacilityDialog() {
 
 function RoomCard({ room }: { room: Room }) {
   const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
   const edit = (label: string, fn: (r: Room) => void | string) =>
     act(label, (g) => {
       const r = g.ship.rooms.find((x) => x.id === room.id)!;
@@ -451,17 +452,18 @@ function RoomCard({ room }: { room: Room }) {
   return (
     <div className={cn("grid gap-3 rounded-xl border bg-card p-3", !room.active && "opacity-70", (room.condition === "Offline" || room.condition === "Destroyed") && "border-rose-500/30")}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        <fieldset disabled={!isGM} className="min-w-0 flex-1">
           <CommitInput aria-label="Room name" value={room.name} onCommit={(v) => edit("Rename room", (r) => { r.name = v || r.name; })} className="h-7 border-transparent bg-transparent px-0 font-medium dark:bg-transparent" />
           <div className="mt-1 flex flex-wrap gap-1">
             <Pill tone={CONDITION_TONE[room.condition]}>{room.condition}</Pill>
             {!room.active && <Pill>Inactive</Pill>}
             {room.essential && <Pill tone="info">Essential</Pill>}
           </div>
-        </div>
+        </fieldset>
         <Switch aria-label="Powered" checked={room.active} onCheckedChange={(v) => edit(`${room.name} power`, (r) => { r.active = v; return `${r.name} ${v ? "powered up" : "powered down"}.`; })} />
       </div>
 
+      <fieldset disabled={!isGM} className={cn("grid min-w-0 gap-3", !isGM && READ_ONLY)} title={isGM ? undefined : "Only the GM changes rooms. Crew can power them on and off."}>
       <div className="grid grid-cols-2 gap-2">
         <Select value={room.module ?? "none"} onValueChange={(v) => edit("Module", (r) => { const preset = MODULE_PRESETS.find((m) => m.name === v); r.module = v === "none" ? null : (v as string); r.powerDraw = preset?.powerDraw ?? 0; r.powerOutput = preset?.powerOutput ?? 0; r.level = ladderFor(r.module) ? 0 : undefined; if (r.level !== undefined) setLevel(r, 0); return `${r.name} now houses ${r.module ?? "no module"}.`; })}>
           <SelectTrigger size="sm" className="w-full"><SelectValue>{room.module ?? "Empty room"}</SelectValue></SelectTrigger>
@@ -512,6 +514,7 @@ function RoomCard({ room }: { room: Room }) {
         <label className="flex items-center gap-1"><Checkbox checked={room.essential} onCheckedChange={(v) => edit("Essential", (r) => { r.essential = !!v; })} /> Essential</label>
         <Button size="icon-xs" variant="ghost" aria-label={`Remove ${room.name}`} onClick={() => act("Remove room", (g) => { g.ship.rooms = g.ship.rooms.filter((r) => r.id !== room.id); return `${room.name} was removed from the ship.`; })}><Trash2Icon /></Button>
       </div>
+      </fieldset>
     </div>
   );
 }
@@ -673,7 +676,7 @@ export function ShipTab() {
       <section>
         <SectionTitle
           action={
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            isGM && <div className="flex flex-wrap items-center justify-end gap-1.5">
               <Select value={preset} onValueChange={(v) => setPreset(v as string)}>
                 <SelectTrigger size="sm" className="w-44"><SelectValue>{preset === "none" ? "Empty room" : preset}</SelectValue></SelectTrigger>
                 <SelectContent>

@@ -13,7 +13,7 @@ const idOf = (s: Seg | undefined) => (s && typeof s === "object" ? s.id : undefi
  *
  * Players can edit their own character (spending Energy, but never restoring it), items in the ship's hold or their own inventory (without
  * conjuring new items into the hold), shared-pool cargo carried by anyone in their Loadmaster pool,
- * ship rooms and projects (building and repairing), mechs, cybernetic research, maps (but not the
+ * ship projects, powering rooms on and off, mechs, cybernetic research, maps (but not the
  * neutron star, chart size, or ship position), the item catalog, the log, and their own planned
  * segment tasks (the GM resolves them).
  * Returns a reason when the change is not allowed.
@@ -59,6 +59,15 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     const after = applyOps(structuredClone(game), ops);
     if (after.characters.some((c) => c.energy > (game.characters.find((x) => x.id === c.id)?.energy ?? Infinity))) return "Only the GM can restore Energy.";
     if (newImplants(game, after) && !itemsUsedUp(game, after)) return "Installing or enhancing a cybernetic uses an implant or materials from ship storage. Only the GM can skip that.";
+  }
+  if (ops.some((o) => o.path[0] === "ship" && o.path[1] === "rooms")) {
+    const was = new Map(game.ship.rooms.map((r) => [r.id, r]));
+    const now = applyOps(structuredClone(game), ops).ship.rooms;
+    const sameButPower = (r: (typeof now)[number]) => {
+      const w = was.get(r.id);
+      return !!w && JSON.stringify({ ...w, active: r.active }) === JSON.stringify(r);
+    };
+    if (now.length !== was.size || !now.every(sameButPower)) return "Only the GM can change rooms. Crew can only power them on and off.";
   }
   if (ops.some((o) => o.path[0] === "mechs")) {
     const had = new Set(game.mechs.map((m) => m.id));
