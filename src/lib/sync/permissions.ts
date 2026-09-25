@@ -1,5 +1,6 @@
 import { needsPermission, permissionReasons, segmentTasks } from "../actions";
 import { poolFor } from "../derive";
+import { coreMapId } from "../maps";
 import type { GameState, Item, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
 
@@ -14,7 +15,7 @@ const idOf = (s: Seg | undefined) => (s && typeof s === "object" ? s.id : undefi
  * Players can edit their own character (spending Energy, but never restoring it), items in the ship's hold or their own inventory (without
  * conjuring new items into the hold), shared-pool cargo carried by anyone in their Loadmaster pool,
  * ship projects, powering rooms on and off, mechs, cybernetic research, maps (but not the
- * neutron star, chart size, or ship position), the item catalog, the log, and their own planned
+ * neutron star, chart size, or ship position, and they delete only maps they made, never the core system map), the item catalog, the log, and their own planned
  * segment tasks (the GM resolves them).
  * Returns a reason when the change is not allowed.
  */
@@ -82,7 +83,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     if ([...before.values()].some((r) => !kept.has(r.id) && r.by !== own)) return "Only the GM can answer someone else's mech request.";
   }
   if (ops.some((o) => o.path[0] === "maps")) {
-    const reason = moveDenyReason(game, ops);
+    const reason = mapOwnerDenyReason(game, ops, own) ?? moveDenyReason(game, ops);
     if (reason) return reason;
   }
   if (ops.some((o) => o.path[0] === "actions")) {
@@ -90,6 +91,23 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     if (reason) return reason;
   }
   return ops.some((o) => o.path[0] === "items") ? itemDenyReason(game, ops, own) : null;
+}
+
+/** Players may delete maps their character made, never the core system map, and can't reassign who made one. */
+function mapOwnerDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
+  const after = new Map(applyOps(structuredClone(game), ops).maps.map((m) => [m.id, m]));
+  const had = new Set(game.maps.map((m) => m.id));
+  for (const m of game.maps) {
+    const n = after.get(m.id);
+    if (n) {
+      if (n.createdBy !== m.createdBy) return "Only the GM can change who made a map.";
+      continue;
+    }
+    if (m.id === coreMapId(game.maps)) return "Only the GM can delete the core system map.";
+    if (!own || m.createdBy !== own) return "You can only delete maps you made. Ask the GM to delete this one.";
+  }
+  for (const n of after.values()) if (!had.has(n.id) && n.createdBy !== undefined && n.createdBy !== own) return "Make new maps as your own character.";
+  return null;
 }
 
 /** The neutron star, the chart's size, and the ship's position are the GM's. Players move the ship by planning a course. */

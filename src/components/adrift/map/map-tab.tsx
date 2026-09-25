@@ -14,8 +14,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { newGridMap, newStarMap } from "@/lib/maps";
+import { coreMapId, newGridMap, newStarMap } from "@/lib/maps";
 import { useGame } from "@/lib/store";
+import { usePerms } from "@/lib/use-perms";
 import type { GameMap } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "../common";
@@ -27,12 +28,15 @@ export function MapTab() {
   const act = useGame((s) => s.act);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { isGM, myCharacterId } = usePerms();
   const active = maps.find((m) => m.id === activeId) ?? maps[0];
   const starmap = maps.find((m) => m.kind === "star");
   const parentStar = active?.kind === "grid" ? maps.find((m) => m.kind === "star" && m.nodes.some((n) => n.mapId === active.id)) : undefined;
+  const canDelete = !!active && (isGM || (active.id !== coreMapId(maps) && !!myCharacterId && active.createdBy === myCharacterId));
 
   function create(kind: GameMap["kind"]) {
-    const m = kind === "grid" ? newGridMap(`Deck map ${maps.filter((x) => x.kind === "grid").length + 1}`) : newStarMap(`System chart ${maps.filter((x) => x.kind === "star").length + 1}`);
+    const blank = kind === "grid" ? newGridMap(`Deck map ${maps.filter((x) => x.kind === "grid").length + 1}`) : newStarMap(`System chart ${maps.filter((x) => x.kind === "star").length + 1}`);
+    const m: GameMap = { ...blank, ...(myCharacterId ? { createdBy: myCharacterId } : {}) };
     act(kind === "grid" ? "New deck map" : "New system chart", (g) => {
       g.maps.push(m);
       return `Created ${m.name}.`;
@@ -69,7 +73,7 @@ export function MapTab() {
           ))}
         </div>
         {newMenu}
-        <Button size="icon-sm" variant="ghost" aria-label={`Delete ${active.name}`} onClick={() => setConfirmDelete(true)}><Trash2Icon /></Button>
+        {canDelete && <Button size="icon-sm" variant="ghost" aria-label={`Delete ${active.name}`} onClick={() => setConfirmDelete(true)}><Trash2Icon /></Button>}
       </div>
 
       {active.kind === "star" ? (

@@ -291,7 +291,8 @@ export type StarMap = {
   notes: string;
 };
 
-export type GameMap = GridMap | StarMap;
+/** `createdBy` is the character who made the map; players may delete only their own. */
+export type GameMap = (GridMap | StarMap) & { createdBy?: string };
 
 export type GameState = {
   version: 1;

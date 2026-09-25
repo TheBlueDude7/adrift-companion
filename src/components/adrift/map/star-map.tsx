@@ -31,7 +31,7 @@ import { newAction, segmentTasks } from "@/lib/actions";
 import { moveShip as moveShipOnMap, planMove, type MovePlan } from "@/lib/power";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
-import type { GameState, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, TilePos } from "@/lib/types";
+import type { GameMap, GameState, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, TilePos } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "../commit-input";
 import { Pill, SectionTitle } from "../common";
@@ -274,7 +274,7 @@ export function StarMapView({ map, onOpenMap }: { map: StarMap; onOpenMap: (id: 
 
   function deckMap(n: StarNode) {
     if (n.mapId && maps.some((m) => m.id === n.mapId)) return onOpenMap(n.mapId);
-    const grid = newGridMap(n.name);
+    const grid: GameMap = { ...newGridMap(n.name), ...(myCharacterId ? { createdBy: myCharacterId } : {}) };
     update("Chart derelict", (m, g) => {
       g.maps.push(grid);
       m.nodes.find((k) => k.id === n.id)!.mapId = grid.id;

@@ -86,6 +86,11 @@ export function defaultMaps(): GameMap[] {
   return [newStarMap("System chart")];
 }
 
+/** The core system map: the campaign's first system chart. Only the GM may delete it. */
+export function coreMapId(maps: GameMap[]): string | undefined {
+  return maps.find((m) => m.kind === "star")?.id;
+}
+
 /**
  * Grow or shrink a chart around its middle tile. Returns false (and changes nothing) if a
  * contact, the ship, or the star would fall off the edge.
