@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, canPush, craftList, energyShort, masterPilotReady, needsPermission, newAction, overdueActions, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, canPush, craftList, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
@@ -222,7 +222,7 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<SegmentAction>(() => existing ?? newAction(game, c, "Rest"));
   const def = taskFor(draft);
-  const short = energyShort(game, draft);
+  const reasons = permissionReasons(game, draft);
   const projects = game.ship.projects.filter((p) => !p.done);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
@@ -231,7 +231,7 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
   function save(ask = false) {
     const d = { ...draft, detail: draft.detail.trim() };
     if (ask) d.approval = "pending";
-    else if (isGM && short > 0) d.approval = "granted";
+    else if (isGM && reasons.length > 0) d.approval = "granted";
     else delete d.approval;
     if (def.effect !== "project") d.projectId = null;
     if (def.effect !== "course" && def.effect !== "scan") d.target = null;
@@ -244,7 +244,7 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
       else g.actions.push(d);
       const where = targetName(g, d.target);
       const project = g.ship.projects.find((p) => p.id === d.projectId);
-      return `${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They're ${short} Energy short and ask the GM for permission.` : ""}`;
+      return `${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They ask the GM for permission (${reasons.join("; ").toLowerCase()}).` : ""}`;
     });
     setOpen(false);
   }
@@ -321,9 +321,9 @@ function PlanDialog({ c, existing, trigger }: { c: Character; existing?: Segment
           </div>
         </div>
         <DialogFooter className="gap-2 sm:items-center">
-          {!isGM && short > 0 ? (
+          {!isGM && reasons.length > 0 ? (
             <>
-              <span className="text-xs text-rose-300 sm:mr-auto">{c.name.split(" ")[0]} is {short} Energy short{c.energy >= taskTerms(game, draft).energy ? " after their other planned tasks" : ""}.</span>
+              <span className="text-xs text-rose-300 sm:mr-auto">Needs the GM&apos;s permission: {reasons.join("; ")}.</span>
               <Button variant="outline" disabled={missing || (def.name === "Other" && !draft.detail.trim())} onClick={() => save(true)}><HandIcon /> Ask the GM for permission</Button>
             </>
           ) : (
@@ -507,24 +507,24 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const canEdit = planned && canEditCharacter(a.characterId) && (isGM || !a.roll);
   const canResolve = isGM || playerResolves(a, myCharacterId);
   const blocked = !isGM && planned && canResolve && needsPermission(game, a);
-  const short = energyShort(game, a);
+  const why = permissionReasons(game, a).join("; ");
   function decide(allow: boolean) {
     act(allow ? "Allow task" : "Refuse task", (g) => {
       const name = g.characters.find((x) => x.id === a.characterId)?.name ?? "Someone";
       if (!allow) {
         g.actions = g.actions.filter((x) => x.id !== a.id);
-        return `The GM refuses ${name}'s plan to ${a.task.toLowerCase()} without the Energy for it.`;
+        return `The GM refuses ${name}'s plan to ${a.task.toLowerCase()}${why ? ` (${why.toLowerCase()})` : ""}.`;
       }
       const x = g.actions.find((y) => y.id === a.id);
       if (x) x.approval = "granted";
-      return `The GM allows ${name} to ${a.task.toLowerCase()} despite being short on Energy.`;
+      return `The GM allows ${name} to ${a.task.toLowerCase()}${why ? ` despite: ${why.toLowerCase()}` : ""}.`;
     });
   }
   function askPermission() {
     act("Ask the GM", (g) => {
       const x = g.actions.find((y) => y.id === a.id);
       if (x) x.approval = "pending";
-      return `${c?.name ?? "Someone"} is ${short} Energy short for ${a.task} and asks the GM for permission.`;
+      return `${c?.name ?? "Someone"} asks the GM for permission to ${a.task.toLowerCase()} (${why.toLowerCase()}).`;
     });
   }
   function routine() {
@@ -539,7 +539,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
         <span className="font-medium">{a.task}</span>
         {showWhen && <Pill>{whenLabel(a)}</Pill>}
         <Pill tone={STATUS_TONE[a.status]}>{STATUS_LABEL[a.status]}</Pill>
-        {planned && a.approval === "pending" && <Pill tone="warn">Needs GM permission · {short} Energy short</Pill>}
+        {planned && a.approval === "pending" && <Pill tone="warn">Needs GM permission</Pill>}
         {planned && a.approval === "granted" && <Pill tone="info">GM allowed</Pill>}
         {canEdit && c && (
           <span className="ml-auto flex gap-0.5">
@@ -558,6 +558,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
         </p>
       )}
       {a.detail && <p className="text-xs">“{a.detail}”</p>}
+      {planned && a.approval === "pending" && why && <p className="text-xs text-amber-300">Asking the GM to allow it: {why}.</p>}
       {a.roll && (
         <div className="flex flex-wrap items-center gap-2">
           <Dice dice={a.roll.dice} />
@@ -577,7 +578,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
             canEdit && <span className="ml-auto text-[11px] text-muted-foreground">Waiting for the GM&apos;s permission.</span>
           ) : blocked ? (
             <span className="ml-auto flex items-center gap-1.5">
-              <span className="text-[11px] text-rose-300">{short} Energy short</span>
+              <span className="text-[11px] text-rose-300">{why}</span>
               <Button size="xs" variant="outline" onClick={askPermission}><HandIcon /> Ask the GM</Button>
             </span>
           ) : canResolve ? (

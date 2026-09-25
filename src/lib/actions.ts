@@ -1,12 +1,12 @@
 import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
-import { fabricate, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
+import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { attributeValue, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { changePressure, changeStress, gainXp, rest } from "./mechanics";
 import { moveShip } from "./power";
-import { haveInStorage, spend, stockItem } from "./stock";
+import { haveInStorage, shortfalls, spend, stockItem } from "./stock";
 import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { ActionStatus, Character, GameState, SegmentAction, SpaceTile, StarMap } from "./types";
@@ -35,8 +35,23 @@ export function energyShort(g: GameState, a: SegmentAction) {
   return Math.max(0, taskTerms(g, a).energy - Math.max(0, c.energy - committed));
 }
 
-/** A player may take on a task they can't afford only with the GM's permission. */
-export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !== "granted" && energyShort(g, a) > 0;
+/** What stops a Fabricate task from working on its own: missing stations and a short hold. */
+export function craftProblems(g: GameState, a: SegmentAction): string[] {
+  if (taskFor(a).effect !== "craft" || !a.crafts?.length) return [];
+  const blockers = a.crafts.map((n) => RECIPE_BY_NAME[n] && craftBlocker(g, RECIPE_BY_NAME[n])).filter((b): b is string => !!b);
+  const cost = fabricateCost(a.crafts);
+  const short = shortfalls(g, cost.inputs, cost.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
+  return [...new Set([...blockers, ...short])];
+}
+
+/** Why a player needs the GM's permission for this task, if they do. */
+export function permissionReasons(g: GameState, a: SegmentAction): string[] {
+  const short = energyShort(g, a);
+  return [...(short > 0 ? [`${short} Energy short`] : []), ...craftProblems(g, a)];
+}
+
+/** A player may take on a task they can't afford, or can't craft on their own, only with the GM's permission. */
+export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !== "granted" && permissionReasons(g, a).length > 0;
 
 export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment);
 
@@ -401,7 +416,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   if (def.effect === "craft") {
     (a.crafts ?? []).forEach((name, i) => {
       const recipe = RECIPE_BY_NAME[name];
-      if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok));
+      if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted"));
     });
   }
   if (def.effect === "scan" && a.target && r.scan !== undefined) {

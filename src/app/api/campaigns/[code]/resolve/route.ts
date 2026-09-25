@@ -1,4 +1,4 @@
-import { canPush, needsPermission, playerResolves, pushTask, resolveAction, rolledStatus, rollTask, taskTerms, type Resolution } from "@/lib/actions";
+import { canPush, needsPermission, permissionReasons, playerResolves, pushTask, resolveAction, rolledStatus, rollTask, taskTerms, type Resolution } from "@/lib/actions";
 import { pushLog } from "@/lib/log";
 import { SPACE_TILE_BY_KEY } from "@/lib/maps";
 import { diff } from "@/lib/sync/ops";
@@ -39,7 +39,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
   if (actor.role !== "gm" && !playerResolves(a, actor.characterId)) return Response.json({ error: "Only the GM can resolve that task." }, { status: 403 });
 
   if (actor.role !== "gm" && (step === "roll" || step === "routine") && needsPermission(room.game, a)) {
-    return Response.json({ error: "Not enough Energy for that task. Ask the GM for permission." }, { status: 409 });
+    return Response.json({ error: `That task needs the GM's permission (${permissionReasons(room.game, a).join("; ")}).` }, { status: 409 });
   }
   const terms = taskTerms(room.game, a);
   const draft = structuredClone(room.game);

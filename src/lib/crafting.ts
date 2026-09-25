@@ -100,17 +100,18 @@ export function fabricateCost(names: string[]) {
 
 /**
  * Make one recipe from ship storage. A failure still spends the toolkit charges and loses half the
- * materials (rounded up); the rest go back to the hold. Refuses when the hold is short or the station is missing.
+ * materials (rounded up); the rest go back to the hold. Refuses when the hold is short or the station is missing,
+ * unless the GM allowed it, in which case it uses whatever the hold has.
  */
-export function fabricate(g: GameState, recipe: CraftRecipe, success: boolean): string {
+export function fabricate(g: GameState, recipe: CraftRecipe, success: boolean, allowed = false): string {
   const blocker = craftBlocker(g, recipe);
-  if (blocker) return `⚠ ${recipe.name} wasn't made: ${blocker.toLowerCase()}.`;
+  if (blocker && !allowed) return `⚠ ${recipe.name} wasn't made: ${blocker.toLowerCase()}.`;
   const short = shortfalls(g, recipe.inputs, recipe.toolkit);
-  if (short.length) return `⚠ ${recipe.name} wasn't made: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`;
+  if (short.length && !allowed) return `⚠ ${recipe.name} wasn't made: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`;
   if (success) {
     spend(g, recipe.inputs, recipe.toolkit);
     stockOutput(g, recipe, recipe.name, recipe.output);
-    return `${recipe.output}× ${recipe.name} added to ship storage (spent ${recipeText(recipe.inputs, recipe.toolkit)}).`;
+    return `${recipe.output}× ${recipe.name} added to ship storage (spent ${recipeText(recipe.inputs, recipe.toolkit)}${blocker || short.length ? "; the GM allowed it despite what was missing" : ""}).`;
   }
   const lost = recipe.inputs.map((p) => ({ ...p, qty: Math.ceil(p.qty / 2) }));
   spend(g, lost, recipe.toolkit);
