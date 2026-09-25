@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, CopyIcon, CrownIcon, KeyRoundIcon, Loader2Icon, LogOutIcon, RadioIcon, UsersIcon, WifiOffIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, CrownIcon, KeyRoundIcon, Loader2Icon, LogOutIcon, RadioIcon, UsersIcon, WifiOffIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BACKUP_KEY, claimCharacter, connect, hostCampaign, joinCampaign, leaveCampaign, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
+import { BACKUP_KEY, claimCharacter, connect, forget, hostCampaign, joinCampaign, leaveCampaign, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Pill } from "./common";
@@ -26,6 +26,43 @@ function initialJoinCode() {
 function initialGmKey() {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get("gm") ?? "";
+}
+
+/** Campaigns this device has hosted or joined, so a GM running several can hop between them. */
+function RecentCampaigns({ onJoin, disabled }: { onJoin: () => void; disabled?: boolean }) {
+  const { recent, session } = useGame();
+  const others = recent.filter((r) => r.code !== session?.code);
+  if (others.length === 0) return null;
+  return (
+    <div className="grid gap-2 rounded-xl border p-3">
+      <p className="text-sm font-medium">{session ? "Switch to another campaign" : "Your campaigns"}</p>
+      <ul className="grid max-h-56 gap-1.5 overflow-y-auto">
+        {others.map((r) => (
+          <li key={r.code} className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 text-sm">
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-medium">{r.ship}</span> <span className="font-mono text-xs text-muted-foreground">{r.code}</span>
+            </span>
+            {r.gmKey && <Pill tone="warn"><CrownIcon className="size-3" /> GM</Pill>}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={() => {
+                joinCampaign(r.code);
+                onJoin();
+                toast.success(`Rejoined ${r.ship}`);
+              }}
+            >
+              Rejoin
+            </Button>
+            <Button size="icon" variant="ghost" className="size-7" title="Remove from this list" onClick={() => forget(r.code)}>
+              <XIcon />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function CopyField({ value, label }: { value: string; label: string }) {
@@ -214,13 +251,14 @@ export function PlayTogether() {
                 </DialogDescription>
               </DialogHeader>
               <SessionPanel code={session.code} gmKey={session.gmKey} onRename={(v) => { setName(v); reannounce(); }} />
+              <RecentCampaigns onJoin={() => onOpenChange(false)} />
               <DialogFooter>
                 <Button
                   variant="outline"
                   onClick={() => {
                     leaveCampaign();
                     onOpenChange(false);
-                    toast("Left the shared campaign. The latest version is kept on this device.");
+                    toast("Left the shared campaign. The latest version is kept on this device, and you can rejoin it from Play together.");
                   }}
                 >
                   <LogOutIcon /> Leave
@@ -238,6 +276,8 @@ export function PlayTogether() {
                   <Label htmlFor="mp-name">Your name</Label>
                   <Input id="mp-name" value={playerName} placeholder="Shown to other players and in the log" onChange={(e) => useGame.setState({ playerName: e.target.value.slice(0, 40) })} />
                 </div>
+
+                <RecentCampaigns disabled={!named} onJoin={() => onOpenChange(false)} />
 
                 <div className="grid gap-2 rounded-xl border p-3">
                   <p className="flex items-center gap-2 text-sm font-medium"><RadioIcon className="size-4 text-primary" /> Host this campaign</p>
@@ -266,7 +306,7 @@ export function PlayTogether() {
                         <span className="font-medium">{preview.ship}</span> · {preview.crew} survivor{preview.crew === 1 ? "" : "s"} · {preview.people.length} online
                       </p>
                       <p className="text-xs text-muted-foreground">Your current campaign is saved on this device and can be restored after you leave.</p>
-                      <Button disabled={!named} onClick={() => { joinCampaign(preview.code, gmKey && preview.code === linkCode ? gmKey : undefined); onOpenChange(false); toast.success(`Joined ${preview.ship}`); }}>
+                      <Button disabled={!named} onClick={() => { joinCampaign(preview.code, gmKey && preview.code === linkCode ? gmKey : undefined, preview.ship); onOpenChange(false); toast.success(`Joined ${preview.ship}`); }}>
                         Join as {named ? playerName : "…"}{gmKey && preview.code === linkCode ? " (GM)" : ""}
                       </Button>
                     </div>

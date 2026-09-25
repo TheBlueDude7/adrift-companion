@@ -170,12 +170,25 @@ export function reannounce() {
   if (code) open();
 }
 
+/** Keep a campaign in this device's list so it can be rejoined later. A GM key, once known, is never dropped. */
+export function remember(c: string, ship: string, gmKey?: string) {
+  const { recent } = useGame.getState();
+  const old = recent.find((r) => r.code === c);
+  const entry = { code: c, ship, at: Date.now(), ...((gmKey ?? old?.gmKey) ? { gmKey: gmKey ?? old?.gmKey } : {}) };
+  useGame.setState({ recent: [entry, ...recent.filter((r) => r.code !== c)].slice(0, 20) });
+}
+
+export function forget(c: string) {
+  useGame.setState({ recent: useGame.getState().recent.filter((r) => r.code !== c) });
+}
+
 export async function hostCampaign() {
   const { game } = useGame.getState();
   const res = await fetch("/api/campaigns", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ game }) });
   const data = (await res.json()) as { code?: string; gmKey?: string; error?: string };
   if (!res.ok || !data.code || !data.gmKey) throw new Error(data.error ?? "Could not reach the server.");
   useGame.setState({ session: { code: data.code, gmKey: data.gmKey } });
+  remember(data.code, game.ship.name, data.gmKey);
   connect(data.code);
   return data.code;
 }
@@ -189,11 +202,14 @@ export async function lookupCampaign(raw: string) {
   return data as { code: string; ship: string; crew: number; people: Person[] };
 }
 
-export function joinCampaign(c: string, gmKey?: string) {
+export function joinCampaign(c: string, gmKey?: string, ship?: string) {
   const s = useGame.getState();
   if (!s.session) localStorage.setItem(BACKUP_KEY, JSON.stringify(s.game));
+  else remember(s.session.code, s.game.ship.name, s.session.gmKey);
+  const key = gmKey ?? s.recent.find((r) => r.code === c)?.gmKey;
   disconnect();
-  useGame.setState({ session: gmKey ? { code: c, gmKey } : { code: c }, past: [] });
+  useGame.setState({ session: key ? { code: c, gmKey: key } : { code: c }, past: [] });
+  remember(c, ship ?? s.recent.find((r) => r.code === c)?.ship ?? "Campaign", key);
   connect(c);
 }
 
@@ -227,6 +243,8 @@ export async function claimCharacter(characterId: string | null, memberId?: stri
 
 /** Stop syncing. The latest shared state stays on this device as a local copy. */
 export function leaveCampaign() {
+  const { session, game } = useGame.getState();
+  if (session) remember(session.code, game.ship.name, session.gmKey);
   disconnect();
   useGame.setState({ session: null, past: [] });
 }

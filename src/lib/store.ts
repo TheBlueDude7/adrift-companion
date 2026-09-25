@@ -24,6 +24,8 @@ type Store = {
   /** Private key that identifies this device to shared campaigns. */
   playerKey: string;
   session: { code: string; gmKey?: string } | null;
+  /** Shared campaigns this device has hosted or joined, newest first, so they can be rejoined. */
+  recent: { code: string; gmKey?: string; ship: string; at: number }[];
   status: SyncStatus;
   people: Person[];
   me: { id: string; role: Role } | null;
@@ -60,6 +62,7 @@ export const useGame = create<Store>()(
         playerName: "",
         playerKey: "",
         session: null,
+        recent: [],
         status: "offline",
         people: [],
         me: null,
@@ -88,7 +91,7 @@ export const useGame = create<Store>()(
     {
       name: "adrift-companion",
       version: 1,
-      partialize: (s) => ({ game: s.game, past: s.past.slice(0, 15), playerName: s.playerName, playerKey: s.playerKey, session: s.session }),
+      partialize: (s) => ({ game: s.game, past: s.past.slice(0, 15), playerName: s.playerName, playerKey: s.playerKey, session: s.session, recent: s.recent }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<Store>;
         return {
@@ -98,6 +101,7 @@ export const useGame = create<Store>()(
           playerName: p.playerName ?? "",
           playerKey: p.playerKey ?? "",
           session: p.session ?? null,
+          recent: Array.isArray(p.recent) ? p.recent : p.session ? [{ ...p.session, ship: p.game?.ship.name ?? "Campaign", at: Date.now() }] : [],
         };
       },
     },
