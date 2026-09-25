@@ -1,5 +1,5 @@
 import { poolFor } from "../derive";
-import type { GameState } from "../types";
+import type { GameState, Item, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
 
 export type Role = "gm" | "player";
@@ -10,10 +10,11 @@ const idOf = (s: Seg | undefined) => (s && typeof s === "object" ? s.id : undefi
 /**
  * What players may change in a shared campaign. The GM may change anything.
  *
- * Players can edit their own character, items in the ship's hold or their own inventory,
- * shared-pool cargo carried by anyone in their Loadmaster pool, ship rooms and projects
- * (building and repairing), mechs, cybernetic research, maps, the item catalog, the log, and their
- * own planned segment tasks (the GM resolves them).
+ * Players can edit their own character, items in the ship's hold or their own inventory (without
+ * conjuring new items into the hold), shared-pool cargo carried by anyone in their Loadmaster pool,
+ * ship rooms and projects (building and repairing), mechs, cybernetic research, maps (but not the
+ * neutron star, chart size, or ship position), the item catalog, the log, and their own planned
+ * segment tasks (the GM resolves them).
  * Returns a reason when the change is not allowed.
  */
 export function denyReason(game: GameState, ops: Op[], actor: Actor): string | null {
@@ -23,8 +24,8 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
   for (const o of ops) {
     const [head, second] = o.path;
     switch (head) {
-      case "log":
       case "maps":
+      case "log":
       case "catalog":
       case "mechs":
       case "research":
@@ -52,11 +53,32 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
         return "Only the GM can change that.";
     }
   }
+  if (ops.some((o) => o.path[0] === "maps")) {
+    const reason = moveDenyReason(game, ops);
+    if (reason) return reason;
+  }
   if (ops.some((o) => o.path[0] === "actions")) {
     const reason = actionDenyReason(game, ops, own);
     if (reason) return reason;
   }
   return ops.some((o) => o.path[0] === "items") ? itemDenyReason(game, ops, own) : null;
+}
+
+/** The neutron star, the chart's size, and the ship's position are the GM's. Players move the ship by planning a course. */
+function moveDenyReason(game: GameState, ops: Op[]): string | null {
+  const after = applyOps(structuredClone(game), ops);
+  const same = (a: TilePos | null, b: TilePos | null) => a?.x === b?.x && a?.y === b?.y;
+  for (const m of game.maps) {
+    if (m.kind !== "star") continue;
+    const n = after.maps.find((x): x is StarMap => x.id === m.id && x.kind === "star");
+    if (!n) {
+      if (m.shipAt) return "Only the GM can delete the chart the ship is on.";
+      continue;
+    }
+    if (!same(m.shipAt, n.shipAt)) return "Only the GM can move the ship. Plan a course on the Actions tab instead.";
+    if (!same(m.star, n.star) || m.size !== n.size) return "Only the GM can move the neutron star or resize the chart.";
+  }
+  return null;
 }
 
 /** True when these ops finish a Stress Recovery project whose patient is `patientId`. */
@@ -103,5 +125,29 @@ function itemDenyReason(game: GameState, ops: Op[], own: string | null): string 
     if (a && !mine(a.location) && !(inPool(a.location) && a.shared)) return "You can only change items in the ship's hold, your own inventory, or your shared pool.";
     if (b && !mine(b.location) && !(inPool(b.location) && (b.shared || a?.shared))) return "Players can move items between the hold, their own inventory, and their shared pool.";
   }
-  return null;
+  return addsToHold(game, after, ops) ? "Only the GM can add items to ship storage." : null;
+}
+
+/**
+ * True when the hold gains items out of nowhere: more than survivors handed over, with nothing
+ * used up to make them. Crafting, refining, and removing implants or mech modules still stock the hold.
+ */
+function addsToHold(game: GameState, after: GameState, ops: Op[]): boolean {
+  const tally = (items: Item[], where: (location: string) => boolean) => {
+    const m = new Map<string, number>();
+    for (const i of items) if (where(i.location)) m.set(i.name, (m.get(i.name) ?? 0) + i.qty);
+    return m;
+  };
+  const hold = (l: string) => l === "ship";
+  const carried = (l: string) => l !== "ship";
+  const anywhere = () => true;
+  const [holdBefore, holdAfter] = [tally(game.items, hold), tally(after.items, hold)];
+  const [carriedBefore, carriedAfter] = [tally(game.items, carried), tally(after.items, carried)];
+  const gained = [...holdAfter].some(([name, n]) => n - (holdBefore.get(name) ?? 0) > (carriedBefore.get(name) ?? 0) - (carriedAfter.get(name) ?? 0));
+  if (!gained || ops.some((o) => o.path[0] !== "items" && o.path[0] !== "log")) return false;
+  const [allBefore, allAfter] = [tally(game.items, anywhere), tally(after.items, anywhere)];
+  const usedUp = [...allBefore].some(([name, n]) => (allAfter.get(name) ?? 0) < n);
+  const now = new Map(after.items.map((i) => [i.id, i]));
+  const chargesSpent = game.items.some((i) => (now.get(i.id)?.charges ?? 0) < (i.charges ?? 0));
+  return !usedUp && !chargesSpent;
 }

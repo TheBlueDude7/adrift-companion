@@ -524,6 +524,7 @@ export function StarMapView({ map, onOpenMap }: { map: StarMap; onOpenMap: (id: 
             <CommitInput aria-label="Chart name" value={map.name} onCommit={(v) => update("Rename chart", (m) => void (m.name = v.trim() || m.name))} />
             <Select
               value={String(map.size)}
+              disabled={!isGM}
               onValueChange={(v) => {
                 const size = Number(v);
                 if (size === map.size) return;
@@ -665,7 +666,7 @@ function TilePanel({
             </p>
           </>
         )}
-        {!isStar && (
+        {!isStar && isGM && (
           <Button size="sm" variant="ghost" onClick={onPlaceStar}><SunIcon /> Put the neutron star here</Button>
         )}
       </div>

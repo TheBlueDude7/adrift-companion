@@ -75,7 +75,7 @@ export { addItem };
 
 export function ItemRow({ item, compact, showCarrier }: { item: Item; compact?: boolean; showCarrier?: boolean }) {
   const { act, game } = useGame();
-  const { canUseLocation } = usePerms();
+  const { canUseLocation, isGM } = usePerms();
   const pool = item.location === "ship" ? null : poolFor(game, item.location);
   const shared = !!item.shared && !!pool;
   const poolRoom = pool ? poolUsage(game, pool.members) : null;
@@ -115,6 +115,7 @@ export function ItemRow({ item, compact, showCarrier }: { item: Item; compact?: 
       <Stepper
         value={item.qty}
         min={0}
+        max={item.location === "ship" && !isGM ? item.qty : undefined}
         size="xs"
         label="quantity"
         onChange={(v) =>

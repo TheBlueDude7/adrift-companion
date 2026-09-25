@@ -3,7 +3,7 @@ import { TRAINING, trainingBand } from "@/data/training";
 import { fabricate, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { attributeValue, skillLevel } from "./derive";
 import { d, uid } from "./dice";
-import { cellKey, tileDistance } from "./maps";
+import { cellKey, tileDistance, tileLabel } from "./maps";
 import { changeStress, gainXp, rest } from "./mechanics";
 import { moveShip } from "./power";
 import { haveInStorage, spend, stockItem } from "./stock";
@@ -17,6 +17,14 @@ export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.
 
 /** Planned tasks from segments that have already passed. */
 export const overdueActions = (g: GameState) => g.actions.filter((a) => a.status === "planned" && (a.day < g.day || (a.day === g.day && a.segment < g.segment)));
+
+export function targetName(g: GameState, t: SegmentAction["target"]) {
+  if (!t) return null;
+  const map = g.maps.find((m): m is StarMap => m.id === t.mapId && m.kind === "star");
+  if (!map) return "a tile";
+  const node = map.nodes.find((n) => n.x === t.x && n.y === t.y);
+  return node ? node.name : `tile ${tileLabel(map, t)}`;
+}
 
 export const whenLabel = (a: Pick<SegmentAction, "day" | "segment">) => `Day ${a.day} ${SEGMENTS[a.segment]}`;
 
@@ -352,16 +360,17 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   }
   if (def.effect === "course" && a.target) {
     const unsafe = a.task === "Plot Unsafe Course";
-    if (ok || unsafe) {
+    if (ok) {
       const strongFree = strong && !unsafe;
-      const master = ok && !strongFree && !!c && masterPilotReady(g, c, a);
+      const master = !strongFree && !!c && masterPilotReady(g, c, a);
       const line = moveShip(g, a.target.mapId, a.target, true, strongFree || master);
       if (line && master) {
         a.freeCell = true;
         out.push(`${c?.name} flies it as a Master Pilot: no Power Cell consumed.`);
       }
       out.push(line ?? "⚠ The ship couldn't make the move: check the engines and power cells.");
-      if (line && !ok) out.push("⚠ The ship enters the tile but runs straight into a hazard, collision, ambush, or navigation error.");
+    } else if (r.status === "failed") {
+      out.push(`⚠ ${c?.name ?? "The pilot"} fails to plot the course to ${targetName(g, a.target) ?? "the destination"}. The ship stays where it is.`);
     }
   }
   if (def.effect === "craft") {

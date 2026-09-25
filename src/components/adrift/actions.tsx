@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, craftList, masterPilotReady, newAction, overdueActions, scanRadius, trainingCost, resolveAction, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, craftList, masterPilotReady, newAction, overdueActions, scanRadius, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
@@ -20,7 +20,7 @@ import { planMove, shipMap } from "@/lib/power";
 import { SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
-import type { Character, GameState, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
+import type { Character, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EmptyState, Pill, Stepper } from "./common";
@@ -31,14 +31,6 @@ const MODE_TONE = { routine: "good", skilled: "warn", crisis: "danger" } as cons
 
 const STATUS_LABEL: Record<SegmentAction["status"], string> = { planned: "Planned", success: "Success", strong: "Strong success", failed: "Failed", cancelled: "Called off" };
 const STATUS_TONE = { planned: "info", success: "good", strong: "good", failed: "danger", cancelled: "muted" } as const;
-
-function targetName(g: GameState, t: SegmentAction["target"]) {
-  if (!t) return null;
-  const map = g.maps.find((m): m is StarMap => m.id === t.mapId && m.kind === "star");
-  if (!map) return "a tile";
-  const node = map.nodes.find((n) => n.x === t.x && n.y === t.y);
-  return node ? node.name : `tile ${tileLabel(map, t)}`;
-}
 
 function TermsPills({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);

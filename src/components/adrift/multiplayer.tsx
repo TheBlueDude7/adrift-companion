@@ -69,7 +69,7 @@ function SessionPanel({ code, gmKey, onRename }: { code: string; gmKey?: string;
       <div className="flex items-center gap-2 text-sm">
         {perms.isGM ? <Pill tone="warn"><CrownIcon className="size-3" /> Game master</Pill> : <Pill tone="info">Player</Pill>}
         <span className="text-xs text-muted-foreground">
-          {perms.isGM ? "You can change everything." : "You can edit your character, the ship's storage, and rooms and projects aboard the ship."}
+          {perms.isGM ? "You can change everything." : "You can edit your character, take and use items from the ship's storage, and work on rooms and projects aboard the ship."}
         </span>
       </div>
 

@@ -9,6 +9,7 @@ import { carrySlots, supplyCount, usedSlots } from "@/lib/derive";
 import { ITEM_CATEGORIES } from "@/lib/rules";
 import { cellCount } from "@/lib/power";
 import { useGame } from "@/lib/store";
+import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { Meter, SectionTitle } from "./common";
 import { CraftDialog } from "./crafting";
@@ -44,6 +45,7 @@ export function SupplyStrip() {
 
 export function StorageTab() {
   const game = useGame((s) => s.game);
+  const { isGM } = usePerms();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const alive = game.characters.filter((c) => !c.dead);
@@ -70,7 +72,7 @@ export function StorageTab() {
                 </SelectContent>
               </Select>
               <CraftDialog />
-              <AddItemDialog location="ship" />
+              {isGM && <AddItemDialog location="ship" />}
             </div>
             <ItemList location="ship" filter={q} category={cat} />
           </CardContent>
