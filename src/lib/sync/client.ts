@@ -70,11 +70,16 @@ async function flush() {
         lost();
         break;
       }
-      if (res.status === 403 || res.status === 400) {
+      if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 413) {
         const { error } = (await res.json().catch(() => ({}))) as { error?: string };
         toast.error(error ?? "The server rejected that change.");
         pending = pending.filter((p) => p !== next);
         show();
+        continue;
+      }
+      // Gateway errors while the host restarts or redeploys. Ops are idempotent, so resending is safe.
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 2000));
         continue;
       }
       Object.assign(next, { sent: true });
