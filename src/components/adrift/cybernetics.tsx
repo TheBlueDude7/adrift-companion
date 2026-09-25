@@ -45,6 +45,7 @@ import { ATTRIBUTES } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import type { Character, GameState } from "@/lib/types";
+import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EmptyState, Pill } from "./common";
 
@@ -72,12 +73,15 @@ function MaterialsLine({ recipe, className }: { recipe: { name: string; qty: num
 }
 
 function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed: boolean }) {
+  const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
   const { inst, def } = x;
   const tag = mechTag(x);
   const off = suppressed && (tag === "Suppressed" || tag === "GM decides");
   const edit = (label: string, fn: (g: GameState) => string) => act(label, fn);
   const upgradeCost = IMPLANT_RECIPES[1].map((p, i) => ({ name: p.name, qty: Math.max(0, p.qty - IMPLANT_RECIPES.replacement[i].qty) })).filter((p) => p.qty > 0);
+  const upgradeShort = shortfalls(game, upgradeCost);
 
   function remove(keep: boolean) {
     edit(keep ? "Remove cybernetic" : "Discard cybernetic", (g) => {
@@ -110,7 +114,7 @@ function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed
               <WrenchIcon /> {inst.damaged ? "Mark repaired" : "Mark damaged"}
             </DropdownMenuItem>
             {inst.replacement && (
-              <DropdownMenuItem onClick={() => edit("Enhance cybernetic", (g) => {
+              <DropdownMenuItem disabled={!isGM && upgradeShort.length > 0} onClick={() => edit("Enhance cybernetic", (g) => {
                 const i = char(g, c.id).cybernetics!.find((y) => y.id === inst.id)!;
                 const short = shortfalls(g, upgradeCost);
                 if (!short.length) spend(g, upgradeCost);
@@ -118,6 +122,7 @@ function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed
                 return `${c.name}'s ${def.name} is upgraded from a Replacement to an Enhanced implant${short.length ? " (materials not tracked)" : ` (${recipeText(upgradeCost)})`}.`;
               })}>
                 <PlusIcon /> Upgrade to Enhanced
+                <span className={cn("ml-auto text-[10px]", upgradeShort.length ? "text-rose-300" : "text-muted-foreground")}>{upgradeShort.length ? "Short on materials" : recipeText(upgradeCost)}</span>
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -180,6 +185,7 @@ function InstallDialog({ c }: { c: Character }) {
   const [replaceId, setReplaceId] = useState("none");
   const [choice, setChoice] = useState("");
   const [source, setSource] = useState<Source>("fabricate");
+  const { isGM } = usePerms();
 
   const def = key ? CYBER_BY_KEY[key] : null;
   const defs = CYBERNETICS.filter((d) => d.system === system);
@@ -224,7 +230,7 @@ function InstallDialog({ c }: { c: Character }) {
   }
 
   const short = shortfalls(game, recipe);
-  const canInstall = !!def && !blocker && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0) && (source !== "fabricate" || short.length === 0);
+  const canInstall = !!def && !blocker && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0) && (source !== "fabricate" || short.length === 0) && (source !== "untracked" || isGM);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setKey(null); }}>
@@ -327,7 +333,7 @@ function InstallDialog({ c }: { c: Character }) {
                         <SelectContent>
                           <SelectItem value="storage" disabled={inStorage === 0}>Use {itemName} from the hold ({inStorage})</SelectItem>
                           <SelectItem value="fabricate">Fabricate it now from ship storage</SelectItem>
-                          <SelectItem value="untracked">Don&apos;t track materials</SelectItem>
+                          {isGM && <SelectItem value="untracked">Don&apos;t track materials</SelectItem>}
                         </SelectContent>
                       </Select>
                       {source === "fabricate" && <MaterialsLine recipe={recipe} />}

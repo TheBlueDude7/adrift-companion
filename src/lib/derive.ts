@@ -116,13 +116,23 @@ export function inventoryFor(state: GameState, location: string) {
   return state.items.filter((i) => i.location === location);
 }
 
-/** Personal slots in use: carried items outside the shared pool, plus undecided Contingency Slots. */
+/** The armor a survivor wears in their Armor Slot: their best carried piece. It takes no inventory slot. */
+export function wornArmor(state: GameState, characterId: string): Item | null {
+  const pieces = inventoryFor(state, characterId).filter((i) => i.category === "Armor" && !i.shared && i.qty > 0);
+  return pieces.sort((a, b) => Number(a.broken) - Number(b.broken) || (b.armor ?? 0) - (a.armor ?? 0))[0] ?? null;
+}
+
+/** Personal slots in use: carried items outside the shared pool and the Armor Slot, plus undecided Contingency Slots. */
 export function usedSlots(state: GameState, characterId: string) {
   const pooled = !!poolFor(state, characterId);
   const relief = heavyRelief(state, characterId);
   const carried = inventoryFor(state, characterId).filter((i) => !(pooled && i.shared));
   const heavyCount = carried.filter((i) => i.heavy).reduce((n, i) => n + i.qty, 0);
-  const items = carried.reduce((sum, i) => sum + itemSlots(i, relief.heavyCost), 0) - Math.min(relief.freeHeavy, heavyCount) * relief.heavyCost;
+  const worn = wornArmor(state, characterId);
+  const items =
+    carried.reduce((sum, i) => sum + itemSlots(i, relief.heavyCost), 0) -
+    Math.min(relief.freeHeavy, heavyCount) * relief.heavyCost -
+    (worn ? itemSlots({ ...worn, qty: 1 }, relief.heavyCost) : 0);
   const c = state.characters.find((x) => x.id === characterId);
   return items + (c ? (contingencyFor(state, c)?.undecided ?? 0) : 0);
 }

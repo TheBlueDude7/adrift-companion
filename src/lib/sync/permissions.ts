@@ -57,6 +57,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
   if (ops.some((o) => o.path[0] === "characters")) {
     const after = applyOps(structuredClone(game), ops);
     if (after.characters.some((c) => c.energy > (game.characters.find((x) => x.id === c.id)?.energy ?? Infinity))) return "Only the GM can restore Energy.";
+    if (newImplants(game, after) && !itemsUsedUp(game, after)) return "Installing or enhancing a cybernetic uses an implant or materials from ship storage. Only the GM can skip that.";
   }
   if (ops.some((o) => o.path[0] === "maps")) {
     const reason = moveDenyReason(game, ops);
@@ -140,6 +141,28 @@ function itemDenyReason(game: GameState, ops: Op[], own: string | null): string 
  * True when the hold gains items out of nowhere: more than survivors handed over, with nothing
  * used up to make them. Crafting, refining, and removing implants or mech modules still stock the hold.
  */
+/** A cybernetic was installed, or a Replacement was made Enhanced. */
+function newImplants(game: GameState, after: GameState): boolean {
+  return after.characters.some((c) => {
+    const was = new Map((game.characters.find((x) => x.id === c.id)?.cybernetics ?? []).map((i) => [i.id, i]));
+    return (c.cybernetics ?? []).some((i) => {
+      const w = was.get(i.id);
+      return !w || (w.replacement && !i.replacement);
+    });
+  });
+}
+
+/** Some item's total across the campaign went down. */
+function itemsUsedUp(game: GameState, after: GameState): boolean {
+  const tally = (items: Item[]) => {
+    const m = new Map<string, number>();
+    for (const i of items) m.set(i.name, (m.get(i.name) ?? 0) + i.qty);
+    return m;
+  };
+  const now = tally(after.items);
+  return [...tally(game.items)].some(([name, n]) => (now.get(name) ?? 0) < n);
+}
+
 function addsToHold(game: GameState, after: GameState, ops: Op[]): boolean {
   const tally = (items: Item[], where: (location: string) => boolean) => {
     const m = new Map<string, number>();

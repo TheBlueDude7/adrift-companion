@@ -31,6 +31,7 @@ import {
   skillLevel,
   poolFor,
   usedSlots,
+  wornArmor,
 } from "@/lib/derive";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
@@ -612,12 +613,30 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
             </div>
           </div>
           {used > slots && <p className="mb-2 text-xs text-rose-300">Over capacity — {c.name} is carrying more than they can manage.</p>}
+          {(() => {
+            const worn = wornArmor(game, c.id);
+            return (
+              <p className="mb-2 flex flex-wrap items-center gap-1.5 rounded-md border border-dashed px-2.5 py-1.5 text-xs">
+                <ShieldIcon className="size-3.5 text-sky-300" />
+                <span className="text-muted-foreground">Armor Slot:</span>
+                {worn ? (
+                  <>
+                    <span className="font-medium">{worn.name}</span>
+                    {worn.armor ? <Pill tone="info">+{worn.armor} Armor</Pill> : null}
+                    {worn.broken && <Pill tone="danger">Broken</Pill>}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">empty. Carried armor or a space suit goes here and takes no inventory slot.</span>
+                )}
+              </p>
+            );
+          })()}
           <ItemList location={c.id} personal />
           <div className="mt-3 grid gap-3 empty:hidden">
             <ContingencyPanel c={c} />
             <SharedPoolPanel c={c} />
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">Slots = Strength + ⅓ Scavenging (rounded down){poolFor(game, c.id) ? ", minus one given to the shared pool" : ""}. Every item takes one slot.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Slots = Strength + ⅓ Scavenging (rounded down){poolFor(game, c.id) ? ", minus one given to the shared pool" : ""}. Every item takes one slot, except the armor worn in the Armor Slot.</p>
         </CardContent>
       </Card>
 
