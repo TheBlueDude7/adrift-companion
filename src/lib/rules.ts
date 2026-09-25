@@ -248,6 +248,7 @@ export const MIND_BREAKS = [
   { roll: 5, name: "Compulsive Shedding", effect: "Attempts to remove worn equipment, armor, clothing, or implants that feel foreign." },
   { roll: 6, name: "Violent Outburst", effect: "Attacks the nearest perceived threat recklessly, then all rolls suffer −6d6 until the break ends." },
 ] as const;
+export const MIND_BREAK_BY_NAME: Record<string, (typeof MIND_BREAKS)[number]> = Object.fromEntries(MIND_BREAKS.map((m) => [m.name, m]));
 
 export const INJURY_SEVERITIES = ["Minor", "Major", "Deadly"] as const;
 export type InjurySeverity = (typeof INJURY_SEVERITIES)[number];

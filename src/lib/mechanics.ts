@@ -2,6 +2,7 @@ import { AFFLICTIONS, INJURIES } from "@/data/compendium";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, hasWorkingModule, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import {
+  MIND_BREAK_BY_NAME,
   MIND_BREAKS,
   PANICKED,
   PRESSURE_STATES,
@@ -47,6 +48,8 @@ export function clampVitals(c: Character) {
 export function mindBreak(c: Character): string {
   const r = d(6);
   const mb = MIND_BREAKS[r - 1];
+  c.conditions = c.conditions.filter((x) => !MIND_BREAK_BY_NAME[x.name]);
+  c.conditions.push({ id: uid(), name: mb.name, duration: "Scene", notes: `Mind Break: ${mb.effect}` });
   let text = `${c.name} suffers a Mind Break (d6 = ${r}): ${mb.name} — ${mb.effect}`;
   if (c.stress >= 9) text += " Stress 9+: this Mind Break also causes an Affliction.";
   else if (c.stress >= 7) text += " (Unstable: the first Mind Break each expedition also causes an Affliction.)";

@@ -15,6 +15,7 @@ import {
   CONDITION_DURATIONS,
   CONDITION_GROUPS,
   INSTANT_CONDITIONS,
+  MIND_BREAK_BY_NAME,
   defaultDuration,
   type ConditionDuration,
 } from "@/lib/rules";
@@ -24,14 +25,16 @@ import type { Character } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Tip } from "./common";
 
-const effectOf = (name: string) => CONDITIONS.find((c) => c.name === name);
+const effectOf = (name: string): { effect: string; removal?: string } | undefined =>
+  CONDITIONS.find((c) => c.name === name) ??
+  (MIND_BREAK_BY_NAME[name] && { effect: MIND_BREAK_BY_NAME[name].effect, removal: "Lasts until the immediate danger ends (the scene), or the GM clears it." });
 
 export function conditionTip(name: string) {
   const e = effectOf(name);
   if (!e) return null;
   return (
     <span className="grid gap-1">
-      <span className="font-semibold">{name}</span>
+      <span className="font-semibold">{MIND_BREAK_BY_NAME[name] ? `Mind Break: ${name}` : name}</span>
       <span>{e.effect}</span>
       {e.removal && <span className="opacity-80">Removal: {e.removal}</span>}
     </span>
@@ -41,7 +44,7 @@ export function conditionTip(name: string) {
 function chipTone(name: string, active: boolean) {
   if (!active) return "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground";
   if (BENEFICIAL_CONDITIONS.has(name)) return "border-emerald-400/60 bg-emerald-500/15 text-emerald-100";
-  if (name === "Bleeding" || name === "Burning") return "border-rose-400/60 bg-rose-500/15 text-rose-100";
+  if (name === "Bleeding" || name === "Burning" || MIND_BREAK_BY_NAME[name]) return "border-rose-400/60 bg-rose-500/15 text-rose-100";
   return "border-amber-300/60 bg-amber-400/15 text-amber-100";
 }
 
