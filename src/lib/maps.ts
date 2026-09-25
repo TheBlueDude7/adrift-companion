@@ -76,7 +76,7 @@ export function newStarMap(name: string, size = 101): StarMap {
     size,
     star: { x: c, y: c },
     tiles: { [cellKey(home.x, home.y)]: "debris" },
-    nodes: [{ id: uid(), ...home, name: "Home tile", type: "derelict", status: "visited", notes: "Debris field where the battle ended. Scanned." }],
+    nodes: [],
     shipAt: home,
     notes: "",
   };

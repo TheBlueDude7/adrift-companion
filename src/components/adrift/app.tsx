@@ -1,6 +1,6 @@
 "use client";
 
-import { ActivityIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
+import { ActivityIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { advanceSegment, completeAct } from "@/lib/mechanics";
+import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
 import { createInitialState } from "@/lib/seed";
 import { useGame } from "@/lib/store";
@@ -96,6 +96,11 @@ function Header() {
             </div>
             <span className="text-sm text-primary">{SEGMENTS[game.segment]}</span>
           </div>
+          {isGM && game.segment > 0 && (
+            <Button size="sm" variant="ghost" aria-label="Previous segment" title={`Back to ${SEGMENTS[game.segment - 1]}`} onClick={() => act("Previous segment", (g) => previousSegment(g), "day")}>
+              <ChevronLeftIcon />
+            </Button>
+          )}
           {isGM && game.segment < 3 && (
             <Button size="sm" variant="outline" onClick={() => act("Next segment", (g) => advanceSegment(g), "day")}>
               Next <ChevronRightIcon />

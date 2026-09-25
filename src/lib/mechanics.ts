@@ -181,6 +181,13 @@ export function advanceSegment(g: GameState): string[] {
   return ["Night is over — run the End of Day procedure."];
 }
 
+/** Step back one segment within the day. End of Day can't be reversed this way; use Undo. */
+export function previousSegment(g: GameState): string[] {
+  if (g.segment === 0) return [];
+  g.segment -= 1;
+  return [`Back to ${SEGMENTS[g.segment]}.`];
+}
+
 export type EndOfDayInput = Record<string, { food: FoodIntake; water: boolean; slept: boolean }>;
 
 export function endOfDay(g: GameState, input: EndOfDayInput): string[] {

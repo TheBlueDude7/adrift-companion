@@ -133,7 +133,7 @@ export function createInitialState(): GameState {
       catastrophicEvents: 0,
       destroyed: false,
       overloaded: false,
-      location: "Home tile — debris field, scanned",
+      location: "Debris field where the battle ended",
       rooms,
       projects: [],
     },
