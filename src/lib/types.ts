@@ -162,6 +162,17 @@ export type Item = {
   contingency?: boolean;
 };
 
+export type Crop = {
+  growing: boolean;
+  /** Days of growth so far, out of three. */
+  day: number;
+  plantedDay: number;
+  /** Days someone took Maintain Crops for this crop. */
+  tended: number[];
+  /** Raw Food waiting to be harvested. */
+  ready: number;
+};
+
 export type Room = {
   id: string;
   name: string;
@@ -207,6 +218,8 @@ export type Ship = {
   tuned?: boolean;
   /** Stretch Rations: tonight every 3 Food Units feed 4 survivors. */
   rationsStretched?: boolean;
+  /** The crop growing in Hydroponics. */
+  crop?: Crop;
   location: string;
   rooms: Room[];
   projects: Project[];

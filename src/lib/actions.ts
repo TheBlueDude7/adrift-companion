@@ -1,6 +1,7 @@
 import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
 import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
+import { harvestCrops, tendCrops } from "./crops";
 import { attributeValue, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
@@ -351,7 +352,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   if (strong && def.strong) out.push(`Strong Result: ${def.strong}`);
   if (c && ok && def.effect === "rest") rest(g, c, out);
   if (ok && def.effect === "project" && a.projectId) out.push(...advanceProject(g, a.projectId, terms.progress));
-  if (ok && def.effect === "harvest") {
+  if (ok && def.effect === "tend") tendCrops(g, out);
+  if (ok && def.effect === "harvest" && harvestCrops(g, out) > 0) {
     const bonus = Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0);
     if (bonus > 0) {
       stockItem(g, "Raw Food", bonus, { category: "Supply" });

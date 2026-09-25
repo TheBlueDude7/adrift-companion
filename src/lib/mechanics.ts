@@ -1,4 +1,5 @@
 import { AFFLICTIONS, INJURIES } from "@/data/compendium";
+import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, hasWorkingModule, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import {
@@ -287,6 +288,7 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
     for (const key of Object.keys(c.abilityUsed)) if (key.startsWith("day:") || key.startsWith("expedition:")) delete c.abilityUsed[key];
     clampVitals(c);
   }
+  growCrops(g, out);
   if (g.ship.tuned) out.push("The reactor settles back to its normal output.");
   delete g.ship.tuned;
   delete g.ship.rationsStretched;

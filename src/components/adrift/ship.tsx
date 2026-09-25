@@ -1,7 +1,7 @@
 "use client";
 
 import { READ_ONLY, usePerms } from "@/lib/use-perms";
-import { AlertTriangleIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, PencilIcon, PlusIcon, PowerIcon, Trash2Icon, ZapIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, PencilIcon, PlusIcon, PowerIcon, SproutIcon, Trash2Icon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,10 +26,11 @@ import {
 import { FACILITIES, ladderFor } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject } from "@/lib/actions";
+import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, growCrops, hydroponicsLevel } from "@/lib/crops";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
 import { useGame } from "@/lib/store";
-import type { GameState, Project, Room } from "@/lib/types";
+import type { Crop, GameState, Project, Room } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Dice, EmptyState, Meter, Pill, SectionTitle, Stepper } from "./common";
@@ -260,6 +261,63 @@ function PowerCard() {
           </span>
           <Switch checked={ship.overloaded} onCheckedChange={(v) => act("Overload", (g) => { g.ship.overloaded = v; return v ? "⚡ The grid is overloaded for this segment." : "The overload ends."; }, v ? "danger" : "info")} />
         </label>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HydroponicsCard() {
+  const { game, act } = useGame();
+  const { isGM } = usePerms();
+  const level = hydroponicsLevel(game);
+  const crop = cropOf(game);
+  if (level < 0 && !crop.growing && !crop.ready) return null;
+  const stall = cropStall(game);
+  const tendedToday = crop.tended.includes(game.day);
+  const update = (label: string, fn: (c: Crop) => Crop | void, line?: string) =>
+    act(label, (g) => {
+      const next = fn({ ...cropOf(g), tended: [...cropOf(g).tended] });
+      if (next) g.ship.crop = next;
+      return line;
+    });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><SproutIcon className="size-4 text-emerald-300" /> Hydroponics</CardTitle>
+        <CardDescription>
+          {level < 0 ? "No working Hydroponics aboard." : `${CROP_LEVEL_NAMES[level]}: ${level >= 1 ? `${CROP_YIELD[level]} Raw Food every ${CROP_DAYS} days.` : "no food production."}`} Maintain Crops seeds and tends; End of Day grows; Harvest Hydroponics collects.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-2xl">{crop.growing ? crop.day : "—"}<span className="text-muted-foreground">/{CROP_DAYS}</span></span>
+          <span className="text-sm text-muted-foreground">{crop.growing ? "days grown" : "nothing planted"}</span>
+          {crop.growing && <Pill tone={tendedToday ? "good" : "muted"}>{tendedToday ? "Tended today" : "Not tended today"}</Pill>}
+          <Pill tone={crop.ready ? "good" : "muted"} className="ml-auto">{crop.ready} Raw Food ready</Pill>
+        </div>
+        <Meter value={crop.growing ? crop.day : 0} max={CROP_DAYS} tone="good" segmented />
+        <p className={cn("text-xs", stall ? "text-amber-300" : "text-muted-foreground")}>
+          {stall ? `Tonight: the crops won't grow. ${stall}.` : crop.growing ? (crop.day + 1 >= CROP_DAYS ? "Tonight: the crop finishes." : "Tonight: the crop grows a day.") : level >= 4 ? "A new crop starts on its own tonight." : ""}
+        </p>
+        {isGM && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
+            <span className="text-[11px] text-muted-foreground">GM:</span>
+            {!crop.growing ? (
+              <Button size="xs" variant="outline" onClick={() => update("Seed crops", (c) => ({ ...c, growing: true, day: 0, plantedDay: game.day, tended: [game.day] }), "🌱 The GM seeds a new crop in Hydroponics.")}>Seed</Button>
+            ) : (
+              <>
+                <Button size="xs" variant="outline" onClick={() => update(tendedToday ? "Untend crops" : "Tend crops", (c) => ({ ...c, tended: tendedToday ? c.tended.filter((d) => d !== game.day) : [...c.tended, game.day] }))}>{tendedToday ? "Unmark tended" : "Mark tended"}</Button>
+                <Button size="xs" variant="outline" onClick={() => act("Grow crops", (g) => { const out: string[] = []; const t = cropOf(g); if (!t.tended.includes(g.day)) g.ship.crop = { ...t, tended: [...t.tended, g.day] }; growCrops(g, out); return out; })}>Grow a day</Button>
+                <Button size="xs" variant="ghost" onClick={() => update("Clear crops", (c) => ({ ...c, growing: false, day: 0, tended: [] }), "The crops in Hydroponics are cleared.")}>Clear crop</Button>
+              </>
+            )}
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              Ready
+              <Stepper value={crop.ready} min={0} max={99} size="xs" label="ready food" onChange={(v) => update("Ready food", (c) => ({ ...c, ready: v }))} />
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -610,6 +668,7 @@ export function ShipTab() {
         <HullCard />
         <PowerCard />
       </fieldset>
+      <HydroponicsCard />
 
       <section>
         <SectionTitle

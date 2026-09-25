@@ -3,7 +3,7 @@ import type { SkillKey } from "@/lib/rules";
 export type TaskMode = "routine" | "skilled" | "crisis";
 
 /** How the tracker resolves the task's normal result. Everything else is narrated by the GM. */
-export type TaskEffect = "rest" | "project" | "course" | "scan" | "assist" | "craft" | "harvest" | "convert" | "yield" | "morale" | "tune" | "rations" | "train" | null;
+export type TaskEffect = "rest" | "project" | "course" | "scan" | "assist" | "craft" | "harvest" | "tend" | "convert" | "yield" | "morale" | "tune" | "rations" | "train" | null;
 
 /** A module the task needs. Several names mean any of them will do. */
 export type TaskFacility = { modules: string[]; level?: number; label: string };
@@ -62,7 +62,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Prepare Food", "Food & water", 1, ["cooking"], 1, "Prepare safe meals from available ingredients.", "routine", null, { strong: "Make one extra meal.", facility: KITCHEN }),
   t("Stretch Rations", "Food & water", 1, ["cooking"], 5, "Tonight, every 3 Food Units feed 4 survivors.", "routine", "rations", { facility: KITCHEN }),
   t("Harvest Hydroponics", "Food & water", 1, ["botany"], 0, "Collect the module's available Food Units. +1 Raw Food for every 3 Botany levels.", "routine", "harvest", { strong: "+1 Raw Food.", facility: HYDROPONICS }),
-  t("Maintain Crops", "Food & water", 2, ["botany"], 2, "Prevent ordinary crop loss and advance cultivation. Botany 5 at Expanded Hydroponics, 7 at Self-Sustaining.", "routine", null, { facility: HYDROPONICS }),
+  t("Maintain Crops", "Food & water", 2, ["botany"], 2, "Prevent ordinary crop loss and advance cultivation. Botany 5 at Expanded Hydroponics, 7 at Self-Sustaining.", "routine", "tend", { facility: HYDROPONICS }),
   t("Cultivate Specimen", "Food & water", 2, ["botany"], 6, "Grow an alien plant sample into 1 Chemical Mixture.", "routine", "yield", { strong: "+1 Chemical Mixture.", facility: HYDROPONICS, yields: { name: "Chemical Mixture", qty: 1 } }),
   t("Purify Water", "Food & water", 1, ["biology"], 2, "Convert contaminated water when equipment is available."),
   t("Filter Reclaimed Water", "Food & water", 1, ["cooking"], 1, "Process water produced by Life Support using a filter."),
