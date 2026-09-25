@@ -11,7 +11,7 @@ const idOf = (s: Seg | undefined) => (s && typeof s === "object" ? s.id : undefi
 /**
  * What players may change in a shared campaign. The GM may change anything.
  *
- * Players can edit their own character, items in the ship's hold or their own inventory (without
+ * Players can edit their own character (spending Energy, but never restoring it), items in the ship's hold or their own inventory (without
  * conjuring new items into the hold), shared-pool cargo carried by anyone in their Loadmaster pool,
  * ship rooms and projects (building and repairing), mechs, cybernetic research, maps (but not the
  * neutron star, chart size, or ship position), the item catalog, the log, and their own planned
@@ -53,6 +53,10 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       default:
         return "Only the GM can change that.";
     }
+  }
+  if (ops.some((o) => o.path[0] === "characters")) {
+    const after = applyOps(structuredClone(game), ops);
+    if (after.characters.some((c) => c.energy > (game.characters.find((x) => x.id === c.id)?.energy ?? Infinity))) return "Only the GM can restore Energy.";
   }
   if (ops.some((o) => o.path[0] === "maps")) {
     const reason = moveDenyReason(game, ops);

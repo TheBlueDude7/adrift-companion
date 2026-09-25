@@ -108,6 +108,7 @@ export function StatBlock({
   tone,
   onChange,
   extra,
+  limit = max,
 }: {
   label: string;
   value: number;
@@ -115,6 +116,8 @@ export function StatBlock({
   tone: keyof typeof TONES;
   onChange: (v: number) => void;
   extra?: ReactNode;
+  /** The highest value the stepper may reach, when lower than `max`. */
+  limit?: number;
 }) {
   return (
     <div className="rounded-lg border bg-background/40 p-3">
@@ -127,7 +130,7 @@ export function StatBlock({
       </div>
       <Meter value={value} max={max} tone={tone} segmented />
       <div className="mt-2 flex items-center justify-between gap-2">
-        <Stepper value={value} onChange={onChange} min={0} max={max} label={label} size="xs" />
+        <Stepper value={value} onChange={onChange} min={0} max={limit} label={label} size="xs" />
         {extra}
       </div>
     </div>

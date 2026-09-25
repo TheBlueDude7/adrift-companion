@@ -197,6 +197,7 @@ function CrewListCard({ c, selected, onSelect }: { c: Character; selected: boole
 
 function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   const band = stressBand(c.stress);
+  const { isGM } = usePerms();
   return (
     <div className="grid gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -205,6 +206,7 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           label="Energy"
           value={c.energy}
           max={maxEnergy(c)}
+          limit={isGM ? maxEnergy(c) : c.energy}
           tone="energy"
           onChange={(v) => edit(`${c.name} Energy → ${v}`, (x) => { const diff = v - x.energy; x.energy = v; return `${x.name} ${diff < 0 ? "spends" : "regains"} ${Math.abs(diff)} Energy (${v}/${maxEnergy(x)}).`; })}
           extra={c.survival.energyPenalty > 0 ? <span className="text-[11px] text-amber-300">−{c.survival.energyPenalty} max today</span> : c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined}
@@ -575,7 +577,7 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
             <div className="flex flex-wrap gap-1.5">
               <DiceRoller character={c} />
               <DamageDialog character={c} />
-              <Button size="sm" variant="outline" onClick={() => edit(`${c.name} rests`, (x, g) => { const o: string[] = []; rest(g, x, o); return o; })}><BedIcon /> Rest</Button>
+              {perms.isGM && <Button size="sm" variant="outline" onClick={() => edit(`${c.name} rests`, (x, g) => { const o: string[] = []; rest(g, x, o); return o; })}><BedIcon /> Rest</Button>}
             </div>
           </div>
         </CardHeader>
