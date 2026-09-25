@@ -14,7 +14,29 @@ import type { ActionStatus, Character, GameState, SegmentAction, SpaceTile, Star
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
 
 /** Players roll and resolve their own planned tasks, except the ones the GM keeps. */
-export const playerResolves = (a: SegmentAction, characterId: string | null) => a.status === "planned" && a.characterId === characterId && !taskFor(a).gmResolves;
+export const playerResolves = (a: SegmentAction, characterId: string | null) =>
+  a.status === "planned" && a.characterId === characterId && !taskFor(a).gmResolves && a.approval !== "pending";
+
+/** How much Energy the survivor lacks for this task, after what their earlier planned tasks will cost. */
+export function energyShort(g: GameState, a: SegmentAction) {
+  const c = g.characters.find((x) => x.id === a.characterId);
+  if (!c) return 0;
+  const order = (x: SegmentAction) => {
+    const i = g.actions.findIndex((y) => y.id === x.id);
+    return [x.day, x.segment, i < 0 ? Infinity : i];
+  };
+  const before = (x: SegmentAction) => {
+    const [p, q] = [order(x), order(a)];
+    return p[0] - q[0] || p[1] - q[1] || p[2] - q[2];
+  };
+  const committed = g.actions
+    .filter((x) => x.id !== a.id && x.characterId === c.id && x.status === "planned" && before(x) < 0)
+    .reduce((sum, x) => sum + taskTerms(g, x).energy, 0);
+  return Math.max(0, taskTerms(g, a).energy - Math.max(0, c.energy - committed));
+}
+
+/** A player may take on a task they can't afford only with the GM's permission. */
+export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !== "granted" && energyShort(g, a) > 0;
 
 export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment);
 

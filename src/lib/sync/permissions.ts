@@ -1,3 +1,4 @@
+import { needsPermission } from "../actions";
 import { poolFor } from "../derive";
 import type { GameState, Item, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
@@ -104,6 +105,8 @@ function actionDenyReason(game: GameState, ops: Op[], own: string | null): strin
       if (x.status !== "planned") return "Only the GM can resolve tasks.";
     }
     if (a?.roll || b?.roll) return "That task has been rolled. The dice decide it now.";
+    if (b?.approval === "granted") return "Only the GM can grant permission. Changing the task clears it.";
+    if (b && b.approval !== "pending" && needsPermission(after, b)) return "Not enough Energy for that task. Ask the GM for permission.";
   }
   return null;
 }
