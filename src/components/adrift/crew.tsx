@@ -199,9 +199,10 @@ function CrewListCard({ c, selected, onSelect }: { c: Character; selected: boole
 function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   const band = stressBand(c.stress);
   const { isGM } = usePerms();
+  const worn = useGame((s) => wornArmor(s.game, c.id));
   return (
     <div className="grid gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatBlock label="HP" value={c.hp} max={maxHp(c)} tone="hp" onChange={(v) => edit(`${c.name} HP → ${v}`, (x) => { x.hp = v; return `${x.name} HP set to ${v}.`; })} />
         <StatBlock
           label="Energy"
@@ -213,6 +214,15 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           extra={c.survival.energyPenalty > 0 ? <span className="text-[11px] text-amber-300">−{c.survival.energyPenalty} max today</span> : c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined}
         />
         <StatBlock label="Willpower" value={c.willpower} max={maxWillpower(c)} tone="willpower" onChange={(v) => edit(`${c.name} Willpower → ${v}`, (x) => { x.willpower = v; return `${x.name} Willpower set to ${v}.`; })} />
+        <StatBlock
+          label="Armor"
+          value={c.armor}
+          max={Math.max(worn?.armor ?? 0, c.armor)}
+          limit={20}
+          tone="hull"
+          onChange={(v) => edit(`${c.name} Armor → ${v}`, (x) => { x.armor = v; return `${x.name}'s Armor set to ${v}.`; })}
+          extra={<span className="truncate text-[11px] text-muted-foreground" title="Ablative: absorbs 1 damage and loses 1 point per hit.">{worn ? worn.name : "No armor worn"}</span>}
+        />
       </div>
 
       <div className="rounded-lg border bg-background/40 p-3">
@@ -605,13 +615,7 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
           <SectionTitle action={<AddItemDialog location={c.id} />}>
             Inventory · <span className={cn("normal-case", used > slots ? "text-rose-300" : "text-foreground")}>{used}/{slots} slots</span>
           </SectionTitle>
-          <div className="mb-3 flex items-center gap-3">
-            <Meter value={used} max={slots} tone={used > slots ? "hp" : "good"} segmented className="flex-1" />
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Worn Armor (ablative)">
-              <ShieldIcon className="size-3.5" /> Armor
-              <Stepper value={c.armor} min={0} max={20} size="xs" label="armor" onChange={(v) => edit(`${c.name} Armor → ${v}`, (x) => { x.armor = v; })} />
-            </div>
-          </div>
+          <Meter value={used} max={slots} tone={used > slots ? "hp" : "good"} segmented className="mb-3" />
           {used > slots && <p className="mb-2 text-xs text-rose-300">Over capacity — {c.name} is carrying more than they can manage.</p>}
           {(() => {
             const worn = wornArmor(game, c.id);
