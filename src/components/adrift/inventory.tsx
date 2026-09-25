@@ -200,7 +200,7 @@ export function ItemList({ location, filter = "", category = "all", compact, per
       .filter((i) => i.location === location && !(pooled && i.shared))
       .filter((i) => category === "all" || i.category === category)
       .filter((i) => !needle || i.name.toLowerCase().includes(needle) || i.notes.toLowerCase().includes(needle))
-      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+      .sort((a, b) => (location === "ship" ? 0 : a.category.localeCompare(b.category)) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }, [items, location, filter, category, pooled]);
 
   if (list.length === 0 && personal && !filter && category === "all")
