@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangleIcon, BotIcon, BatteryIcon, HeartCrackIcon, PlusIcon, RocketIcon, Trash2Icon, UndoIcon, WrenchIcon } from "lucide-react";
+import { AlertTriangleIcon, BotIcon, BatteryIcon, CheckIcon, HandIcon, HeartCrackIcon, PlusIcon, RocketIcon, Trash2Icon, UndoIcon, WrenchIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import { mechCapacity, mechModules, mechStats, moduleBlocker, newMech, resolveMe
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import type { GameState, Mech, MechChassis, MechDamageType } from "@/lib/types";
+import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EMPTY_ROLL, InjuryRollFields, parseRoll, type RollDraft } from "./character-dialogs";
 import { CommitInput } from "./commit-input";
@@ -61,8 +62,66 @@ function ResistPicker({ tier, value, onChange }: { tier: 1 | 2 | 3; value: MechD
   );
 }
 
+/** A GM adds a finished frame; a player asks the GM to. */
+function addMech(g: GameState, m: Mech) {
+  const cap = mechCapacity(g);
+  if (cap.used >= cap.capacity) m.external = true;
+  g.mechs.push(m);
+  return `🤖 ${m.name} (${tierName(m.tier)} ${CHASSIS[m.chassis].name}) is assembled${m.external ? " and secured outside the hull: no berth is free" : " in a mech berth"}.`;
+}
+
+function MechRequests() {
+  const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
+  const { isGM, myCharacterId } = usePerms();
+  const requests = game.mechRequests ?? [];
+  if (!requests.length) return null;
+  const who = (id: string) => game.characters.find((c) => c.id === id)?.name ?? "Someone";
+  const answer = (id: string, allow: boolean | null) =>
+    act(allow ? "Allow mech" : allow === false ? "Refuse mech" : "Withdraw mech request", (g) => {
+      const r = (g.mechRequests ?? []).find((x) => x.id === id);
+      g.mechRequests = (g.mechRequests ?? []).filter((x) => x.id !== id);
+      if (!r) return "";
+      if (allow) return [`The GM allows ${who(r.by)}'s ${r.mech.name}.`, addMech(g, r.mech)];
+      return allow === false ? `The GM refuses ${who(r.by)}'s request for ${r.mech.name}.` : `${who(r.by)} withdraws their request for ${r.mech.name}.`;
+    });
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><HandIcon className="size-4" /> Mech requests</CardTitle>
+        <CardDescription>Players have asked to add these frames. They don&apos;t exist until the GM allows them.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {requests.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 p-2.5 text-sm">
+            <span className="font-medium">{r.mech.name}</span>
+            <Pill tone="info">{tierName(r.mech.tier)} {CHASSIS[r.mech.chassis].name}</Pill>
+            <span className="text-xs text-muted-foreground">asked by {who(r.by)}</span>
+            <span className="ml-auto flex gap-1.5">
+              {isGM ? (
+                <>
+                  <Button size="xs" variant="outline" onClick={() => answer(r.id, false)}><XIcon /> Refuse</Button>
+                  <Button size="xs" onClick={() => answer(r.id, true)}><CheckIcon /> Allow</Button>
+                </>
+              ) : r.by === myCharacterId ? (
+                <>
+                  <span className="self-center text-[11px] text-muted-foreground">Waiting for the GM</span>
+                  <Button size="xs" variant="ghost" onClick={() => answer(r.id, null)}>Withdraw</Button>
+                </>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Waiting for the GM</span>
+              )}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function NewMechDialog() {
   const act = useGame((s) => s.act);
+  const { isGM, myCharacterId } = usePerms();
   const { capacity, used } = mechCapacity(useGame((s) => s.game));
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -114,20 +173,23 @@ function NewMechDialog() {
           <ResistPicker tier={tier} value={picks} onChange={setResist} />
           {used >= capacity && <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-100">Every mech berth is taken ({used}/{capacity}). The new frame will have to be secured outside the hull.</p>}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:items-center">
+          {!isGM && <span className="text-xs text-muted-foreground sm:mr-auto">Only the GM adds mechs. Your request waits for their answer.</span>}
           <Button
+            disabled={!isGM && !myCharacterId}
             onClick={() => {
-              act("Add mech", (g) => {
-                const m = newMech(name.trim() || `${c.name} ${tier === 1 ? "I" : tier === 2 ? "II" : "III"}`, chassis, tier, picks);
-                const cap = mechCapacity(g);
-                if (cap.used >= cap.capacity) m.external = true;
-                g.mechs.push(m);
-                return `🤖 ${m.name} (${tierName(tier)} ${c.name}) is assembled${m.external ? " and secured outside the hull: no berth is free" : " in a mech berth"}.`;
-              });
+              const m = newMech(name.trim() || `${c.name} ${tier === 1 ? "I" : tier === 2 ? "II" : "III"}`, chassis, tier, picks);
+              if (isGM) act("Add mech", (g) => addMech(g, m));
+              else
+                act("Ask for a mech", (g) => {
+                  (g.mechRequests ??= []).push({ id: uid(), by: myCharacterId!, mech: m });
+                  const who = g.characters.find((x) => x.id === myCharacterId)?.name ?? "A player";
+                  return `${who} asks the GM to add ${m.name} (${tierName(tier)} ${c.name}).`;
+                });
               setOpen(false);
             }}
           >
-            Add {tierName(tier)} {c.name}
+            {isGM ? `Add ${tierName(tier)} ${c.name}` : <><HandIcon /> Ask the GM to add it</>}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -578,6 +640,7 @@ export function MechsTab() {
         </CardContent>
       </Card>
 
+      <MechRequests />
       {game.mechs.length === 0 ? (
         <EmptyState title="No mechs yet" body="Start a Mech Frame Project on the Ship tab, then record the finished frame here with its chassis and tier." />
       ) : (

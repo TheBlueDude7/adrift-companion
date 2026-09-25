@@ -293,6 +293,8 @@ export type GameState = {
   ship: Ship;
   log: LogEntry[];
   mechs: Mech[];
+  /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
+  mechRequests?: { id: string; by: string; mech: Mech }[];
   research: Research;
   /** Tasks the crew has committed to, by day and segment. */
   actions: SegmentAction[];

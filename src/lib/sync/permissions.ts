@@ -29,6 +29,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       case "log":
       case "catalog":
       case "mechs":
+      case "mechRequests":
       case "research":
         continue;
       case "characters": {
@@ -58,6 +59,18 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     const after = applyOps(structuredClone(game), ops);
     if (after.characters.some((c) => c.energy > (game.characters.find((x) => x.id === c.id)?.energy ?? Infinity))) return "Only the GM can restore Energy.";
     if (newImplants(game, after) && !itemsUsedUp(game, after)) return "Installing or enhancing a cybernetic uses an implant or materials from ship storage. Only the GM can skip that.";
+  }
+  if (ops.some((o) => o.path[0] === "mechs")) {
+    const had = new Set(game.mechs.map((m) => m.id));
+    if (applyOps(structuredClone(game), ops).mechs.some((m) => !had.has(m.id))) return "Only the GM can add mechs. Ask the GM for permission instead.";
+  }
+  if (ops.some((o) => o.path[0] === "mechRequests")) {
+    const before = new Map((game.mechRequests ?? []).map((r) => [r.id, r]));
+    const after = applyOps(structuredClone(game), ops).mechRequests ?? [];
+    if (after.some((r) => before.has(r.id) && JSON.stringify(before.get(r.id)) !== JSON.stringify(r))) return "Only the GM can change a mech request.";
+    if (after.some((r) => !before.has(r.id) && r.by !== own)) return "Ask for mechs as your own character.";
+    const kept = new Set(after.map((r) => r.id));
+    if ([...before.values()].some((r) => !kept.has(r.id) && r.by !== own)) return "Only the GM can answer someone else's mech request.";
   }
   if (ops.some((o) => o.path[0] === "maps")) {
     const reason = moveDenyReason(game, ops);
