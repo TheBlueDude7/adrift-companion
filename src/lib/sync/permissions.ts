@@ -224,7 +224,10 @@ function addsToHold(game: GameState, after: GameState, ops: Op[]): boolean {
   const anywhere = () => true;
   const [holdBefore, holdAfter] = [tally(game.items, hold), tally(after.items, hold)];
   const [carriedBefore, carriedAfter] = [tally(game.items, carried), tally(after.items, carried)];
-  const gained = [...holdAfter].some(([name, n]) => n - (holdBefore.get(name) ?? 0) > (carriedBefore.get(name) ?? 0) - (carriedAfter.get(name) ?? 0));
+  const gained = [...holdAfter].some(([name, n]) => {
+    const gain = n - (holdBefore.get(name) ?? 0);
+    return gain > 0 && gain > (carriedBefore.get(name) ?? 0) - (carriedAfter.get(name) ?? 0);
+  });
   if (!gained || ops.some((o) => o.path[0] !== "items" && o.path[0] !== "log")) return false;
   const [allBefore, allAfter] = [tally(game.items, anywhere), tally(after.items, anywhere)];
   const usedUp = [...allBefore].some(([name, n]) => (allAfter.get(name) ?? 0) < n);
