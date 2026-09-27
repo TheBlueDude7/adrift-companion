@@ -22,6 +22,7 @@ import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
 import { createInitialState } from "@/lib/seed";
 import { useGame } from "@/lib/store";
+import { leaveCampaign } from "@/lib/sync/client";
 import type { GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionsTab } from "./actions";
@@ -155,13 +156,23 @@ function Header() {
           <AlertDialogHeader>
             <AlertDialogTitle>Start a new campaign?</AlertDialogTitle>
             <AlertDialogDescription>
-              This clears the crew, ship, storage, maps, and log. Export first if you want to keep this one. Undo can still bring it back.
-              {session && " This campaign is shared, so it resets for every player."}
+              {session
+                ? `You'll leave the shared campaign ${session.code} and start a fresh one on this device. The shared campaign isn't touched: your players keep playing it, and you can rejoin it from Play together.`
+                : "This clears the crew, ship, storage, maps, and log. Export first if you want to keep this one. Undo can still bring it back."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { replace(createInitialState(), "New campaign"); toast("A new campaign begins"); }}>Start fresh</AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                const shared = session?.code;
+                if (shared) leaveCampaign();
+                replace(createInitialState(), "New campaign");
+                toast(shared ? `A new campaign begins. ${shared} is still in Play together.` : "A new campaign begins");
+              }}
+            >
+              Start fresh
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
