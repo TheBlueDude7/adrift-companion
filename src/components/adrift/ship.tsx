@@ -27,6 +27,7 @@ import { FACILITIES, ladderFor } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject } from "@/lib/actions";
 import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, growCrops, hydroponicsLevel } from "@/lib/crops";
+import { installLevels, moduleCost, nextRoomLevel, setRoomLevel } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
 import { useGame } from "@/lib/store";
@@ -323,14 +324,6 @@ function HydroponicsCard() {
   );
 }
 
-function setLevel(r: Room, index: number) {
-  const ladder = ladderFor(r.module);
-  if (!ladder) return;
-  r.level = index;
-  const grade = ladder.levels[index].grade;
-  if (grade) r.grade = grade;
-}
-
 function UpgradeRoomDialog({ room }: { room: Room }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
@@ -343,7 +336,7 @@ function UpgradeRoomDialog({ room }: { room: Room }) {
     act(`Upgrade ${room.name}`, (g) => {
       const r = g.ship.rooms.find((x) => x.id === room.id)!;
       if (pay) spend(g, next.cost, next.toolkit);
-      setLevel(r, (r.level ?? 0) + 1);
+      setRoomLevel(r, (r.level ?? 0) + 1);
       return `🔧 ${r.name} is upgraded to ${next.name}${pay ? `, using ${recipeText(next.cost, next.toolkit)}` : ""}. ${next.effect}`;
     });
     setOpen(false);
@@ -465,7 +458,7 @@ function RoomCard({ room }: { room: Room }) {
 
       <fieldset disabled={!isGM} className={cn("grid min-w-0 gap-3", !isGM && READ_ONLY)} title={isGM ? undefined : "Only the GM changes rooms. Crew can power them on and off."}>
       <div className="grid grid-cols-2 gap-2">
-        <Select value={room.module ?? "none"} onValueChange={(v) => edit("Module", (r) => { const preset = MODULE_PRESETS.find((m) => m.name === v); r.module = v === "none" ? null : (v as string); r.powerDraw = preset?.powerDraw ?? 0; r.powerOutput = preset?.powerOutput ?? 0; r.level = ladderFor(r.module) ? 0 : undefined; if (r.level !== undefined) setLevel(r, 0); return `${r.name} now houses ${r.module ?? "no module"}.`; })}>
+        <Select value={room.module ?? "none"} onValueChange={(v) => edit("Module", (r) => { const preset = MODULE_PRESETS.find((m) => m.name === v); r.module = v === "none" ? null : (v as string); r.powerDraw = preset?.powerDraw ?? 0; r.powerOutput = preset?.powerOutput ?? 0; r.level = ladderFor(r.module) ? 0 : undefined; if (r.level !== undefined) setRoomLevel(r, 0); return `${r.name} now houses ${r.module ?? "no module"}.`; })}>
           <SelectTrigger size="sm" className="w-full"><SelectValue>{room.module ?? "Empty room"}</SelectValue></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Empty room</SelectItem>
@@ -473,7 +466,7 @@ function RoomCard({ room }: { room: Room }) {
           </SelectContent>
         </Select>
         {ladder ? (
-          <Select value={room.level === undefined ? "unset" : String(room.level)} onValueChange={(v) => edit("Upgrade level", (r) => { setLevel(r, Number(v)); return `${r.name} is set to ${ladder.levels[Number(v)].name}.`; })}>
+          <Select value={room.level === undefined ? "unset" : String(room.level)} onValueChange={(v) => edit("Upgrade level", (r) => { setRoomLevel(r, Number(v)); return `${r.name} is set to ${ladder.levels[Number(v)].name}.`; })}>
             <SelectTrigger size="sm" className="w-full" aria-label="Upgrade level"><SelectValue>{level ? level.name : "Set level…"}</SelectValue></SelectTrigger>
             <SelectContent>{ladder.levels.map((l, i) => <SelectItem key={l.name} value={String(i)}>{l.name}</SelectItem>)}</SelectContent>
           </Select>
@@ -525,10 +518,79 @@ function AddProjectDialog() {
   const [tpl, setTpl] = useState(0);
   const [roomId, setRoomId] = useState("none");
   const [patientId, setPatientId] = useState<string | null>(null);
+  const [moduleName, setModuleName] = useState<string | null>(null);
+  const [startLevel, setStartLevel] = useState(0);
+  const { isGM } = usePerms();
   const t = PROJECT_TEMPLATES[tpl];
   const needsPatient = t.name === "Stress Recovery";
   const patient = game.characters.find((c) => c.id === patientId);
   const inRecovery = new Set(game.ship.projects.filter((p) => !p.done && p.patientId).map((p) => p.patientId));
+  const installing = t.name === "Install Module";
+  const upgrading = t.name === "Upgrade Module";
+  const rooms = installing ? game.ship.rooms.filter((r) => !r.module) : upgrading ? game.ship.rooms.filter((r) => nextRoomLevel(r)) : game.ship.rooms;
+  const room = rooms.find((r) => r.id === roomId);
+  const next = upgrading && room ? nextRoomLevel(room) : undefined;
+  const levels = installing && moduleName ? installLevels(moduleName) : [];
+  const plan = installing && room && moduleName ? { name: moduleName, level: levels.length ? startLevel : undefined } : next && room?.module ? { name: room.module, level: next.index } : null;
+  const { cost, toolkit } = plan ? moduleCost(plan.name, plan.level) : { cost: [], toolkit: 0 };
+  const paid = cost.length > 0 || toolkit > 0;
+  const short = plan ? shortfalls(game, cost, toolkit) : [];
+  const threshold = upgrading && next ? upgradeThreshold(next.index) : t.threshold;
+  const blocked = (needsPatient && !patient) || ((installing || upgrading) && !plan);
+
+  function pickTemplate(i: number) {
+    setTpl(i);
+    setRoomId("none");
+    setModuleName(null);
+  }
+
+  function pickModule(m: string) {
+    setModuleName(m);
+    setStartLevel(Math.max(0, installLevels(m).length - 1));
+  }
+
+  function start(pay: boolean) {
+    act("New project", (g) => {
+      const room = g.ship.rooms.find((r) => r.id === roomId);
+      if (plan && pay) spend(g, cost, toolkit);
+      const levelName = plan?.level === undefined ? undefined : ladderFor(plan.name)?.levels[plan.level].name;
+      const p: Project = {
+        id: uid(),
+        name:
+          installing && plan && room ? `Install ${plan.name}${levelName ? ` (${levelName})` : ""} in ${room.name}`
+          : upgrading && room && levelName ? `Upgrade ${room.name} to ${levelName}`
+          : t.name === "Custom Project" ? "New Project"
+          : room && t.name === "Module Repair" ? `Repair ${room.name}`
+          : needsPatient && patient ? `Stress Recovery: ${patient.name}`
+          : t.name,
+        skill: t.skill,
+        threshold,
+        progress: 0,
+        required:
+          t.name === "Module Repair" && room
+            ? REPAIR_PROGRESS[room.condition] ?? 1
+            : t.name === "Hull Repair"
+              ? Math.max(1, HULL_TIERS[g.ship.hullTier].maxHp - g.ship.hullHp)
+              : t.required,
+        contributorLimit: t.contributorLimit,
+        energy: t.energy,
+        facility: t.facility,
+        materials: plan ? `${paid ? `${recipeText(cost, toolkit)}${pay ? ", spent when the project started" : ", not spent"}.` : "No listed materials."} It applies itself when complete.` : t.materials,
+        roomId: room?.id ?? null,
+        ...(needsPatient && patient ? { patientId: patient.id } : {}),
+        ...(plan ? { module: plan } : {}),
+        notes: "",
+        done: false,
+      };
+      g.ship.projects.push(p);
+      return `Project started: ${p.name} (0/${p.required})${plan && pay && paid ? `, using ${recipeText(cost, toolkit)}` : ""}.`;
+    });
+    setOpen(false);
+    setPatientId(null);
+    setModuleName(null);
+    setRoomId("none");
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button size="sm"><HammerIcon /> New project</Button>} />
@@ -538,12 +600,12 @@ function AddProjectDialog() {
           <DialogDescription>Routine contributions add 1 Progress automatically; successful Skilled contributions add 1 Progress.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <Select value={String(tpl)} onValueChange={(v) => setTpl(Number(v))}>
+          <Select value={String(tpl)} onValueChange={(v) => pickTemplate(Number(v))}>
             <SelectTrigger className="w-full"><SelectValue>{t.name}</SelectValue></SelectTrigger>
             <SelectContent>{PROJECT_TEMPLATES.map((p, i) => <SelectItem key={p.name} value={String(i)}>{p.name}</SelectItem>)}</SelectContent>
           </Select>
           <div className="rounded-lg bg-muted/40 p-3 text-xs">
-            <p><span className="text-muted-foreground">Skill:</span> {t.skill || "—"} · Routine {t.threshold}</p>
+            <p><span className="text-muted-foreground">Skill:</span> {t.skill || "—"} · Routine {threshold}</p>
             <p><span className="text-muted-foreground">Progress:</span> {t.required} · up to {t.contributorLimit} contributors · {t.energy} Energy each</p>
             {t.facility && <p><span className="text-muted-foreground">Facility:</span> {t.facility}</p>}
             {t.materials && <p className="mt-1">{t.materials}</p>}
@@ -566,51 +628,65 @@ function AddProjectDialog() {
             </div>
           )}
           <div className="grid gap-1.5">
-            <Label>Room / workspace</Label>
-            <Select value={roomId} onValueChange={(v) => setRoomId(v as string)}>
-              <SelectTrigger className="w-full"><SelectValue>{roomId === "none" ? "None" : game.ship.rooms.find((r) => r.id === roomId)?.name}</SelectValue></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {game.ship.rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>{installing ? "Empty room" : upgrading ? "Room to upgrade" : "Room / workspace"}</Label>
+            {(installing || upgrading) && rooms.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {installing ? "No empty rooms aboard. Finish an Expand Ship project first, or ask the GM to add one." : "No rooms have an upgrade left."}
+              </p>
+            ) : (
+              <Select value={roomId} onValueChange={(v) => setRoomId(v as string)}>
+                <SelectTrigger className="w-full"><SelectValue>{room?.name ?? (installing || upgrading ? "Pick a room" : "None")}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{installing || upgrading ? "Pick a room" : "None"}</SelectItem>
+                  {rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}{upgrading && nextRoomLevel(r) ? ` · ${ladderFor(r.module)!.levels[r.level!].name} → ${nextRoomLevel(r)!.step.name}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
+          {installing && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-1.5">
+                <Label>Module</Label>
+                <Select value={moduleName ?? "none"} onValueChange={(v) => v !== "none" && pickModule(v as string)}>
+                  <SelectTrigger className="w-full"><SelectValue>{moduleName ?? "Pick a module"}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" disabled>Pick a module</SelectItem>
+                    {MODULE_PRESETS.map((m) => <SelectItem key={m.name} value={m.name}>{m.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {levels.length > 1 && (
+                <div className="grid gap-1.5">
+                  <Label>Starts at</Label>
+                  <Select value={String(startLevel)} onValueChange={(v) => setStartLevel(Number(v))}>
+                    <SelectTrigger className="w-full"><SelectValue>{levels[startLevel]?.name}</SelectValue></SelectTrigger>
+                    <SelectContent>{levels.map((l, i) => <SelectItem key={l.name} value={String(i)}>{l.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+          {plan && (
+            <div className="grid gap-1 rounded-lg border p-3 text-sm">
+              {plan.level !== undefined && <p className="text-xs">{ladderFor(plan.name)?.levels[plan.level].effect}</p>}
+              <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Materials, spent when it starts</p>
+              {!paid && <p className="text-xs text-muted-foreground">None listed. The GM can note any in the project.</p>}
+              {cost.map((p) => {
+                const miss = short.find((x) => x.name === p.name);
+                return <p key={p.name} className={miss ? "text-rose-300" : undefined}>{p.qty} {p.name}{miss && <span className="text-xs text-muted-foreground"> (have {miss.have})</span>}</p>;
+              })}
+              {toolkit > 0 && <p className={short.some((x) => x.name === "Toolkit charges") ? "text-rose-300" : undefined}>{toolkit} charges of any toolkit</p>}
+            </div>
+          )}
         </div>
         <DialogFooter>
-          <Button
-            disabled={needsPatient && !patient}
-            onClick={() => {
-              act("New project", (g) => {
-                const room = g.ship.rooms.find((r) => r.id === roomId);
-                const p: Project = {
-                  id: uid(),
-                  name: t.name === "Custom Project" ? "New Project" : room && t.name === "Module Repair" ? `Repair ${room.name}` : needsPatient && patient ? `Stress Recovery: ${patient.name}` : t.name,
-                  skill: t.skill,
-                  threshold: t.threshold,
-                  progress: 0,
-                  required:
-                    t.name === "Module Repair" && room
-                      ? REPAIR_PROGRESS[room.condition] ?? 1
-                      : t.name === "Hull Repair"
-                        ? Math.max(1, HULL_TIERS[g.ship.hullTier].maxHp - g.ship.hullHp)
-                        : t.required,
-                  contributorLimit: t.contributorLimit,
-                  energy: t.energy,
-                  facility: t.facility,
-                  materials: t.materials,
-                  roomId: room?.id ?? null,
-                  ...(needsPatient && patient ? { patientId: patient.id } : {}),
-                  notes: "",
-                  done: false,
-                };
-                g.ship.projects.push(p);
-                return `Project started: ${p.name} (0/${p.required}).`;
-              });
-              setOpen(false);
-              setPatientId(null);
-            }}
-          >
-            Start project
+          {plan && paid && isGM && <Button variant="ghost" onClick={() => start(false)}>Start without spending</Button>}
+          <Button disabled={blocked || short.length > 0} onClick={() => start(true)}>
+            {short.length ? "Missing materials" : plan && paid ? "Spend and start" : "Start project"}
           </Button>
         </DialogFooter>
       </DialogContent>

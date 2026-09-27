@@ -1,6 +1,7 @@
 import { needsPermission, permissionReasons, segmentTasks } from "../actions";
 import { poolFor } from "../derive";
 import { coreMapId } from "../maps";
+import { completeModuleWork } from "../modules";
 import type { GameState, Item, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
 
@@ -62,13 +63,17 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     if (newImplants(game, after) && !itemsUsedUp(game, after)) return "Installing or enhancing a cybernetic uses an implant or materials from ship storage. Only the GM can skip that.";
   }
   if (ops.some((o) => o.path[0] === "ship" && o.path[1] === "rooms")) {
+    const after = applyOps(structuredClone(game), ops);
+    const now = after.ship.rooms;
+    const built = structuredClone(game);
+    for (const p of after.ship.projects) if (p.done && game.ship.projects.some((q) => q.id === p.id && !q.done)) completeModuleWork(built, p);
     const was = new Map(game.ship.rooms.map((r) => [r.id, r]));
-    const now = applyOps(structuredClone(game), ops).ship.rooms;
-    const sameButPower = (r: (typeof now)[number]) => {
-      const w = was.get(r.id);
+    const expected = new Map(built.ship.rooms.map((r) => [r.id, r]));
+    const sameButPower = (r: (typeof now)[number], base: Map<string, (typeof now)[number]>) => {
+      const w = base.get(r.id);
       return !!w && JSON.stringify({ ...w, active: r.active }) === JSON.stringify(r);
     };
-    if (now.length !== was.size || !now.every(sameButPower)) return "Only the GM can change rooms. Crew can only power them on and off.";
+    if (now.length !== was.size || !now.every((r) => sameButPower(r, was) || sameButPower(r, expected))) return "Only the GM can change rooms. Crew can only power them on and off.";
   }
   if (ops.some((o) => o.path[0] === "mechs")) {
     const had = new Set(game.mechs.map((m) => m.id));

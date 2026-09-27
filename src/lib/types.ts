@@ -202,6 +202,8 @@ export type Project = {
   roomId: string | null;
   /** The survivor a Stress Recovery project treats; relief lands only on completion. */
   patientId?: string | null;
+  /** Install or Upgrade Module: on completion, the project's room houses this module at this ladder level. */
+  module?: { name: string; level?: number } | null;
   notes: string;
   done: boolean;
 };

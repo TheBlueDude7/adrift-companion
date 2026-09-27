@@ -6,6 +6,7 @@ import { attributeValue, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { changePressure, changeStress, gainXp, rest } from "./mechanics";
+import { completeModuleWork } from "./modules";
 import { moveShip } from "./power";
 import { haveInStorage, shortfalls, spend, stockItem } from "./stock";
 import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
@@ -276,6 +277,8 @@ export function advanceProject(g: GameState, projectId: string, amount = 1): str
       const line = restore(g, x.roomId);
       if (line) out.push(line);
     }
+    const built = completeModuleWork(g, x);
+    if (built) out.push(built);
     const patient = x.patientId ? g.characters.find((c) => c.id === x.patientId) : undefined;
     if (x.patientId && patient) {
       const roll = d(4);
