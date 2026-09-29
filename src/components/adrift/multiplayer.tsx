@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BACKUP_KEY, claimCharacter, connect, forget, hostCampaign, joinCampaign, leaveCampaign, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
+import { BACKUP_KEY, claimCharacter, connect, forget, hostCampaign, joinCampaign, kickPlayer, leaveCampaign, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Pill } from "./common";
@@ -146,6 +146,7 @@ function SessionPanel({ code, gmKey, onRename }: { code: string; gmKey?: string;
               {p.role === "gm" ? (
                 <Pill tone="warn">GM</Pill>
               ) : perms.isGM ? (
+                <>
                 <Select value={p.characterId ?? "none"} onValueChange={(v) => assign(v === "none" ? null : (v as string), p.id)}>
                   <SelectTrigger size="sm" className="w-40" aria-label={`Character for ${p.name}`}><SelectValue>{characters.find((c) => c.id === p.characterId)?.name ?? "No character"}</SelectValue></SelectTrigger>
                   <SelectContent>
@@ -156,6 +157,17 @@ function SessionPanel({ code, gmKey, onRename }: { code: string; gmKey?: string;
                     })}
                   </SelectContent>
                 </Select>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label={`Remove ${p.name}`}
+                  title={`Remove ${p.name} from the campaign${p.characterId ? " and free their character" : ""}`}
+                  onClick={() => kickPlayer(p.id).then(() => toast(`Removed ${p.name}.`), (e: Error) => toast.error(e.message))}
+                >
+                  <XIcon />
+                </Button>
+                </>
               ) : (
                 <span className="truncate text-xs text-muted-foreground">{characters.find((c) => c.id === p.characterId)?.name ?? "No character yet"}</span>
               )}

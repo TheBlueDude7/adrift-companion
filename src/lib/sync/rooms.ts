@@ -12,7 +12,7 @@ import type { Actor, Role } from "./permissions";
 export type Person = { id: string; name: string; role: Role; characterId: string | null; online: boolean };
 
 type Member = { name: string; role: Role; characterId: string | null };
-type Conn = { memberId: string; send: (event: string, data: unknown) => void };
+type Conn = { memberId: string; send: (event: string, data: unknown) => void; close: () => void };
 
 type Room = {
   code: string;
@@ -124,12 +124,24 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
   return room.version;
 }
 
-export function join(room: Room, key: string, name: string, send: Conn["send"]): Conn {
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export function join(room: Room, key: string, name: string, send: Conn["send"], close: Conn["close"]): Conn {
   const memberId = memberIdFor(key);
   const gm = isGm(room, key);
   const existing = room.members[memberId];
-  room.members[memberId] = { name, role: gm ? "gm" : "player", characterId: gm ? null : (existing?.characterId ?? null) };
-  const conn = { memberId, send };
+  let characterId = gm ? null : (existing?.characterId ?? null);
+  // A player who comes back under the same name (new device, cleared browser) takes over their old offline slot.
+  if (!gm && name !== "Someone") {
+    const online = new Set([...room.conns].map((c) => c.memberId));
+    for (const [id, m] of Object.entries(room.members)) {
+      if (id === memberId || m.role !== "player" || online.has(id) || !sameName(m.name, name)) continue;
+      characterId ??= m.characterId;
+      delete room.members[id];
+    }
+  }
+  room.members[memberId] = { name, role: gm ? "gm" : "player", characterId };
+  const conn = { memberId, send, close };
   room.conns.add(conn);
   scheduleSave(room);
   announce(room);
@@ -139,6 +151,22 @@ export function join(room: Room, key: string, name: string, send: Conn["send"]):
 export function leave(room: Room, conn: Conn) {
   room.conns.delete(conn);
   announce(room);
+}
+
+/** Remove a player from the campaign, freeing their character. Anyone connected under that slot is told and disconnected. */
+export function kick(room: Room, memberId: string): string | null {
+  const m = room.members[memberId];
+  if (!m || m.role === "gm") return "That person isn't a player in this campaign.";
+  delete room.members[memberId];
+  for (const c of [...room.conns]) {
+    if (c.memberId !== memberId) continue;
+    room.conns.delete(c);
+    c.send("kicked", {});
+    c.close();
+  }
+  scheduleSave(room);
+  announce(room);
+  return null;
 }
 
 /** Give a player a character (or none). A character belongs to at most one player. */

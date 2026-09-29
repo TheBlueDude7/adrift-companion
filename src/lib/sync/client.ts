@@ -130,6 +130,11 @@ function open() {
     useGame.setState({ me: JSON.parse((e as MessageEvent).data) as { id: string; role: "gm" | "player" } });
   });
 
+  src.addEventListener("kicked", () => {
+    leaveCampaign();
+    toast.error("The GM removed you from the shared campaign. The latest version is kept on this device.");
+  });
+
   src.addEventListener("presence", (e) => {
     useGame.setState({ people: JSON.parse((e as MessageEvent).data) as Person[] });
   });
@@ -239,6 +244,19 @@ export async function claimCharacter(characterId: string | null, memberId?: stri
   }).catch(() => null);
   if (!res) throw new Error("Could not reach the server.");
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Could not claim that character.");
+}
+
+/** GM only: remove a player from the campaign and free their character. */
+export async function kickPlayer(memberId: string) {
+  const { session } = useGame.getState();
+  if (!session) return;
+  const res = await fetch(`/api/campaigns/${session.code}/kick`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-adrift-key": keyFor() },
+    body: JSON.stringify({ memberId }),
+  }).catch(() => null);
+  if (!res) throw new Error("Could not reach the server.");
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Could not remove that player.");
 }
 
 /** Stop syncing. The latest shared state stays on this device as a local copy. */

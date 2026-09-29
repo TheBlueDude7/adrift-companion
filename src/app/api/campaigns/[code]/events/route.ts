@@ -40,7 +40,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/campaigns/[c
       const actor = actorFor(room, key);
       send("me", { id: actor.memberId, role: actor.role });
       send("snapshot", { version: room.version, game: room.game });
-      conn = join(room, key, name, send);
+      conn = join(room, key, name, send, cleanup);
     },
     cancel() {
       cleanup();
