@@ -160,16 +160,11 @@ export function rollAffliction(c: Character) {
 }
 
 export function rest(g: GameState, c: Character, out: string[]) {
-  const priorRests = c.survival.rests;
   c.survival.rests += 1;
   c.hp = Math.min(maxHp(c), c.hp + 1);
-  if (priorRests >= 1 && !c.survival.restBlocked) {
-    const sleepLimited = c.afflictions.some((a) => a.name === "Sleep Disruption");
-    if (!sleepLimited) c.energy = maxEnergy(c);
-  }
-  out.push(
-    `${c.name} Rests (${c.survival.rests} today): +1 HP${priorRests >= 1 && !c.survival.restBlocked ? ", Energy restored" : ""}.`,
-  );
+  const restores = !c.survival.restBlocked && !c.afflictions.some((a) => a.name === "Sleep Disruption");
+  if (restores) c.energy = maxEnergy(c);
+  out.push(`${c.name} Rests (${c.survival.rests} today): +1 HP${restores ? ", Energy restored" : ""}.`);
   if (c.pressure > 0) changePressure(g, c, -1, out);
 }
 
@@ -285,7 +280,6 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
     // Energy, pressure and resets
     s.energyPenalty = penalty;
     s.restBlocked = restBlocked;
-    if (i.slept && !restBlocked) c.energy = maxEnergy(c);
     c.energy = Math.min(c.energy, maxEnergy(c));
     c.pressure = dailyPressureFloor(c.stress);
     s.food = "none";
