@@ -9,9 +9,10 @@ import { changePressure, changeStress, gainXp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip } from "./power";
 import { haveInStorage, shortfalls, spend, stockItem } from "./stock";
-import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
+import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
-import type { ActionStatus, Character, GameState, SegmentAction, SpaceTile, StarMap } from "./types";
+import type { CraftRecipe } from "@/data/crafting";
+import type { ActionStatus, Character, GameState, Project, SegmentAction, SpaceTile, StarMap } from "./types";
 
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
 
@@ -43,7 +44,10 @@ export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const blockers = a.crafts.map((n) => RECIPE_BY_NAME[n] && craftBlocker(g, RECIPE_BY_NAME[n])).filter((b): b is string => !!b);
   const cost = fabricateCost(a.crafts);
   const short = shortfalls(g, cost.inputs, cost.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
-  return [...new Set([...blockers, ...short])];
+  const c = g.characters.find((x) => x.id === a.characterId);
+  const limit = c ? fabricateLimit(c, a.crafts) : 1;
+  const over = a.crafts.length > limit ? [`More than ${limit} item${limit > 1 ? "s" : ""} (a second needs 6 levels above every recipe's threshold)`] : [];
+  return [...new Set([...over, ...blockers, ...short])];
 }
 
 /** Why a player needs the GM's permission for this task, if they do. */
@@ -105,7 +109,21 @@ export type TaskTerms = {
   perks: string[];
 };
 
-const skillKeyByName = (name: string) => SKILLS.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())?.key ?? null;
+/**
+ * Skills a Project accepts, read from text like "Engineering", "Mechanical Technician or Engineering",
+ * or "Mech. Technician 3 / Engineering 4". A number after a skill is its own threshold.
+ */
+export function projectSkills(p: Pick<Project, "skill" | "threshold">): { skill: SkillKey; threshold: number }[] {
+  const out: { skill: SkillKey; threshold: number }[] = [];
+  for (const part of p.skill.replace(/\(.*?\)/g, "").split(/\s*(?:\/|,|\bor\b)\s*/i)) {
+    const m = part.trim().match(/^(.+?)(?:\s+(\d+))?$/);
+    if (!m) continue;
+    const name = m[1].toLowerCase().replace(/^mech\.?\s+/, "mechanical ");
+    const key = SKILLS.find((s) => s.name.toLowerCase() === name)?.key;
+    if (key && !out.some((x) => x.skill === key)) out.push({ skill: key, threshold: m[2] ? Number(m[2]) : p.threshold });
+  }
+  return out;
+}
 
 export function facilityBlocker(g: GameState, f: TaskFacility | undefined): string | null {
   if (!f) return null;
@@ -169,9 +187,10 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   blocker ??= facilityBlocker(g, def.facility);
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : undefined;
   if (def.effect === "project" && project) {
-    const key = skillKeyByName(project.skill);
-    if (key) skills = [key];
-    threshold = project.threshold;
+    const options = projectSkills(project);
+    const pick = c && options.length ? options.reduce((b, o) => (skillLevel(c, o.skill) - o.threshold > skillLevel(c, b.skill) - b.threshold ? o : b)) : options[0];
+    if (pick) skills = [pick.skill];
+    threshold = pick?.threshold ?? project.threshold;
     energy = project.energy;
   }
   if (def.effect === "assist") {
@@ -215,11 +234,36 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   );
 }
 
+/** Levels the crafter stands above a recipe's Routine Threshold, using their best listed skill. */
+export function craftMargin(c: Character, r: CraftRecipe) {
+  return Math.max(...recipeSkills(r).map((s) => skillLevel(c, s.skill) - s.threshold));
+}
+
+const REDLINE = "Redline Familiarity";
+
+/**
+ * Items one Fabricate task can make. One, or two when the crafter is 6 levels above the threshold of
+ * every item. Redline Familiarity's overdrive produces three.
+ */
+export function fabricateLimit(c: Character, crafts: string[]) {
+  if (c.specialty === REDLINE) return 3;
+  const recipes = crafts.map((n) => RECIPE_BY_NAME[n]).filter(Boolean);
+  return recipes.length > 0 && recipes.every((r) => craftMargin(c, r) >= EXPERT_MARGIN) ? 2 : 1;
+}
+
+/** Each item pays the task's Energy, except the extra items from Redline Familiarity's overdrive. */
+function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
+  const terms = craftCheck(c, crafts, energy);
+  const items = c.specialty === REDLINE ? 1 : crafts.length;
+  if (items <= 1) return terms;
+  return { ...terms, energy: terms.energy * items, perks: [...terms.perks, `${items} items: Energy for each`] };
+}
+
 /**
  * One check covers every item. Its terms come from the hardest item: Routine when the crafter meets
  * every recipe's threshold, −1 Energy when they clear them all by 3, otherwise −1d6 per level short.
  */
-function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
+function craftCheck(c: Character, crafts: string[], energy: number): TaskTerms {
   let worst: { skill: SkillKey; threshold: number; margin: number } | null = null;
   for (const name of crafts) {
     const r = RECIPE_BY_NAME[name];
@@ -391,7 +435,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     }
   }
   if (ok && def.effect === "morale") {
-    const lifted = g.characters.filter((x) => !x.dead && x.pressure > 0);
+    const lifted = g.characters.filter((x) => !x.dead && x.pressure > pressureFloor(x.stress));
     for (const x of lifted) x.pressure -= 1;
     out.push(lifted.length ? `Pressure eases for ${lifted.map((x) => x.name).join(", ")}.` : "Nobody was under Pressure, but spirits lift anyway.");
   }

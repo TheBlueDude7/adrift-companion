@@ -10,12 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
+import { EXPERT_MARGIN, SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, canPush, craftList, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, canPush, craftList, craftMargin, fabricateLimit, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { changePressure } from "@/lib/mechanics";
-import { craftBlocker, FABRICATE_LIMIT, FABRICATE_RECIPES, fabricateCost, fabricateLimit, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
+import { craftBlocker, FABRICATE_RECIPES, fabricateCost, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
@@ -127,7 +127,8 @@ const CRAFT_CATEGORIES = Array.from(new Set(FABRICATE_RECIPES.map((r) => r.categ
 
 function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; onChange: (v: string[]) => void }) {
   const game = useGame((s) => s.game);
-  const limit = fabricateLimit(c.specialty);
+  const redline = c.specialty === "Redline Familiarity";
+  const limit = fabricateLimit(c, value.slice(0, 1));
   const cost = fabricateCost(value);
   const short = new Map(shortfalls(game, cost.inputs, cost.toolkit).map((s) => [s.name, s]));
   const blockers = Array.from(new Set(value.map((n) => RECIPE_BY_NAME[n] && craftBlocker(game, RECIPE_BY_NAME[n])).filter(Boolean)));
@@ -136,7 +137,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
     const next = [...value];
     if (name) next[i] = name;
     else next.splice(i, 1);
-    onChange(next);
+    onChange(next.slice(0, fabricateLimit(c, next.slice(0, 1))));
   };
   return (
     <div className="grid gap-1.5">
@@ -150,7 +151,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
               <SelectGroup key={cat}>
                 <SelectLabel>{cat}</SelectLabel>
                 {FABRICATE_RECIPES.filter((r) => r.category === cat).map((r) => (
-                  <SelectItem key={r.name} value={r.name}>
+                  <SelectItem key={r.name} value={r.name} disabled={i > 0 && !redline && craftMargin(c, r) < EXPERT_MARGIN}>
                     {r.name}
                     <span className="text-muted-foreground">{r.tier ? ` · ${r.tier}` : ""} · {recipeSkills(r).map((s) => `${SKILL_BY_KEY[s.skill].name} ${s.threshold}`).join(" or ")}</span>
                   </SelectItem>
@@ -179,7 +180,10 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        Up to {FABRICATE_LIMIT} items per segment, any mix, repeats allowed.{limit > FABRICATE_LIMIT ? " Redline Familiarity can overdrive the bench for a third, once per day." : ""} A failed item loses half its materials (rounded up) and its toolkit charges.
+        {redline
+          ? "Redline Familiarity can overdrive the bench for up to 3 items, once per day, for one task's Energy."
+          : `One item per task. Being ${EXPERT_MARGIN} levels above an item's threshold lets ${c.name.split(" ")[0]} make a second one ${EXPERT_MARGIN} above too, paying Energy for each.`}{" "}
+        A failed item loses half its materials (rounded up) and its toolkit charges.
       </p>
     </div>
   );

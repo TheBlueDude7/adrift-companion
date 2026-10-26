@@ -68,10 +68,6 @@ export function stockOutput(g: GameState, recipe: CraftRecipe, name: string, qty
 export const FABRICATE_RECIPES = RECIPES.filter((r) => r.station !== "kitchen");
 export const RECIPE_BY_NAME = Object.fromEntries(RECIPES.map((r) => [r.name, r])) as Record<string, CraftRecipe>;
 
-/** Items per Fabricate Common Item task. Redline Familiarity's once-a-day overdrive makes it 3. */
-export const FABRICATE_LIMIT = 2;
-export const fabricateLimit = (specialty: string | null | undefined) => (specialty === "Redline Familiarity" ? FABRICATE_LIMIT + 1 : FABRICATE_LIMIT);
-
 const TIER_THRESHOLD: Record<string, number> = { "Tier I": 3, "Tier II": 6, "Tier III": 9 };
 
 /** Skills that can make a recipe, with their Routine Thresholds. Recipes without a listed skill use Mechanical Technician by tier. */
