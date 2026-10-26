@@ -21,6 +21,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  attributeBonuses,
   attributeValue,
   characterAlerts,
   creationSpend,
@@ -45,7 +46,9 @@ import {
   INJURY_SEVERITIES,
   INJURY_STATES,
   MAX_SKILL_LEVEL,
+  activeStressBands,
   PRESSURE_STATES,
+  pressureFloor,
   pressureTip,
   SKILLS,
   stressBand,
@@ -198,6 +201,8 @@ function CrewListCard({ c, selected, onSelect }: { c: Character; selected: boole
 
 function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   const band = stressBand(c.stress);
+  const bands = activeStressBands(c.stress);
+  const floor = pressureFloor(c.stress);
   const { isGM } = usePerms();
   const worn = useGame((s) => wornArmor(s.game, c.id));
   return (
@@ -229,17 +234,18 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Pressure</span>
           <div className="flex gap-1">
-            <Button size="xs" variant="outline" onClick={() => edit(`${c.name} −Pressure`, (x, g) => { const o: string[] = []; changePressure(g, x, -1, o); return o; })}>− Reduce</Button>
+            <Button size="xs" variant="outline" disabled={c.pressure <= floor} title={floor > 0 && c.pressure <= floor ? `Stress ${c.stress} keeps Pressure at ${PRESSURE_STATES[floor].name} or higher` : undefined} onClick={() => edit(`${c.name} −Pressure`, (x, g) => { const o: string[] = []; changePressure(g, x, -1, o); return o; })}>− Reduce</Button>
             <Button size="xs" variant="outline" onClick={() => edit(`${c.name} +Pressure`, (x, g) => { const o: string[] = []; changePressure(g, x, 1, o); return o; }, "danger")}>+ Gain</Button>
           </div>
         </div>
         <div className="grid grid-cols-5 gap-1">
           {PRESSURE_STATES.map((p, i) => (
-            <Tip key={p.name} content={pressureTip(i)}>
+            <Tip key={p.name} content={i < floor ? `Stress ${c.stress} keeps Pressure at ${PRESSURE_STATES[floor].name} or higher.` : pressureTip(i)}>
             <button
+              disabled={i < floor}
               onClick={() => edit(`${c.name} Pressure → ${p.name}`, (x) => { x.pressure = i; return `${x.name}'s Pressure set to ${p.name}.`; })}
               className={cn(
-                "rounded-md border px-1 py-1.5 text-center text-[11px] font-medium transition-colors sm:text-xs",
+                "rounded-md border px-1 py-1.5 text-center text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:text-xs",
                 c.pressure === i ? (i >= 3 ? "border-rose-400 bg-rose-500/20 text-rose-200" : i >= 1 ? "border-amber-300 bg-amber-400/15 text-amber-200" : "border-emerald-400 bg-emerald-500/15 text-emerald-200") : "text-muted-foreground hover:bg-muted/40",
               )}
             >
@@ -263,7 +269,9 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           </div>
         </div>
         <Meter value={c.stress} max={10} tone="stress" segmented />
-        <p className="mt-2 text-xs text-muted-foreground">{band.effect}</p>
+        <ul className="mt-2 grid gap-0.5 text-xs text-muted-foreground">
+          {bands.map((b) => <li key={b.name}>{bands.length > 1 && <span className="text-orange-300/80">{b.name}: </span>}{b.effect}</li>)}
+        </ul>
       </div>
     </div>
   );
@@ -277,15 +285,20 @@ const ATTRIBUTE_TONE: Record<Attribute, { card: string; text: string; badge: str
 };
 
 function Attributes({ c, edit }: { c: Character; edit: Edit }) {
-  const bg = c.background ? BACKGROUND_BY_KEY[c.background] : undefined;
   const spend = creationSpend(c);
   return (
     <div>
       <SectionTitle action={<span className={cn("text-xs", spend.attrPoints > CREATION_ATTRIBUTE_POINTS ? "text-amber-300" : "text-muted-foreground")}>{spend.attrPoints}/{CREATION_ATTRIBUTE_POINTS} creation points</span>}>Attributes</SectionTitle>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {ATTRIBUTES.map((a) => {
-          const bonus = bg?.attributes[a] ?? 0;
-          const mod = c.attributeMods[a];
+          const b = attributeBonuses(c, a);
+          const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+          const sources = [
+            b.background && `${sign(b.background)} bg`,
+            b.mastery && `${sign(b.mastery)} mastery`,
+            b.cyber && `${sign(b.cyber)} cyber`,
+            b.mod && `${sign(b.mod)} mod`,
+          ].filter(Boolean);
           return (
             <div key={a} className={cn("rounded-lg border p-3", ATTRIBUTE_TONE[a].card)}>
               <div className="flex items-center justify-between gap-2">
@@ -297,7 +310,7 @@ function Attributes({ c, edit }: { c: Character; edit: Edit }) {
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <Stepper value={c.attributes[a]} min={1} max={10} size="xs" label={`${a} base`} onChange={(v) => edit(`${c.name} ${a} → ${v}`, (x) => { x.attributes[a] = v; return `${x.name}'s base ${ATTRIBUTE_NAMES[a]} set to ${v}.`; })} />
-                <span className="text-[11px] text-muted-foreground">{bonus ? `+${bonus} bg` : ""}{mod ? ` ${mod > 0 ? "+" : ""}${mod} mod` : ""}</span>
+                <span className="text-right text-[11px] text-muted-foreground" title={b.mastery ? `Mastery: +1 for each ${ATTRIBUTE_NAMES[a]} skill at level 10.` : undefined}>{sources.join(" · ")}</span>
               </div>
             </div>
           );

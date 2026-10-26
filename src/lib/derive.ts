@@ -21,10 +21,16 @@ export function skillLevel(c: Character, key: SkillKey) {
   return Math.min(MAX_SKILL_LEVEL, c.skills[key] + bonus) + cultivar;
 }
 
-export function attributeValue(c: Character, attr: Attribute) {
+/** Where an attribute's bonuses come from: background, manual modifier, skills at level 10, and cybernetics. */
+export function attributeBonuses(c: Character, attr: Attribute) {
   const bg = c.background ? BACKGROUND_BY_KEY[c.background] : undefined;
   const mastery = SKILLS.filter((s) => s.attr === attr && Math.min(MAX_SKILL_LEVEL, c.skills[s.key] + (bg?.skills[s.key] ?? 0)) >= MAX_SKILL_LEVEL).length;
-  return Math.max(1, c.attributes[attr] + (bg?.attributes[attr] ?? 0) + c.attributeMods[attr] + mastery + cyberAttr(c, attr));
+  return { background: bg?.attributes[attr] ?? 0, mod: c.attributeMods[attr], mastery, cyber: cyberAttr(c, attr) };
+}
+
+export function attributeValue(c: Character, attr: Attribute) {
+  const b = attributeBonuses(c, attr);
+  return Math.max(1, c.attributes[attr] + b.background + b.mod + b.mastery + b.cyber);
 }
 
 export function allAttributes(c: Character) {
