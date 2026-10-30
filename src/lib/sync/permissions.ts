@@ -32,6 +32,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       case "catalog":
       case "mechs":
       case "mechRequests":
+      case "firstAidOffers":
       case "research":
         continue;
       case "characters": {
@@ -41,7 +42,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
         }
         if (o.path[2] === "stress" && o.path.length === 3 && completesRecoveryFor(game, ops, idOf(second))) continue;
         if (own === null) return "Pick your character in Play together to edit a character sheet.";
-        if (idOf(second) !== own) return "You can only edit your own character. Ask the GM to change someone else's.";
+        if (idOf(second) !== own && !acceptsFirstAidFrom(game, ops, own, idOf(second))) return "You can only edit your own character. Ask the GM to change someone else's.";
         continue;
       }
       case "items":
@@ -87,6 +88,10 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     const kept = new Set(after.map((r) => r.id));
     if ([...before.values()].some((r) => !kept.has(r.id) && r.by !== own)) return "Only the GM can answer someone else's mech request.";
   }
+  if (ops.some((o) => o.path[0] === "firstAidOffers")) {
+    const reason = firstAidOfferDenyReason(game, ops, own);
+    if (reason) return reason;
+  }
   if (ops.some((o) => o.path[0] === "maps")) {
     const reason = mapOwnerDenyReason(game, ops, own) ?? moveDenyReason(game, ops);
     if (reason) return reason;
@@ -129,6 +134,27 @@ function moveDenyReason(game: GameState, ops: Op[]): string | null {
     if (!same(m.shipAt, n.shipAt)) return "Only the GM can move the ship. Plan a course on the Actions tab instead.";
     if (!same(m.star, n.star) || m.size !== n.size) return "Only the GM can move the neutron star or resize the chart.";
   }
+  return null;
+}
+
+/** The patient accepts First Aid `healerId` offered them, and the healer's only change is spending Energy. */
+function acceptsFirstAidFrom(game: GameState, ops: Op[], own: string | null, healerId: string | undefined): boolean {
+  const after = applyOps(structuredClone(game), ops);
+  const kept = new Set((after.firstAidOffers ?? []).map((o) => o.id));
+  if (!(game.firstAidOffers ?? []).some((o) => o.healerId === healerId && o.patientId === own && !kept.has(o.id))) return false;
+  const was = game.characters.find((c) => c.id === healerId);
+  const now = after.characters.find((c) => c.id === healerId);
+  return !!was && !!now && JSON.stringify({ ...now, energy: was.energy }) === JSON.stringify(was);
+}
+
+/** Players offer First Aid as their own character. The healer withdraws an offer; the patient accepts or declines it. */
+function firstAidOfferDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
+  const before = new Map((game.firstAidOffers ?? []).map((o) => [o.id, o]));
+  const after = applyOps(structuredClone(game), ops).firstAidOffers ?? [];
+  if (after.some((o) => before.has(o.id) && JSON.stringify(before.get(o.id)) !== JSON.stringify(o))) return "Withdraw the offer and make a new one instead.";
+  if (after.some((o) => !before.has(o.id) && o.healerId !== own)) return "Offer First Aid as your own character.";
+  const kept = new Set(after.map((o) => o.id));
+  if ([...before.values()].some((o) => !kept.has(o.id) && o.healerId !== own && o.patientId !== own)) return "Only the healer or the patient can answer a First Aid offer.";
   return null;
 }
 

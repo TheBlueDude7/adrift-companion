@@ -237,7 +237,7 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
           </div>
           {r.excess > 0 && pilot && (
             <>
-              <label className="flex items-center gap-2 text-sm"><Checkbox checked={injury} onCheckedChange={(v) => setInjury(!!v)} /> {pilot.name} suffers an Injury (3+ HP from one source)</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={injury} onCheckedChange={(v) => setInjury(!!v)} /> {pilot.name} suffers an Injury (2+ HP from one source)</label>
               {injury && <InjuryRollFields value={roll} onChange={setRoll} />}
             </>
           )}

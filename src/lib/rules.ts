@@ -237,8 +237,14 @@ export const STRESS_BANDS = [
 export const stressBand = (stress: number) =>
   STRESS_BANDS.find((b) => stress >= b.min && stress <= b.max) ?? STRESS_BANDS[0];
 
-/** Minimum Pressure a character starts the day at, based on Stress. */
-export const dailyPressureFloor = (stress: number) => (stress >= 9 ? 2 : stress >= 5 ? 1 : 0);
+/** Stress bands stack: each includes the effects of every band below it. */
+export const activeStressBands = (stress: number) => {
+  const reached = STRESS_BANDS.filter((b) => b.min > 0 && stress >= b.min);
+  return reached.length ? reached : [STRESS_BANDS[0]];
+};
+
+/** Lowest Pressure a character can be at: Shaken from Frayed (Stress 5), Pressured from Unstable (Stress 7). */
+export const pressureFloor = (stress: number) => (stress >= 7 ? 2 : stress >= 5 ? 1 : 0);
 
 export const MIND_BREAKS = [
   { roll: 1, name: "Freeze Response", effect: "Cannot move, speak, or take actions and is helpless." },

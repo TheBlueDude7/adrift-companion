@@ -2,7 +2,7 @@ import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_
 import { TRAINING, trainingBand } from "@/data/training";
 import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
-import { attributeValue, skillLevel } from "./derive";
+import { attributeValue, maxHp, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { changePressure, changeStress, gainXp, rest } from "./mechanics";
@@ -560,6 +560,45 @@ export function pushTask(g: GameState, id: string): string[] {
   const extra = Math.max(0, PRESSURE_STATES[c.pressure].dice - before);
   a.roll = { dice: [...kept, ...rollPool(a.roll.dice.length - kept.length + extra)], pushed: true };
   return [`${c.name} Pushes (−1 Energy).`, ...out, `Reroll: ${rollText(a.roll.dice)}.`];
+}
+
+export const FIRST_AID = "First Aid: Minor Injury";
+
+/** The healer's First Aid pool, as if it were their task this segment. */
+export function firstAidPool(g: GameState, healer: Character) {
+  const p = taskPool(g, newAction(g, healer, FIRST_AID));
+  return { dice: p.dice, label: p.parts.join(" + ") };
+}
+
+/**
+ * First Aid is a free skilled roll: no segment, no Energy. The first 6 treats one Untreated Minor injury.
+ * Every 6 after that clears one of `clear` (condition ids, in order), then heals 1 HP each.
+ */
+export function giveFirstAid(g: GameState, healerId: string, patientId: string, injuryId: string, clear: string[] = []): string[] {
+  const healer = g.characters.find((x) => x.id === healerId);
+  const patient = g.characters.find((x) => x.id === patientId);
+  const injury = patient?.injuries.find((i) => i.id === injuryId);
+  if (!healer || !patient || !injury || injury.state !== "Untreated" || injury.severity !== "Minor") return ["That injury no longer needs First Aid."];
+  if (healer.dead) return [`${healer.name} can't give First Aid.`];
+  const who = healer.id === patient.id ? `${healer.name} treats their own ${injury.name}` : `${healer.name} gives ${patient.name} First Aid for ${injury.name}`;
+  const dice = rollPool(firstAidPool(g, healer).dice);
+  let extra = sixes(dice) - 1;
+  if (extra < 0) return [`🩹 ${who}: ${rollText(dice)}. No 6, so it stays Untreated.`];
+  injury.state = "Treated";
+  const out = [`🩹 ${who}: ${rollText(dice)}. It's Treated.`];
+  for (const id of clear) {
+    const cond = patient.conditions.find((x) => x.id === id);
+    if (!cond || extra <= 0) continue;
+    patient.conditions = patient.conditions.filter((x) => x.id !== id);
+    extra -= 1;
+    out.push(`Extra 6: ${patient.name}'s ${cond.name} clears.`);
+  }
+  const hp = Math.min(extra, maxHp(patient) - patient.hp);
+  if (hp > 0) {
+    patient.hp += hp;
+    out.push(`Extra 6${hp > 1 ? "s" : ""}: ${patient.name} heals ${hp} HP (${patient.hp}/${maxHp(patient)}).`);
+  }
+  return out;
 }
 
 export function newAction(g: GameState, c: Character, task: string): SegmentAction {

@@ -311,10 +311,15 @@ export type GameState = {
   mechs: Mech[];
   /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
   mechRequests?: { id: string; by: string; mech: Mech }[];
+  /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */
+  firstAidOffers?: FirstAidOffer[];
   research: Research;
   /** Tasks the crew has committed to, by day and segment. */
   actions: SegmentAction[];
 };
+
+/** `clear` lists the patient's condition ids that extra 6s clear first, in order. */
+export type FirstAidOffer = { id: string; healerId: string; patientId: string; injuryId: string; clear?: string[] };
 
 export type ActionStatus = "planned" | "success" | "strong" | "failed" | "cancelled";
 

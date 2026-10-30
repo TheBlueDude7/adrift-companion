@@ -287,7 +287,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
                 {TASK_GROUPS.map((grp) => (
                   <SelectGroup key={grp}>
                     <SelectLabel>{grp}</SelectLabel>
-                    {SHIPBOARD_TASKS.filter((x) => x.group === grp).map((x) => <SelectItem key={x.name} value={x.name}>{x.name}</SelectItem>)}
+                    {SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task)).map((x) => <SelectItem key={x.name} value={x.name}>{x.name}</SelectItem>)}
                   </SelectGroup>
                 ))}
               </SelectContent>

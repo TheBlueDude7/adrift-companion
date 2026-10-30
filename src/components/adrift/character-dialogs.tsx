@@ -1,6 +1,6 @@
 "use client";
 
-import { DicesIcon, HeartCrackIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { BandageIcon, DicesIcon, HeartCrackIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,10 +10,12 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AFFLICTIONS, CONDITIONS, INJURIES, type TableEntry } from "@/data/compendium";
+import { firstAidPool, giveFirstAid } from "@/lib/actions";
 import { uid } from "@/lib/dice";
 import { addInjuryFromRoll, applyDamage, findChar, injuryFor, rollAffliction, type InjuryRoll } from "@/lib/mechanics";
 import { CONDITION_DURATIONS, INJURY_SEVERITIES, severityFromRoll, type ConditionDuration, type InjurySeverity } from "@/lib/rules";
 import { useGame } from "@/lib/store";
+import { usePerms } from "@/lib/use-perms";
 import type { Character } from "@/lib/types";
 import { Stepper } from "./common";
 
@@ -79,7 +81,7 @@ export function DamageDialog({ character }: { character: Character }) {
   const setAmt = (v: number) => {
     setAmount(v);
     setPressure(v >= 2);
-    setInjury(v >= 3);
+    setInjury(v >= 2);
   };
 
   return (
@@ -111,7 +113,7 @@ export function DamageDialog({ character }: { character: Character }) {
           </label>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={injury} onCheckedChange={(v) => setInjury(!!v)} />
-            Suffers an Injury (lost 3+ HP from one source)
+            Suffers an Injury (lost 2+ HP from one source)
           </label>
           {injury && <InjuryRollFields value={roll} onChange={setRoll} />}
         </div>
@@ -133,6 +135,119 @@ export function DamageDialog({ character }: { character: Character }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** First Aid is a free action: the sheet's character treats anyone's Untreated Minor injury, any time. */
+export function FirstAidDialog({ character }: { character: Character }) {
+  const act = useGame((s) => s.act);
+  const game = useGame((s) => s.game);
+  const { isGM } = usePerms();
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState("");
+  const [clear, setClear] = useState<string[]>([]);
+  const wounds = game.characters
+    .filter((c) => !c.dead)
+    .flatMap((c) => c.injuries.filter((i) => i.severity === "Minor" && i.state === "Untreated").map((i) => ({ key: `${c.id}:${i.id}`, patient: c, injury: i })));
+  const chosen = wounds.find((w) => w.key === pick) ?? wounds[0];
+  const pool = firstAidPool(game, character);
+  const offers = game.firstAidOffers ?? [];
+  const asks = !!chosen && !isGM && chosen.patient.id !== character.id;
+  const offered = !!chosen && offers.some((o) => o.injuryId === chosen.injury.id && o.healerId === character.id);
+  const clearing = clear.filter((id) => chosen?.patient.conditions.some((x) => x.id === id));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setPick(""); setClear([]); } }}>
+      <DialogTrigger render={<Button size="sm" variant="outline" disabled={character.dead}><BandageIcon /> First Aid</Button>} />
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{character.name} gives First Aid</DialogTitle>
+          <DialogDescription>A free skilled roll, no Energy. The first 6 treats one Untreated Minor injury. Each 6 after it heals 1 HP or clears a condition.</DialogDescription>
+        </DialogHeader>
+        {wounds.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nobody has an Untreated Minor injury.</p>
+        ) : (
+          <div className="grid gap-3">
+            <Select value={chosen?.key ?? ""} onValueChange={(v) => { setPick(String(v)); setClear([]); }}>
+              <SelectTrigger className="w-full"><SelectValue>{chosen ? `${chosen.patient.name}: ${chosen.injury.name}` : "Pick an injury"}</SelectValue></SelectTrigger>
+              <SelectContent>
+                {wounds.map((w) => <SelectItem key={w.key} value={w.key}>{w.patient.name}: {w.injury.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">Rolls {pool.dice} dice ({pool.label}).</p>
+            {chosen && chosen.patient.conditions.length > 0 && (
+              <div className="grid gap-1.5">
+                <Label className="text-xs text-muted-foreground">Extra 6s clear these first, in the order checked. The rest heal HP.</Label>
+                {chosen.patient.conditions.map((x) => (
+                  <label key={x.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={clear.includes(x.id)} onCheckedChange={(v) => setClear((cur) => (v ? [...cur, x.id] : cur.filter((id) => id !== x.id)))} />
+                    {x.name}
+                    {clear.includes(x.id) && <span className="text-xs text-muted-foreground">#{clearing.indexOf(x.id) + 1}</span>}
+                  </label>
+                ))}
+              </div>
+            )}
+            {asks && <p className="text-xs text-muted-foreground">{chosen.patient.name}&apos;s player (or the GM) accepts before it&apos;s rolled.</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button
+            disabled={!chosen || offered}
+            onClick={() => {
+              if (!chosen) return;
+              if (asks) {
+                act(`${character.name} offers First Aid`, (g) => {
+                  (g.firstAidOffers ??= []).push({ id: uid(), healerId: character.id, patientId: chosen.patient.id, injuryId: chosen.injury.id, clear: clearing });
+                  return `🩹 ${character.name} offers ${chosen.patient.name} First Aid for ${chosen.injury.name}.`;
+                });
+              } else act(`${character.name} gives First Aid`, (g) => giveFirstAid(g, character.id, chosen.patient.id, chosen.injury.id, clearing));
+              setOpen(false);
+            }}
+          >
+            {offered ? "Already offered" : asks ? `Offer to ${chosen.patient.name}` : "Roll First Aid"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** First Aid offered to or by this character, waiting for the patient's player (or the GM) to accept. */
+export function FirstAidOffers({ character }: { character: Character }) {
+  const act = useGame((s) => s.act);
+  const game = useGame((s) => s.game);
+  const { isGM, myCharacterId } = usePerms();
+  const offers = (game.firstAidOffers ?? []).filter((o) => o.patientId === character.id || o.healerId === character.id);
+  if (!offers.length) return null;
+  const name = (id: string) => game.characters.find((c) => c.id === id)?.name ?? "Someone";
+  const answer = (id: string, how: "accept" | "decline" | "withdraw") =>
+    act(how === "accept" ? "Accept First Aid" : how === "decline" ? "Decline First Aid" : "Withdraw First Aid", (g) => {
+      const o = (g.firstAidOffers ?? []).find((x) => x.id === id);
+      g.firstAidOffers = (g.firstAidOffers ?? []).filter((x) => x.id !== id);
+      if (!o) return "";
+      if (how === "accept") return giveFirstAid(g, o.healerId, o.patientId, o.injuryId, o.clear);
+      return how === "decline" ? `${name(o.patientId)} declines ${name(o.healerId)}'s First Aid.` : `${name(o.healerId)} withdraws their First Aid offer.`;
+    });
+
+  return (
+    <div className="grid gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/5 p-2.5">
+      {offers.map((o) => {
+        const injury = game.characters.find((c) => c.id === o.patientId)?.injuries.find((i) => i.id === o.injuryId);
+        const canAnswer = isGM || o.patientId === myCharacterId;
+        return (
+          <div key={o.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <BandageIcon className="size-4 text-sky-400" />
+            <span><span className="font-medium">{name(o.healerId)}</span> offers <span className="font-medium">{name(o.patientId)}</span> First Aid for {injury?.name ?? "an injury"}.</span>
+            <span className="ml-auto flex gap-1.5">
+              {canAnswer && <Button size="xs" variant="outline" onClick={() => answer(o.id, "decline")}>Decline</Button>}
+              {canAnswer && <Button size="xs" onClick={() => answer(o.id, "accept")}>Accept</Button>}
+              {!canAnswer && o.healerId === myCharacterId && <Button size="xs" variant="ghost" onClick={() => answer(o.id, "withdraw")}>Withdraw</Button>}
+              {!canAnswer && o.healerId !== myCharacterId && <span className="self-center text-[11px] text-muted-foreground">Waiting for {name(o.patientId)}</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

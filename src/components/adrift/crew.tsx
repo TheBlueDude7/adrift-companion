@@ -61,7 +61,7 @@ import { newCharacter, sampleCrew } from "@/lib/seed";
 import { useGame } from "@/lib/store";
 import type { Character, FoodIntake, GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CompendiumPicker, DamageDialog } from "./character-dialogs";
+import { CompendiumPicker, DamageDialog, FirstAidDialog, FirstAidOffers } from "./character-dialogs";
 import { CommitInput } from "./commit-input";
 import { READ_ONLY, usePerms } from "@/lib/use-perms";
 import { claimCharacter } from "@/lib/sync/client";
@@ -601,11 +601,13 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
             <div className="flex flex-wrap gap-1.5">
               <DiceRoller character={c} />
               <DamageDialog character={c} />
+              {canEdit && <FirstAidDialog character={c} />}
               {perms.isGM && <Button size="sm" variant="outline" onClick={() => edit(`${c.name} rests`, (x, g) => { const o: string[] = []; rest(g, x, o); return o; })}><BedIcon /> Rest</Button>}
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-3">
+          <FirstAidOffers character={c} />
           <Vitals c={c} edit={edit} />
         </CardContent>
       </Card>

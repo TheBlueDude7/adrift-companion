@@ -28,6 +28,8 @@ export type ShipboardTask = {
   yields?: { name: string; qty: number };
   /** Only the GM resolves it. Players roll and resolve every other task of their own. */
   gmResolves?: boolean;
+  /** A free action taken from the character sheet whenever it's needed, not planned into a segment. */
+  free?: boolean;
 };
 
 /** Mastery: levels above a Routine Threshold that cut the task's Energy by 1. */
@@ -37,7 +39,7 @@ export const EXPERT_MARGIN = 6;
 /** Mastery: levels above a Project's threshold that add 2 Progress per Routine segment. */
 export const PROJECT_MARGIN = 4;
 
-type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves">;
+type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free">;
 
 const t = (name: string, group: string, energy: number, skills: SkillKey[], threshold: number, result: string, mode: TaskMode = "routine", effect: TaskEffect = null, extra: Extra = {}): ShipboardTask => ({ name, group, energy, skills, threshold, mode, result, effect, ...extra });
 
@@ -67,7 +69,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Purify Water", "Food & water", 1, ["biology"], 2, "Convert contaminated water when equipment is available."),
   t("Filter Reclaimed Water", "Food & water", 1, ["cooking"], 1, "Process water produced by Life Support using a filter."),
   t("Turn Food into Fuel", "Food & water", 1, ["botany"], 4, "Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. Botany 7 converts 3 into 2.", "routine", "convert", { facility: { modules: ["Bioconverter"], label: "a Bioconverter" } }),
-  t("First Aid: Minor Injury", "Medical", 1, ["firstAid"], 3, "Stabilize and treat an accessible Minor injury.", "routine", null, { strong: "Heal +1 HP, or treat a second patient." }),
+  t("First Aid: Minor Injury", "Medical", 0, ["firstAid"], 3, "Stabilize and treat an accessible Minor injury. A free action from the character sheet, any time.", "skilled", null, { strong: "Each 6 after the first heals 1 HP or clears a condition.", free: true }),
   t("Stop Bleeding", "Medical", 1, ["firstAid"], 0, "End Bleeding with a Medkit.", "crisis"),
   t("Surgery", "Medical", 3, ["surgery"], 0, "Treat a Major or Deadly injury.", "crisis", null, { strong: "Reduce long-term penalties, or the patient regains 1 HP." }),
   t("Prep for Surgery", "Medical", 1, ["firstAid"], 7, "Ready the patient and the theatre: the next Surgery on them this day gets +2d6.", "routine", null, { facility: { modules: ["Medical Bay"], level: 3, label: "a Sterile Suite Medical Bay" } }),

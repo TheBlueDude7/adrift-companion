@@ -1,14 +1,14 @@
 import { AFFLICTIONS, INJURIES } from "@/data/compendium";
 import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
-import { attributeValue, hasWorkingModule, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
+import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import {
   MIND_BREAK_BY_NAME,
   MIND_BREAKS,
   PANICKED,
   PRESSURE_STATES,
   SEGMENTS,
-  dailyPressureFloor,
+  pressureFloor,
   severityFromRoll,
   SKILL_BY_KEY,
   xpForNextLevel,
@@ -42,8 +42,8 @@ export function clampVitals(c: Character) {
   c.hp = clamp(c.hp, 0, maxHp(c));
   c.energy = clamp(c.energy, 0, maxEnergy(c));
   c.willpower = clamp(c.willpower, 0, maxWillpower(c));
-  c.pressure = clamp(c.pressure, 0, PANICKED);
   c.stress = clamp(c.stress, 0, 10);
+  c.pressure = clamp(c.pressure, pressureFloor(c.stress), PANICKED);
 }
 
 export function mindBreak(c: Character): string {
@@ -76,13 +76,21 @@ export function changeStress(c: Character, delta: number, out: string[]) {
   }
   if (applied) out.push(`${c.name} gains ${applied} Stress (now ${c.stress}).`);
   if (applied && c.stress === 10) out.push(`${c.name} reaches Stress 10 (Collapsed) and immediately gains an Affliction.`);
+  const floor = pressureFloor(c.stress);
+  if (c.pressure < floor) {
+    c.pressure = floor;
+    out.push(`At Stress ${c.stress}, ${c.name}'s Pressure can't be below ${PRESSURE_STATES[floor].name}.`);
+  }
 }
 
 /** Gain or lose Pressure, applying Strained and Panicked overflow rules. */
 export function changePressure(g: GameState, c: Character, delta: number, out: string[]) {
   if (delta < 0) {
-    c.pressure = clamp(c.pressure + delta, 0, PANICKED);
-    out.push(`${c.name}'s Pressure drops to ${PRESSURE_STATES[c.pressure].name}.`);
+    const floor = pressureFloor(c.stress);
+    const next = clamp(c.pressure + delta, floor, PANICKED);
+    if (next === c.pressure) out.push(`${c.name}'s Pressure can't drop below ${PRESSURE_STATES[floor].name} at Stress ${c.stress}.`);
+    else out.push(`${c.name}'s Pressure drops to ${PRESSURE_STATES[next].name}${next > c.pressure + delta ? ` (held there by Stress ${c.stress})` : ""}.`);
+    c.pressure = next;
     return;
   }
   let steps = delta;
@@ -165,7 +173,20 @@ export function rest(g: GameState, c: Character, out: string[]) {
   const restores = !c.survival.restBlocked && !c.afflictions.some((a) => a.name === "Sleep Disruption");
   if (restores) c.energy = maxEnergy(c);
   out.push(`${c.name} Rests (${c.survival.rests} today): +1 HP${restores ? ", Energy restored" : ""}.`);
-  if (c.pressure > 0) changePressure(g, c, -1, out);
+  if (c.pressure > pressureFloor(c.stress)) changePressure(g, c, -1, out);
+  naturalRecovery(g, c, out);
+}
+
+/** Roll Constitution + days since the injury for the oldest Treated Minor injury. Any 6 heals it. */
+function naturalRecovery(g: GameState, c: Character, out: string[]) {
+  const treated = c.injuries.filter((x) => x.state === "Treated" && x.severity === "Minor");
+  if (!treated.length) return;
+  const oldest = treated.reduce((a, b) => (a.dayReceived <= b.dayReceived ? a : b));
+  const dice = rollPool(attributeValue(c, "CON") + Math.max(0, g.day - oldest.dayReceived));
+  if (sixes(dice) > 0) {
+    c.injuries = c.injuries.filter((x) => x.id !== oldest.id);
+    out.push(`${c.name} recovers while resting [${dice.join(", ")}]: ${oldest.name} heals.`);
+  } else out.push(`${c.name}'s recovery roll for ${oldest.name} [${dice.join(", ")}] found no 6.`);
 }
 
 export function advanceSegment(g: GameState): string[] {
@@ -187,7 +208,6 @@ export type EndOfDayInput = Record<string, { food: FoodIntake; water: boolean; s
 
 export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
   const out: string[] = [`— End of Day ${g.day} —`];
-  const quarters = hasWorkingModule(g.ship, "Crew Quarters");
   const rationDiscipline = g.characters.some((c) => !c.dead && c.specialty === "Ration Discipline");
   for (const c of g.characters) {
     if (c.dead) continue;
@@ -265,23 +285,11 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
       out.push(`${c.name} loses ${untreated} HP from untreated injuries (HP ${c.hp}).`);
     }
 
-    // Natural recovery
-    const treatedMinor = c.injuries.filter((x) => x.state === "Treated" && x.severity === "Minor");
-    if (treatedMinor.length && quarters) {
-      const oldest = treatedMinor.reduce((a, b) => (a.dayReceived <= b.dayReceived ? a : b));
-      const pool = attributeValue(c, "CON") + (g.day - oldest.dayReceived);
-      const dice = rollPool(pool);
-      if (sixes(dice) > 0) {
-        c.injuries = c.injuries.filter((x) => x.id !== oldest.id);
-        out.push(`${c.name} recovers naturally [${dice.join(", ")}]: ${oldest.name} heals.`);
-      } else out.push(`${c.name}'s recovery roll [${dice.join(", ")}] found no 6.`);
-    }
-
     // Energy, pressure and resets
     s.energyPenalty = penalty;
     s.restBlocked = restBlocked;
     c.energy = Math.min(c.energy, maxEnergy(c));
-    c.pressure = dailyPressureFloor(c.stress);
+    c.pressure = pressureFloor(c.stress);
     s.food = "none";
     s.water = false;
     s.rests = 0;
