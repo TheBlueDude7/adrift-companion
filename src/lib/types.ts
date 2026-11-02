@@ -10,7 +10,12 @@ import type {
   ModuleCondition,
   SkillKey,
 } from "./rules";
+import type { InjuryLocation } from "@/data/injuries";
 
+/**
+ * An injury from the 2d6 table has a `location`, and its `code` points into INJURY_TABLE. Injuries from the
+ * old 60-entry table are `legacy`: they keep their own text and get no automatic effects until converted.
+ */
 export type Injury = {
   id: string;
   code: string;
@@ -20,6 +25,12 @@ export type Injury = {
   state: InjuryState;
   dayReceived: number;
   notes: string;
+  location?: InjuryLocation;
+  legacy?: boolean;
+  /** Had Surgery: a Major or Deadly injury now counts as Minor. */
+  operated?: boolean;
+  /** A Deadly injury that needs Surgery by the end of this day and segment, or the character dies. */
+  deadline?: { day: number; segment: number };
 };
 
 export type Affliction = {
@@ -83,6 +94,10 @@ export type Character = {
   survival: Survival;
   abilityUsed: Record<string, boolean>;
   dead: boolean;
+  /** Down at 0 HP but stabilized by First Aid: no more death checks. Any healing wakes them. */
+  stabilized?: boolean;
+  /** Already gained Pressure from losing 2+ HP this round (cleared at End of Round and End Scene). */
+  damagePressureRound?: boolean;
   notes: string;
   /** Quartermaster's Contingency Pack, while packed. */
   contingency?: Contingency;
@@ -117,7 +132,7 @@ export type Mech = {
   chassis: MechChassis;
   tier: 1 | 2 | 3;
   hp: number;
-  /** Built-in Tier Resistance picks. Tier III may pick the same type twice for Resistance 2. */
+  /** Built-in Tier Resistance picks, one damage type each. Older saves may repeat a type; it counts once. */
   tierResist: MechDamageType[];
   modules: InstalledModule[];
   pilotId: string | null;
@@ -314,12 +329,20 @@ export type GameState = {
   /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */
   firstAidOffers?: FirstAidOffer[];
   research: Research;
+  /**
+   * Ration Discipline covers one stretch of rationing. `covered` is true while that stretch lasts;
+   * `cooldown` counts the ration-free days still needed (of 3 in a row) before it covers another.
+   */
+  rationDiscipline?: { covered: boolean; cooldown: number };
   /** Tasks the crew has committed to, by day and segment. */
   actions: SegmentAction[];
 };
 
-/** `clear` lists the patient's condition ids that extra 6s clear first, in order. */
-export type FirstAidOffer = { id: string; healerId: string; patientId: string; injuryId: string; clear?: string[] };
+/**
+ * `injuryId` is the Untreated Minor injury to treat, or null to just heal. `kit` is the medkit it spends,
+ * from the healer's inventory or "ship" storage. `clear` lists condition ids that 6s clear first, in order.
+ */
+export type FirstAidOffer = { id: string; healerId: string; patientId: string; injuryId: string | null; kit?: { name: string; location: string }; clear?: string[] };
 
 export type ActionStatus = "planned" | "success" | "strong" | "failed" | "cancelled";
 

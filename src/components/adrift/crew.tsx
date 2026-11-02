@@ -34,6 +34,8 @@ import {
   usedSlots,
   wornArmor,
 } from "@/lib/derive";
+import { INJURY_BY_CODE, INJURY_TABLE } from "@/data/injuries";
+import { convertLegacy, effectiveSeverity, operate, suggestConversion } from "@/lib/injuries";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
   ATTRIBUTES,
@@ -50,6 +52,7 @@ import {
   PRESSURE_STATES,
   pressureFloor,
   pressureTip,
+  SEGMENTS,
   SKILLS,
   stressBand,
   xpForNextLevel,
@@ -59,7 +62,7 @@ import {
 } from "@/lib/rules";
 import { newCharacter, sampleCrew } from "@/lib/seed";
 import { useGame } from "@/lib/store";
-import type { Character, FoodIntake, GameState } from "@/lib/types";
+import type { Character, FoodIntake, GameState, Injury } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CompendiumPicker, DamageDialog, FirstAidDialog, FirstAidOffers } from "./character-dialogs";
 import { CommitInput } from "./commit-input";
@@ -434,16 +437,32 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
       ) : (
         <div className="grid gap-2">
           {c.injuries.map((inj) => (
-            <div key={inj.id} className={cn("rounded-lg border bg-background/40 p-3", inj.state === "Untreated" && "border-rose-500/30")}>
+            <div key={inj.id} className={cn("rounded-lg border bg-background/40 p-3", inj.state === "Untreated" && "border-rose-500/30", inj.deadline && "border-rose-500/70")}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{inj.name}</span>
                 <span className="font-mono text-xs text-muted-foreground">{inj.code}</span>
+                {inj.legacy ? (
+                  <Tip content="From the old 60-entry injury table. It works as before (no automatic dice penalty) until the GM converts it."><Pill className="border-amber-400/40 text-amber-300">old table</Pill></Tip>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{effectiveSeverity(inj)} {inj.location}{inj.operated && ` (was ${inj.severity})`}</span>
+                )}
                 <span className="text-xs text-muted-foreground">· day {inj.dayReceived}</span>
                 <div className="ml-auto flex items-center gap-1">
-                  <Select value={inj.severity} onValueChange={(v) => edit(`${inj.name} severity`, (x) => { x.injuries.find((i) => i.id === inj.id)!.severity = v as InjurySeverity; return `${x.name}'s ${inj.name} is now ${v}.`; })}>
-                    <SelectTrigger size="sm" className="w-24"><SelectValue /></SelectTrigger>
-                    <SelectContent>{INJURY_SEVERITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
+                  {inj.legacy ? (
+                    <>
+                      <Select value={inj.severity} onValueChange={(v) => edit(`${inj.name} severity`, (x) => { x.injuries.find((i) => i.id === inj.id)!.severity = v as InjurySeverity; return `${x.name}'s ${inj.name} is now ${v}.`; })}>
+                        <SelectTrigger size="sm" className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>{INJURY_SEVERITIES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <ConvertInjuryDialog injury={inj} edit={edit} />
+                    </>
+                  ) : (
+                    effectiveSeverity(inj) !== "Minor" && (
+                      <Tip content="Record a successful Surgery: the injury becomes a Treated Minor one (−1d6) and the conditions it caused end. Surgery is a Crisis task, and the patient drops to half Max HP when it begins.">
+                        <Button size="sm" variant="outline" onClick={() => edit(`Surgery on ${inj.name}`, (x) => { const out: string[] = []; operate(x, inj.id, out); return out; })}>Surgery</Button>
+                      </Tip>
+                    )
+                  )}
                   <Select value={inj.state} onValueChange={(v) => edit(`${inj.name} ${v}`, (x) => { x.injuries.find((i) => i.id === inj.id)!.state = v as InjuryState; return `${x.name}'s ${inj.name} is now ${v}.`; })}>
                     <SelectTrigger size="sm" className={cn("w-28", inj.state === "Untreated" && "text-rose-300")}><SelectValue /></SelectTrigger>
                     <SelectContent>{INJURY_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
@@ -452,12 +471,50 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                 </div>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{inj.effect}</p>
+              {inj.deadline && <p className="mt-1 text-xs font-medium text-rose-300">☠ Needs Surgery by the end of {SEGMENTS[inj.deadline.segment]}, day {inj.deadline.day}, or {c.name} dies.</p>}
               {inj.notes && <p className="mt-1 text-xs text-amber-300">{inj.notes}</p>}
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** Swap an old-table injury for one from the new 36-entry table, starting from the closest match. */
+function ConvertInjuryDialog({ injury, edit }: { injury: Injury; edit: Edit }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState(() => suggestConversion(injury).code);
+  const pick = INJURY_BY_CODE[code];
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setCode(suggestConversion(injury).code); }}>
+      <DialogTrigger render={<Button size="sm" variant="outline" />}>Convert</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Convert {injury.name}</DialogTitle>
+          <DialogDescription>
+            Replace this old-table injury with one from the new table. It stays {injury.state} and keeps its day received. Nothing new is applied: no fresh Bleeding, conditions, or Surgery deadline.
+          </DialogDescription>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">Old: {injury.severity}. {injury.effect}</p>
+        <Select value={code} onValueChange={(v) => v && setCode(v)}>
+          <SelectTrigger className="w-full"><SelectValue>{pick ? `${pick.code} · ${pick.severity} ${pick.location}: ${pick.name}` : code}</SelectValue></SelectTrigger>
+          <SelectContent>
+            {INJURY_TABLE.map((e) => (
+              <SelectItem key={e.code} value={e.code}>{e.code} · {e.severity} {e.location}: {e.name}{e.code === suggestConversion(injury).code ? " (suggested)" : ""}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {pick && (
+          <div className="grid gap-1 text-xs">
+            <p className="text-muted-foreground">{pick.effect}</p>
+            {pick.severity !== injury.severity && <p className="text-amber-300">This changes the severity from {injury.severity} to {pick.severity}.</p>}          </div>
+        )}
+        <DialogFooter>
+          <Button disabled={!pick} onClick={() => { edit(`Convert ${injury.name}`, (x) => { const out: string[] = []; convertLegacy(x, injury.id, code, out); return out; }); setOpen(false); }}>Convert</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -533,7 +590,7 @@ function Survival({ c, edit }: { c: Character; edit: Edit }) {
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {s.foodMissStreak > 0 && <Pill tone="warn" tip={s.foodMissStreak === 1 ? "Missed Food yesterday: −1 Max Energy today. A second day in a row costs 2 Max Energy and stops Rest restoring Energy; a third adds 1 Stress." : `Missed Food ${s.foodMissStreak} days running: −2 Max Energy and Rest restores no Energy.${s.foodMissStreak >= 3 ? " Each further day adds 1 Stress." : " A third day adds 1 Stress."}`}>Missed food {s.foodMissStreak}d</Pill>}
+        {s.foodMissStreak > 0 && <Pill tone="warn" tip={s.foodMissStreak === 1 ? "Missed Food yesterday: −1 Max Energy today. A second day in a row costs 2 Max Energy and stops Rest restoring Energy; a third adds 1 Stress." : `Missed Food ${s.foodMissStreak} days running: −2 Max Energy and Rest restores no Energy.${s.foodMissStreak >= 3 ? " Every third day adds 1 Stress." : " A third day adds 1 Stress."}`}>Missed food {s.foodMissStreak}d</Pill>}
         {s.waterMissStreak > 0 && <Pill tone="danger" tip={s.waterMissStreak === 1 ? "Missed Water: −2 Max Energy. A second day without Water means death without immediate intervention." : "Two or more days without Water: death without immediate intervention."}>Missed water {s.waterMissStreak}d</Pill>}
         {s.sleepMissStreak > 0 && <Pill tone="warn" tip={s.sleepMissStreak === 1 ? "Missed sleep: −1 Max Energy the next day. A second night costs 3 Max Energy." : s.sleepMissStreak === 2 ? "Missed sleep twice: −3 Max Energy. A third night means collapsing for 2 segments of Rest and 1 Stress." : "Collapsed from sleep deprivation: must Rest for 2 segments and gains 1 Stress each night without sleep."}>Missed sleep {s.sleepMissStreak}d</Pill>}
         {s.rationStreak > 0 && <Pill tone="info" tip="Eating half rations. Each day needs a Constitution roll or −1 Max Energy, and every second day in a row adds 1 Stress (Ration Discipline skips both).">Rationing {s.rationStreak}d</Pill>}

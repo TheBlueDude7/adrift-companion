@@ -28,7 +28,7 @@ import {
 } from "@/data/mechs";
 import { TIER_LABEL } from "@/data/cybernetics";
 import { uid } from "@/lib/dice";
-import { applyDamage } from "@/lib/mechanics";
+import { applyDamage, damageSteps } from "@/lib/mechanics";
 import { burnMechCells, cellList, mechCells } from "@/lib/power";
 import { mechCapacity, mechModules, mechStats, moduleBlocker, newMech, resolveMechDamage } from "@/lib/mechs";
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
@@ -44,17 +44,24 @@ const cellWord = (tier: 1 | 2 | 3, n: number) => `${n} ${tier === 1 ? "power" : 
 const findMech = (g: GameState, id: string) => g.mechs.find((m) => m.id === id)!;
 const tierName = (t: 1 | 2 | 3) => TIER_LABEL[t];
 
+/** The frame's built-in Resistance picks: distinct types, filled with unused ones. */
+function fillPicks(resist: MechDamageType[], count: number) {
+  const chosen = [...new Set(resist)];
+  const spare = MECH_DAMAGE_TYPES.filter((t) => !chosen.includes(t));
+  return [...chosen, ...spare].slice(0, count);
+}
+
 function ResistPicker({ tier, value, onChange }: { tier: 1 | 2 | 3; value: MechDamageType[]; onChange: (v: MechDamageType[]) => void }) {
   const picks = MECH_TIERS[tier].resistPicks;
   if (picks === 0) return <p className="text-xs text-muted-foreground">Tier I frames have no built-in Resistance.</p>;
   return (
     <div className="grid gap-1.5">
-      <Label>{tier === 2 ? "Resistance 1 to one damage type" : "Resistance 2 to one type, or 1 to two types"}</Label>
+      <Label>{tier === 2 ? "Resistance to one damage type" : "Resistance to two different damage types"}</Label>
       <div className="grid grid-cols-2 gap-2">
         {Array.from({ length: picks }, (_, i) => (
           <Select key={i} value={value[i] ?? "Physical"} onValueChange={(v) => { const next = [...value]; next[i] = v as MechDamageType; onChange(next.slice(0, picks)); }}>
             <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>{MECH_DAMAGE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            <SelectContent>{MECH_DAMAGE_TYPES.map((t) => <SelectItem key={t} value={t} disabled={value.some((v, j) => j !== i && v === t)}>{t}</SelectItem>)}</SelectContent>
           </Select>
         ))}
       </div>
@@ -130,7 +137,7 @@ function NewMechDialog() {
   const [resist, setResist] = useState<MechDamageType[]>([]);
   const c = CHASSIS[chassis];
   const t = MECH_TIERS[tier];
-  const picks = [...resist, "Physical", "Physical"].slice(0, t.resistPicks) as MechDamageType[];
+  const picks = fillPicks(resist, t.resistPicks);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setName(""); setResist([]); } }}>
@@ -204,20 +211,21 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
   const [amount, setAmount] = useState(3);
   const [type, setType] = useState<MechDamageType | "Other">("Physical");
   const [cover, setCover] = useState(0);
+  const [vulnerable, setVulnerable] = useState(false);
   const [roll, setRoll] = useState<RollDraft>(EMPTY_ROLL);
   const [injury, setInjury] = useState(false);
-  const r = resolveMechDamage(game, mech, amount, type, cover);
+  const r = resolveMechDamage(game, mech, amount, type, cover, vulnerable);
   const pilot = game.characters.find((c) => c.id === mech.pilotId && mech.deployed);
   const injuryRoll = parseRoll(roll);
   const breaks = mech.hp > 0 && r.toMech >= mech.hp;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setInjury(false); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setInjury(false); setVulnerable(false); } }}>
       <DialogTrigger render={<Button size="xs" variant="destructive"><HeartCrackIcon /> Damage</Button>} />
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Damage {mech.name}</DialogTitle>
-          <DialogDescription>Resistance applies first, then Cover. What the mech can&apos;t absorb at 0 HP passes to the pilot.</DialogDescription>
+          <DialogDescription>Vulnerability, then Resistance, then Cover (Ballistic only), then Armor (1 per hit). What the mech can&apos;t absorb at 0 HP passes to the pilot.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="flex items-center justify-between"><Label>Incoming damage</Label><Stepper value={amount} onChange={setAmount} min={1} max={30} label="damage" /></div>
@@ -228,17 +236,22 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
               <SelectContent>{[...MECH_DAMAGE_TYPES, "Other" as const].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="flex items-center justify-between"><Label>Cover</Label><Stepper value={cover} onChange={setCover} min={0} max={10} size="xs" label="cover" /></div>
+          <label className="flex items-center gap-2 text-sm"><Checkbox checked={vulnerable} onCheckedChange={(v) => setVulnerable(!!v)} /> Vulnerable to this damage (+half)</label>
+          <div className="flex items-center justify-between"><Label>Cover (Ballistic only)</Label><Stepper value={cover} onChange={setCover} min={0} max={10} size="xs" label="cover" /></div>
           <div className="rounded-lg bg-muted/40 p-3 text-sm">
-            {r.resisted > 0 && <p>Resistance stops {r.resisted}.</p>}
+            {r.vulnerable > 0 && <p>Vulnerability adds {r.vulnerable}.</p>}
+            {r.resisted > 0 && <p>Resistance halves it, stopping {r.resisted}.</p>}
+            {r.resisted === 0 && r.vulnerable === 0 && vulnerable && type !== "Other" && mechStats(game, mech).resist[type] > 0 && <p>Resistance and Vulnerability cancel out.</p>}
+            {r.covered > 0 && <p>Cover stops {r.covered}.</p>}
+            {r.armored > 0 && <p>Armor stops 1.</p>}
             <p>The mech takes <b>{r.toMech}</b>{mech.hp > 0 ? ` (HP ${mech.hp} → ${mech.hp - r.toMech})` : " (already Offline)"}.</p>
             {r.excess > 0 && <p className="text-rose-200">{r.excess} passes through to {pilot ? pilot.name : "the pilot"}.</p>}
             {breaks && <p className="mt-1 text-xs text-amber-200">The mech goes Offline. Consider a complication: {MECH_COMPLICATIONS.slice(0, 3).join(" ")}</p>}
           </div>
           {r.excess > 0 && pilot && (
             <>
-              <label className="flex items-center gap-2 text-sm"><Checkbox checked={injury} onCheckedChange={(v) => setInjury(!!v)} /> {pilot.name} suffers an Injury (2+ HP from one source)</label>
-              {injury && <InjuryRollFields value={roll} onChange={setRoll} />}
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={injury} onCheckedChange={(v) => setInjury(!!v)} /> {pilot.name} suffers an Injury (3+ HP from one hit, or dropped to 0)</label>
+              {injury && <InjuryRollFields value={roll} onChange={setRoll} character={pilot} />}
             </>
           )}
         </div>
@@ -250,13 +263,14 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
               act(`Damage ${mech.name}`, (g) => {
                 const m = findMech(g, mech.id);
                 const out: string[] = [];
-                const res = resolveMechDamage(g, m, amount, type, cover);
+                const res = resolveMechDamage(g, m, amount, type, cover, vulnerable);
                 const wasUp = m.hp > 0;
                 m.hp -= res.toMech;
-                out.push(`${m.name} takes ${res.toMech} ${type === "Other" ? "" : `${type} `}damage${res.resisted ? ` (${res.resisted} resisted)` : ""}. Mech HP ${m.hp}/${mechStats(g, m).maxHp}.`);
+                const absorbed = [res.vulnerable && `+${res.vulnerable} Vulnerability`, res.resisted && `${res.resisted} resisted`, res.covered && `${res.covered} Cover`, res.armored && "1 Armor"].filter(Boolean).join(", ");
+                out.push(`${m.name} takes ${res.toMech} ${type === "Other" ? "" : `${type} `}damage${absorbed ? ` (${absorbed})` : ""}. Mech HP ${m.hp}/${mechStats(g, m).maxHp}.`);
                 if (wasUp && m.hp <= 0) out.push(`⚠ ${m.name} goes Offline: no Frame Attributes, powered modules, or mounted weapons. The pilot stays inside until they exit (a Slow Action in combat).`);
                 const p = g.characters.find((c) => c.id === m.pilotId && m.deployed);
-                if (res.excess > 0 && p) applyDamage(g, p, { amount: res.excess, useArmor: true, pierce: 0, gainPressure: res.excess >= 2, injury: injury ? injuryRoll : null }, out);
+                if (res.excess > 0 && p) applyDamage(g, p, { amount: res.excess, useArmor: true, pierce: 0, gainPressure: damageSteps(p, { amount: res.excess, useArmor: true, pierce: 0 }).lost >= 2, injury: injury ? injuryRoll : null }, out);
                 else if (res.excess > 0) out.push(`${res.excess} damage passes through the frame.`);
                 return out;
               }, "danger");
@@ -409,7 +423,7 @@ function TierUpgradeDialog({ mech }: { mech: Mech }) {
   const [open, setOpen] = useState(false);
   const next = (mech.tier + 1) as 2 | 3;
   const [resist, setResist] = useState<MechDamageType[]>(mech.tierResist);
-  const picks = [...resist, "Physical", "Physical"].slice(0, MECH_TIERS[next]?.resistPicks ?? 0) as MechDamageType[];
+  const picks = fillPicks(resist, MECH_TIERS[next]?.resistPicks ?? 0);
   if (mech.tier === 3) return null;
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setResist(mech.tierResist); }}>
@@ -511,7 +525,7 @@ function MechCard({ mech }: { mech: Mech }) {
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">Resistance:</span>
-          {resist.length ? resist.map((t) => <Pill key={t} tone="info">{t} {s.resist[t]}</Pill>) : <span className="text-muted-foreground">none</span>}
+          {resist.length ? resist.map((t) => <Pill key={t} tone="info">{t}</Pill>) : <span className="text-muted-foreground">none</span>}
         </div>
         <p className="text-xs text-muted-foreground"><b className="text-foreground">{s.chassis.ability}.</b> {s.chassis.abilityText.join(" ")}</p>
 

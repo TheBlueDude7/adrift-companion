@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { rollPool, sixes } from "@/lib/dice";
 import { attributeValue, skillLevel } from "@/lib/derive";
-import { changePressure, changeStress, clampVitals, findChar, mindBreak } from "@/lib/mechanics";
+import { injuryPenalty } from "@/lib/injuries";
+import { changePressure, changeStress, clampVitals, findChar, mindBreak, payPush } from "@/lib/mechanics";
 import { ATTRIBUTES, ATTRIBUTE_NAMES, PRESSURE_STATES, SKILLS, type Attribute, type SkillKey } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Character } from "@/lib/types";
@@ -40,7 +41,8 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
   const skill = flat ? 0 : skillLevel(character, what as SkillKey);
   const attrVal = attributeValue(character, attr);
   const pressureDice = flat ? 0 : PRESSURE_STATES[character.pressure].dice;
-  const pool = attrVal + skill + pressureDice + modifier + assist;
+  const hurt = injuryPenalty(character, flat ? null : (what as SkillKey), attr);
+  const pool = Math.max(0, attrVal + skill + pressureDice + modifier + assist - hurt.dice);
   const label = flat ? `flat ${ATTRIBUTE_NAMES[attr]}` : SKILLS.find((s) => s.key === what)!.name;
 
   const successes = result ? sixes(result.dice) : 0;
@@ -64,7 +66,7 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
   }
 
   function push() {
-    if (!result || result.pushed || character.energy <= 0) return;
+    if (!result || result.pushed) return;
     const before = character.pressure;
     const out: string[] = [];
     let newPressure = before;
@@ -72,8 +74,7 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
       `${character.name} pushes`,
       (g) => {
         const c = findChar(g, character.id);
-        c.energy = Math.max(0, c.energy - 1);
-        changePressure(g, c, 1, out);
+        payPush(g, c, out);
         newPressure = c.pressure;
         const extra = flat ? 0 : Math.max(0, PRESSURE_STATES[c.pressure].dice - PRESSURE_STATES[before].dice);
         const kept = result.dice.filter((v) => v === 6);
@@ -82,7 +83,6 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
         setResult({ ...result, dice, pressure: newPressure, pushed: true });
         const n = sixes(dice);
         return [
-          `${c.name} Pushes (−1 Energy).`,
           ...out,
           `Reroll: [${dice.join(", ")}] — ${n === 0 ? "failure" : n === 1 ? "success" : `${n} successes`}.`,
         ];
@@ -203,6 +203,7 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
               {pressureDice > 0 && <span className="text-amber-300">+ {PRESSURE_STATES[character.pressure].name} {pressureDice}</span>}
               {modifier !== 0 && <span>{modifier > 0 ? "+" : "−"} mod {Math.abs(modifier)}</span>}
               {assist > 0 && <span>+ assist {assist}</span>}
+              {hurt.sources.map((s) => <span key={s} className="text-rose-300">{s}</span>)}
             </div>
             <div className="mt-1 text-lg font-semibold">
               {pool > 0 ? `${pool}d6` : "No dice — the task cannot succeed"}
@@ -222,13 +223,11 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
-                {!result.pushed && successes < result.dice.length && (character.energy > 0 ? (
+                {!result.pushed && successes < result.dice.length && (
                   <Button size="sm" variant="outline" onClick={push}>
-                    <FlameIcon /> Push (−1 Energy, +1 Pressure)
+                    <FlameIcon /> {character.energy > 0 ? "Push (−1 Energy, +1 Pressure)" : "Push while Exhausted (Affliction, +1 Pressure)"}
                   </Button>
-                ) : (
-                  <span className="self-center text-xs text-muted-foreground">Exhausted: {character.name} can&apos;t Push.</span>
-                ))}
+                )}
                 {successes === 0 && character.pressure > 0 && (
                   <Button size="sm" variant="destructive" onClick={applyFailure}>
                     Apply failure consequence

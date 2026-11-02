@@ -225,7 +225,7 @@ export const INJURIES: TableEntry[] = [
     "category": 4,
     "categoryName": "Major Internal and Sensory Trauma",
     "name": "Severe Burn",
-    "effect": "Reduce Maximum Energy by 2. Fire Resistance is reduced by 1, to a minimum of 0. Extinguishing Burning requires a Slow Action rather than a Fast Action."
+    "effect": "Reduce Maximum Energy by 2. You lose Fire Resistance. Extinguishing Burning requires a Slow Action rather than a Fast Action."
   },
   {
     "code": "4-3",
@@ -253,7 +253,7 @@ export const INJURIES: TableEntry[] = [
     "category": 4,
     "categoryName": "Major Internal and Sensory Trauma",
     "name": "Chemical Burns",
-    "effect": "Become Contaminated until treated. Chemical Resistance is reduced by 1. If you have Chemical Immunity, treat it as Chemical Resistance 2 instead."
+    "effect": "Become Contaminated until treated. You lose Chemical Resistance. If you have Chemical Immunity, treat it as Chemical Resistance instead."
   },
   {
     "code": "4-7",
@@ -337,7 +337,7 @@ export const INJURIES: TableEntry[] = [
     "category": 5,
     "categoryName": "Severe Lasting Trauma",
     "name": "Kidney Damage",
-    "effect": "Reduce Maximum HP and Maximum Energy by 2. Chemical Resistance is reduced by 1. Poisoned and Contaminated effects advance twice as quickly."
+    "effect": "Reduce Maximum HP and Maximum Energy by 2. You lose Chemical Resistance. Poisoned and Contaminated effects advance twice as quickly."
   },
   {
     "code": "5-9",
@@ -851,7 +851,7 @@ export const AFFLICTIONS: TableEntry[] = [
 export const CONDITIONS: ConditionEntry[] = [
   {
     "name": "Surprised",
-    "effect": "The target cannot take a Reaction or Fast Action until the end of its relevant turn.",
+    "effect": "The target cannot take a Reaction or Fast Action until the end of its relevant turn, and becomes Shaken (if not already under more Pressure).",
     "removal": "Ends after the target’s first turn."
   },
   {
@@ -968,6 +968,11 @@ export const CONDITIONS: ConditionEntry[] = [
     "name": "Overheated",
     "effect": "The target’s body, armor, cybernetics, or machinery has exceeded safe temperatures. While Overheated: The target suffers −2d6 to strenuous physical Tasks. It cannot safely use abilities that would produce additional heat. Machines and mechs may suffer random additional penalties when acting. Overheated ends after the target spends a Slow Action cooling itself in an appropriate environment.",
     "removal": ""
+  },
+  {
+    "name": "Overloaded",
+    "effect": "Biological or cybernetic systems are overcharged. The next Task suffers −2d6, and the target gains 1 Pressure at the end of its turn unless it spends a Fast Action venting.",
+    "removal": "Ends after venting (a Fast Action) or after the Pressure is gained."
   },
   {
     "name": "Conductive",

@@ -2,10 +2,11 @@ import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_
 import { TRAINING, trainingBand } from "@/data/training";
 import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
-import { attributeValue, maxHp, skillLevel } from "./derive";
+import { attributeValue, maxHp, maxWillpower, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
-import { changePressure, changeStress, gainXp, rest } from "./mechanics";
+import { injuryPenalty } from "./injuries";
+import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip } from "./power";
 import { haveInStorage, shortfalls, spend, stockItem } from "./stock";
@@ -70,7 +71,6 @@ export function extraTaskBlocker(g: GameState, c: Character): string | null {
   const tasks = segmentTasks(g, c.id);
   if (tasks.length === 0) return "No task planned yet";
   if (tasks.length > 1 || tasks.some((a) => a.extra)) return "Already took the extra task this segment";
-  if (c.energy <= 0) return "Exhausted survivors can't Push for an extra task";
   return null;
 }
 
@@ -212,9 +212,11 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     }
   }
   if (def.effect === "craft" && c && a.crafts?.length) return craftTerms(c, a.crafts, energy);
+  if (def.name === "Plot Unsafe Course" && unscannedTarget(g, a)) mode = "crisis";
   const best = c && skills.length ? skills.reduce((b, k) => (skillLevel(c, k) > skillLevel(c, b) ? k : b)) : null;
   const level = c && best ? skillLevel(c, best) : 0;
-  const routine = mode === "routine" && (!best || level >= threshold);
+  const shaken = !!c && c.pressure >= OVERTAXED && !!best;
+  const routine = mode === "routine" && (!best || level >= threshold) && !shaken;
   const attr = best ? SKILL_BY_KEY[best].attr : null;
   const attrValue = c && attr ? attributeValue(c, attr) : 0;
   return withMastery(
@@ -241,23 +243,39 @@ export function craftMargin(c: Character, r: CraftRecipe) {
 
 const REDLINE = "Redline Familiarity";
 
-/**
- * Items one Fabricate task can make. One, or two when the crafter is 6 levels above the threshold of
- * every item. Redline Familiarity's overdrive produces three.
- */
-export function fabricateLimit(c: Character, crafts: string[]) {
-  if (c.specialty === REDLINE) return 3;
+const REDLINE_KEY = `day:${REDLINE}`;
+
+/** Items one Fabricate task normally makes: one, or two when the crafter is 6 levels above every item's threshold. */
+function normalFabricateLimit(c: Character, crafts: string[]) {
   const recipes = crafts.map((n) => RECIPE_BY_NAME[n]).filter(Boolean);
   return recipes.length > 0 && recipes.every((r) => craftMargin(c, r) >= EXPERT_MARGIN) ? 2 : 1;
 }
 
-/** Each item pays the task's Energy, except the extra items from Redline Familiarity's overdrive. */
+/** Redline Familiarity's overdrive, once per day, adds one more item beyond the normal limit. */
+export const redlineReady = (c: Character) => c.specialty === REDLINE && !c.abilityUsed[REDLINE_KEY];
+
+export function fabricateLimit(c: Character, crafts: string[]) {
+  return normalFabricateLimit(c, crafts) + (redlineReady(c) ? 1 : 0);
+}
+
+/** Each item pays the task's Energy. */
 function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
   const terms = craftCheck(c, crafts, energy);
-  const items = c.specialty === REDLINE ? 1 : crafts.length;
-  if (items <= 1) return terms;
-  return { ...terms, energy: terms.energy * items, perks: [...terms.perks, `${items} items: Energy for each`] };
+  if (c.pressure >= OVERTAXED) terms.routine = false;
+  if (crafts.length <= 1) return terms;
+  return { ...terms, energy: terms.energy * crafts.length, perks: [...terms.perks, `${crafts.length} items: Energy for each`] };
 }
+
+/** Overdriving the bench spends Redline Familiarity for the day and leaves the Workshop Damaged. */
+function redlineOverdrive(g: GameState, c: Character, crafts: string[], out: string[]) {
+  if (c.specialty !== REDLINE || crafts.length <= normalFabricateLimit(c, crafts.slice(0, 1))) return;
+  c.abilityUsed[REDLINE_KEY] = true;
+  const bench = g.ship.rooms.find((r) => r.module === STATION_WORKSHOP && r.condition === "Operational");
+  if (bench) bench.condition = "Damaged";
+  out.push(`${c.name} overdrives the bench with Redline Familiarity${bench ? `; ${bench.name} is now Damaged` : ""}.`);
+}
+
+const STATION_WORKSHOP = "Workshop / Fabrication Bay";
 
 /**
  * One check covers every item. Its terms come from the hardest item: Routine when the crafter meets
@@ -328,6 +346,10 @@ export function advanceProject(g: GameState, projectId: string, amount = 1): str
       const roll = d(4);
       out.push(`Stress Recovery rolls 1d4 + 2 = ${roll + 2}.`);
       changeStress(patient, -(roll + 2), out);
+      if (patient.willpower < maxWillpower(patient)) {
+        patient.willpower = maxWillpower(patient);
+        out.push(`${patient.name}'s Willpower is restored.`);
+      }
     } else if (x.patientId) {
       out.push("The patient is no longer aboard, so no Stress is recovered.");
     }
@@ -435,7 +457,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     }
   }
   if (ok && def.effect === "morale") {
-    const lifted = g.characters.filter((x) => !x.dead && x.pressure > pressureFloor(x.stress));
+    const lifted = g.characters.filter((x) => !x.dead && x.id !== c?.id && x.pressure > pressureFloor(x.stress));
     for (const x of lifted) x.pressure -= 1;
     out.push(lifted.length ? `Pressure eases for ${lifted.map((x) => x.name).join(", ")}.` : "Nobody was under Pressure, but spirits lift anyway.");
   }
@@ -458,7 +480,11 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   }
   if (ok && def.effect === "assist") {
     const target = g.actions.find((x) => x.id === a.assists);
-    if (target?.projectId && taskFor(target).effect === "project") out.push(...advanceProject(g, target.projectId, 1));
+    if (target?.projectId && taskFor(target).effect === "project" && c) {
+      const t = taskTerms(g, target);
+      if (t.skill && skillLevel(c, t.skill) >= t.threshold) out.push(...advanceProject(g, target.projectId, 1));
+      else out.push(`${c.name} helps, but isn't qualified (${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : "no skill"}) to add Progress.`);
+    }
   }
   if (def.effect === "course" && a.target) {
     const unsafe = a.task === "Plot Unsafe Course";
@@ -480,6 +506,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       const recipe = RECIPE_BY_NAME[name];
       if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted"));
     });
+    if (c) redlineOverdrive(g, c, a.crafts ?? [], out);
   }
   if (def.effect === "scan" && a.target && r.scan !== undefined) {
     const map = g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star");
@@ -504,27 +531,46 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice += pressure.dice;
     parts.push(`${pressure.name} ${pressure.dice}`);
   }
-  for (const x of g.actions) {
-    if (x.assists !== a.id || x.status === "cancelled") continue;
-    const helper = g.characters.find((h) => h.id === x.characterId);
-    const level = helper && terms.skill ? Math.min(4, skillLevel(helper, terms.skill)) : 0;
-    if (level > 0) {
-      dice += level;
-      parts.push(`${helper!.name} assists ${level}`);
-    }
+  const hurt = c && terms.skill ? injuryPenalty(c, terms.skill, SKILL_BY_KEY[terms.skill].attr) : null;
+  if (hurt?.dice) {
+    dice -= hurt.dice;
+    parts.push(...hurt.sources);
   }
-  const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
-  if (a.task === "Plot Unsafe Course" && map && a.target && !map.tiles[cellKey(a.target.x, a.target.y)]) {
+  const helper = bestAssistant(g, a, terms.skill);
+  if (helper) {
+    dice += helper.dice;
+    parts.push(`${helper.name} assists ${helper.dice}`);
+  }
+  if (a.task === "Plot Unsafe Course" && unscannedTarget(g, a)) {
     dice -= 3;
     parts.push("unscanned −3");
   }
   return { dice: Math.max(0, dice), parts };
 }
 
-/** A Push rerolls failed dice once, and costs Energy an exhausted survivor doesn't have. */
+/** Only one assistant adds dice: whoever has the most in the task's skill, up to +4d6. */
+function bestAssistant(g: GameState, a: SegmentAction, skill: SkillKey | null) {
+  let best: { name: string; dice: number } | null = null;
+  for (const x of g.actions) {
+    if (x.assists !== a.id || x.status === "cancelled") continue;
+    const helper = g.characters.find((h) => h.id === x.characterId);
+    const level = helper && skill ? Math.min(4, skillLevel(helper, skill)) : 0;
+    if (helper && level > (best?.dice ?? 0)) best = { name: helper.name, dice: level };
+  }
+  return best;
+}
+
+function unscannedTarget(g: GameState, a: SegmentAction) {
+  const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
+  return !!map && !!a.target && !map.tiles[cellKey(a.target.x, a.target.y)];
+}
+
+/** Overtaxed or worse: work can't be Routine any more. */
+const OVERTAXED = 3;
+
+/** A Push rerolls failed dice once. */
 export function canPush(g: GameState, a: SegmentAction) {
-  const c = g.characters.find((x) => x.id === a.characterId);
-  return !!a.roll && !a.roll.pushed && a.roll.dice.some((v) => v !== 6) && !!c && c.energy > 0;
+  return !!a.roll && !a.roll.pushed && a.roll.dice.some((v) => v !== 6) && g.characters.some((x) => x.id === a.characterId);
 }
 
 /** The result a task roll earns. Routine work can't fail on the dice. */
@@ -554,12 +600,11 @@ export function pushTask(g: GameState, id: string): string[] {
   if (!a?.roll || !c || !canPush(g, a)) return [];
   const out: string[] = [];
   const before = PRESSURE_STATES[c.pressure].dice;
-  c.energy = Math.max(0, c.energy - 1);
-  changePressure(g, c, 1, out);
+  payPush(g, c, out);
   const kept = a.roll.dice.filter((v) => v === 6);
   const extra = Math.max(0, PRESSURE_STATES[c.pressure].dice - before);
   a.roll = { dice: [...kept, ...rollPool(a.roll.dice.length - kept.length + extra)], pushed: true };
-  return [`${c.name} Pushes (−1 Energy).`, ...out, `Reroll: ${rollText(a.roll.dice)}.`];
+  return [...out, `Reroll: ${rollText(a.roll.dice)}.`];
 }
 
 export const FIRST_AID = "First Aid: Minor Injury";
@@ -570,33 +615,96 @@ export function firstAidPool(g: GameState, healer: Character) {
   return { dice: p.dice, label: p.parts.join(" + ") };
 }
 
+/** Kits that make First Aid possible, best first. Using one spends it, adds its dice, and heals its HP. */
+export const MEDKITS = [
+  { name: "Glitterworld Medkit", dice: 3, heal: 5 },
+  { name: "Medkit", dice: 1, heal: 3 },
+  { name: "Improvised Medkit", dice: 0, heal: 1 },
+] as const;
+
+export type KitSource = { name: string; location: string };
+
+/** Medkits the healer can use: their own inventory, then ship storage. */
+export function medkitsFor(g: GameState, healerId: string): (KitSource & { qty: number; dice: number; heal: number })[] {
+  const out: (KitSource & { qty: number; dice: number; heal: number })[] = [];
+  for (const location of [healerId, "ship"]) {
+    for (const kit of MEDKITS) {
+      const qty = g.items.filter((i) => i.location === location && i.name === kit.name && !i.broken).reduce((s, i) => s + i.qty, 0);
+      if (qty > 0) out.push({ name: kit.name, location, qty, dice: kit.dice, heal: kit.heal });
+    }
+  }
+  return out;
+}
+
+function spendKit(g: GameState, kit: KitSource): boolean {
+  const item = g.items.find((i) => i.location === kit.location && i.name === kit.name && i.qty > 0 && !i.broken);
+  if (!item) return false;
+  if ((item.charges ?? 1) > 1) item.charges! -= 1;
+  else {
+    item.qty -= 1;
+    if (item.maxCharges) item.charges = item.maxCharges;
+  }
+  g.items = g.items.filter((i) => i.qty > 0);
+  return true;
+}
+
 /**
- * First Aid is a free skilled roll: no segment, no Energy. The first 6 treats one Untreated Minor injury.
- * Every 6 after that clears one of `clear` (condition ids, in order), then heals 1 HP each.
+ * First Aid is a free skilled roll (no segment, no Energy) that spends one medkit from the healer's
+ * inventory or ship storage. The kit heals its HP and adds its dice. Treating an Untreated injury (any
+ * severity) takes the first 6; every other 6 clears one of `clear` (condition ids, in order), then heals 1 HP.
  */
-export function giveFirstAid(g: GameState, healerId: string, patientId: string, injuryId: string, clear: string[] = []): string[] {
+export function giveFirstAid(g: GameState, healerId: string, patientId: string, injuryId: string | null, kit: KitSource, clear: string[] = []): string[] {
   const healer = g.characters.find((x) => x.id === healerId);
   const patient = g.characters.find((x) => x.id === patientId);
-  const injury = patient?.injuries.find((i) => i.id === injuryId);
-  if (!healer || !patient || !injury || injury.state !== "Untreated" || injury.severity !== "Minor") return ["That injury no longer needs First Aid."];
+  const injury = injuryId ? patient?.injuries.find((i) => i.id === injuryId) : undefined;
+  if (!healer || !patient || patient.dead) return ["There's no one to treat."];
+  if (injuryId && (!injury || injury.state !== "Untreated")) return ["That injury no longer needs First Aid."];
   if (healer.dead) return [`${healer.name} can't give First Aid.`];
-  const who = healer.id === patient.id ? `${healer.name} treats their own ${injury.name}` : `${healer.name} gives ${patient.name} First Aid for ${injury.name}`;
-  const dice = rollPool(firstAidPool(g, healer).dice);
-  let extra = sixes(dice) - 1;
-  if (extra < 0) return [`🩹 ${who}: ${rollText(dice)}. No 6, so it stays Untreated.`];
-  injury.state = "Treated";
-  const out = [`🩹 ${who}: ${rollText(dice)}. It's Treated.`];
+  const def = MEDKITS.find((k) => k.name === kit.name);
+  if (!def || (kit.location !== healerId && kit.location !== "ship") || !spendKit(g, kit)) return [`${healer.name} has no ${kit.name} to hand.`];
+  const target = injury ? ` for ${injury.name}` : "";
+  const who = healer.id === patient.id ? `${healer.name} gives themselves First Aid${target}` : `${healer.name} gives ${patient.name} First Aid${target}`;
+  const out = [`🩹 ${who}, using ${kit.location === "ship" ? `the ship's ${kit.name}` : `their ${kit.name}`}.`];
+  const dice = rollPool(firstAidPool(g, healer).dice + def.dice);
+  let extra = sixes(dice);
+  const shown = `[${dice.join(", ")}]`;
+  if (patient.hp === 0) {
+    if (extra === 0) {
+      out.push(`${shown}: no 6, so ${patient.name} isn't stabilized and death checks continue.`);
+      return out;
+    }
+    extra -= 1;
+    patient.stabilized = true;
+    out.push(`${shown}: ${patient.name} is stabilized. No more death checks.`);
+  }
+  const kitHeal = Math.min(recoveredHp(patient, def.heal), maxHp(patient) - patient.hp);
+  if (kitHeal > 0) {
+    patient.hp += kitHeal;
+    delete patient.stabilized;
+    out.push(`The ${kit.name} heals ${kitHeal} HP (${patient.hp}/${maxHp(patient)}).`);
+  }
+  if (injury) {
+    if (extra === 0) {
+      out.push(`${shown}: no 6, so ${injury.name} stays Untreated.`);
+      return out;
+    }
+    injury.state = "Treated";
+    extra -= 1;
+    out.push(`${shown}: ${injury.name} is Treated.${injury.severity !== "Minor" && !injury.operated ? " It still needs Surgery to become a Minor injury." : ""}`);
+  } else out.push(`${shown}: ${extra ? `${extra} six${extra > 1 ? "es" : ""}` : "no 6s"}.`);
   for (const id of clear) {
     const cond = patient.conditions.find((x) => x.id === id);
     if (!cond || extra <= 0) continue;
     patient.conditions = patient.conditions.filter((x) => x.id !== id);
     extra -= 1;
-    out.push(`Extra 6: ${patient.name}'s ${cond.name} clears.`);
+    out.push(`A 6 clears ${patient.name}'s ${cond.name}.`);
   }
-  const hp = Math.min(extra, maxHp(patient) - patient.hp);
+  const hp = Math.min(recoveredHp(patient, extra), maxHp(patient) - patient.hp);
+  if (recoveredHp(patient, extra + def.heal) < extra + def.heal) out.push(`Internal Bleeding halves ${patient.name}'s healing.`);
   if (hp > 0) {
     patient.hp += hp;
-    out.push(`Extra 6${hp > 1 ? "s" : ""}: ${patient.name} heals ${hp} HP (${patient.hp}/${maxHp(patient)}).`);
+    delete patient.stabilized;
+    out.push(`${hp > 1 ? `${hp} sixes heal` : "A 6 heals"} ${hp} HP (${patient.hp}/${maxHp(patient)}).`);
   }
   return out;
 }

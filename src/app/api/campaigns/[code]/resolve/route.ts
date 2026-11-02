@@ -69,7 +69,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
       break;
     case "push":
       if (!a.roll) return Response.json({ error: "Roll first, then decide whether to Push." }, { status: 409 });
-      if (!canPush(room.game, a)) return Response.json({ error: a.roll.pushed ? "You can only Push once." : a.roll.dice.every((v) => v === 6) ? "There are no failed dice to reroll." : "Exhausted survivors can't Push." }, { status: 409 });
+      if (!canPush(room.game, a)) return Response.json({ error: a.roll.pushed ? "You can only Push once." : "There are no failed dice to reroll." }, { status: 409 });
       lines = pushTask(draft, actionId);
       lines.push(...settle());
       break;

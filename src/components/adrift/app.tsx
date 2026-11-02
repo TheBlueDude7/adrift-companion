@@ -1,6 +1,6 @@
 "use client";
 
-import { ActivityIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
+import { ActivityIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, FlagIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
@@ -14,11 +14,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
+import { advanceSegment, completeAct, endExpedition, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
 import { createInitialState } from "@/lib/seed";
 import { useGame } from "@/lib/store";
@@ -35,6 +36,7 @@ import { PlayTogether } from "./multiplayer";
 import { MapTab } from "./map/map-tab";
 import { MechsTab } from "./mechs";
 import { OverviewTab } from "./overview";
+import { RulesTab } from "./rules";
 import { ShipTab } from "./ship";
 import { StorageTab } from "./storage";
 
@@ -45,6 +47,8 @@ function Header() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [shipName, setShipName] = useState("");
+  const [ending, setEnding] = useState(false);
+  const [panicked, setPanicked] = useState<string[]>([]);
 
   function rename() {
     const name = shipName.trim();
@@ -125,6 +129,7 @@ function Header() {
                   <DropdownMenuItem onClick={() => fileRef.current?.click()}><UploadIcon /> Import campaign</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => { setShipName(game.ship.name); setRenaming(true); }}><PencilIcon /> Rename ship</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setPanicked([]); setEnding(true); }}><FlagIcon /> End expedition</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { act("Complete Act", (g) => completeAct(g), "day"); toast.success("Act complete — Willpower restored"); }}><SparklesIcon /> Complete Act</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirmReset(true)}><RotateCcwIcon /> New campaign</DropdownMenuItem>
@@ -135,6 +140,26 @@ function Header() {
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.target.value = ""; }} />
         </div>
       </div>
+
+      <Dialog open={ending} onOpenChange={setEnding}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>End the expedition</DialogTitle>
+            <DialogDescription>Once-per-expedition abilities become ready again. Anyone who reached Panicked during it gains 1 Stress.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {game.characters.filter((c) => !c.dead).map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={panicked.includes(c.id)} onCheckedChange={(v) => setPanicked((p) => (v ? [...p, c.id] : p.filter((x) => x !== c.id)))} />
+                {c.name} reached Panicked
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { act("End expedition", (g) => endExpedition(g, panicked), "day"); setEnding(false); toast.success("Expedition over"); }}>End expedition</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent className="sm:max-w-sm">
@@ -189,6 +214,7 @@ const TABS = [
   { value: "storage", label: "Storage" },
   { value: "map", label: "Map" },
   { value: "log", label: "Log" },
+  { value: "rules", label: "Rules" },
 ];
 
 const subscribeNoop = () => () => {};
@@ -225,6 +251,7 @@ export function AdriftApp() {
           <TabsContent value="storage" className="pt-3"><StorageTab /></TabsContent>
           <TabsContent value="map" className="pt-3"><MapTab /></TabsContent>
           <TabsContent value="log" className="pt-3"><LogTab /></TabsContent>
+          <TabsContent value="rules" className="pt-3"><RulesTab /></TabsContent>
         </Tabs>
       </main>
     </div>

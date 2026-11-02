@@ -12,9 +12,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, canPush, craftList, craftMargin, fabricateLimit, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, canPush, craftList, craftMargin, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
-import { changePressure } from "@/lib/mechanics";
+import { payPush } from "@/lib/mechanics";
 import { craftBlocker, FABRICATE_RECIPES, fabricateCost, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
@@ -127,7 +127,7 @@ const CRAFT_CATEGORIES = Array.from(new Set(FABRICATE_RECIPES.map((r) => r.categ
 
 function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; onChange: (v: string[]) => void }) {
   const game = useGame((s) => s.game);
-  const redline = c.specialty === "Redline Familiarity";
+  const redline = redlineReady(c);
   const limit = fabricateLimit(c, value.slice(0, 1));
   const cost = fabricateCost(value);
   const short = new Map(shortfalls(game, cost.inputs, cost.toolkit).map((s) => [s.name, s]));
@@ -181,7 +181,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
       )}
       <p className="text-[11px] text-muted-foreground">
         {redline
-          ? "Redline Familiarity can overdrive the bench for up to 3 items, once per day, for one task's Energy."
+          ? "Redline Familiarity can overdrive the bench once per day for one more item than normal, paying Energy for each. Afterward the Workshop is Damaged."
           : `One item per task. Being ${EXPERT_MARGIN} levels above an item's threshold lets ${c.name.split(" ")[0]} make a second one ${EXPERT_MARGIN} above too, paying Energy for each.`}{" "}
         A failed item loses half its materials (rounded up) and its toolkit charges.
       </p>
@@ -252,9 +252,8 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
       if (pushing) {
         const who = g.characters.find((x) => x.id === c.id);
         if (who) {
-          who.energy = Math.max(0, who.energy - 1);
-          out.push(`${who.name} Pushes for an extra task this segment (−1 Energy, ${who.energy} left).`);
-          changePressure(g, who, 1, out);
+          out.push(`${who.name} Pushes for an extra task this segment.`);
+          payPush(g, who, out);
         }
       }
       const i = g.actions.findIndex((a) => a.id === d.id);
@@ -275,7 +274,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
         <DialogHeader>
           <DialogTitle>{existing ? "Change task" : extra ? "Push for an extra task" : "Plan a task"}: {c.name}</DialogTitle>
           <DialogDescription>
-            {whenLabel(draft)}. {extra && !existing ? `Submitting costs ${c.name.split(" ")[0]} 1 Energy and 1 Pressure right away, even if the task is withdrawn later.` : "Each survivor takes one task per segment; Pushing buys one extra."}
+            {whenLabel(draft)}. {extra && !existing ? `Submitting costs ${c.name.split(" ")[0]} ${c.energy > 0 ? "1 Energy" : "an Affliction (they're Exhausted)"} and 1 Pressure right away, even if the task is withdrawn later.` : "Each survivor takes one task per segment; Pushing buys one extra."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -360,6 +359,8 @@ const RESULT_LABEL = { failed: "Failure", success: "Success", strong: "Strong Su
 const RESULT_TONE = { failed: "danger", success: "good", strong: "info" } as const;
 
 /** A player's server-side roll for their task: the pool, then the dice, a Push, and the result they earn. */
+const pushCost = (c: Character) => (c.energy > 0 ? "−1 Energy, +1 Pressure" : "Exhausted: an Affliction, +1 Pressure");
+
 function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onStep: (s: TaskStep) => Promise<unknown> }) {
   const game = useGame((s) => s.game);
   const terms = taskTerms(game, a);
@@ -376,7 +377,7 @@ function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onSte
         <p className="font-mono text-xs text-muted-foreground">{pool.parts.join(" + ")}</p>
         <Button disabled={busy || pool.dice <= 0} onClick={() => step("roll")}><DicesIcon /> {pool.dice > 0 ? `Roll ${pool.dice}d6` : "No dice: this can't succeed"}</Button>
         <p className="text-[11px] text-muted-foreground">
-          Each 6 is a success; two or more earn the Strong Result. The dice decide the task as they land. If any fail, you can Push once{c.energy > 0 ? "" : ", but not while exhausted"}.
+          Each 6 is a success; two or more earn the Strong Result. The dice decide the task as they land. If any fail, you can Push once{c.energy > 0 ? "" : "; while Exhausted, a Push costs an Affliction instead of Energy"}.
         </p>
       </div>
     );
@@ -395,7 +396,7 @@ function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onSte
       )}
       {pushable && (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => step("push")} className="justify-self-start">
-          <FlameIcon /> Push: reroll the failed dice (−1 Energy, +1 Pressure)
+          <FlameIcon /> Push: reroll the failed dice ({pushCost(c)})
         </Button>
       )}
     </div>
@@ -644,7 +645,7 @@ function CrewPlanCard({ c }: { c: Character }) {
           (busy === 0 ? (
             <PlanDialog c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a task</Button>} />
           ) : !noExtra ? (
-            <PlanDialog c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task (−1 Energy, +1 Pressure)</Button>} />
+            <PlanDialog c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task ({pushCost(c)})</Button>} />
           ) : (
             busy === 1 && <p className="text-[11px] text-muted-foreground">{noExtra}.</p>
           ))}

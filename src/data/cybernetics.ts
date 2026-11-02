@@ -57,7 +57,7 @@ export const CYBERNETICS: CyberDef[] = [
   },
   {
     key: "kinetic-bracing", name: "Kinetic Bracing", system: "structural", tier: 2, requires: [{ keys: ["spinal-brace"], label: "Spinal Brace" }],
-    effects: ["Gain Physical Resistance and Ballistic Resistance 1.", "Become Resistant to Prone and forced movement.", "Falling Damage is reduced by 2."],
+    effects: ["Gain Physical Resistance and Ballistic Resistance.", "Become Resistant to Prone and forced movement.", "Falling Damage is reduced by 2."],
   },
   {
     key: "precision-actuators", name: "Precision Actuators", system: "structural", tier: 2, requires: [{ keys: ["cyber-limb"], limb: "arm", label: "Cybernetic Arm" }],
@@ -162,7 +162,7 @@ export const CYBERNETICS: CyberDef[] = [
   },
   {
     key: "toxin-processor", name: "Toxin Processor", system: "internal", tier: 2, requires: [{ keys: ["artificial-kidney"], label: "Artificial Kidney" }],
-    effects: ["Gain Chemical Damage Resistance 1.", "Once per Scene, remove Poisoned from yourself as a Slow Action. Doing so applies Drained until the end of the Scene."],
+    effects: ["Gain Chemical Damage Resistance.", "Once per Scene, remove Poisoned from yourself as a Slow Action. Doing so applies Drained until the end of the Scene."],
   },
   {
     key: "closed-cycle-respirator", name: "Closed-Cycle Respirator", system: "internal", tier: 2, requires: [{ keys: ["artificial-lung"], label: "Artificial Lung" }],
@@ -290,12 +290,12 @@ export const CYBERNETICS: CyberDef[] = [
   // Damage systems
   {
     key: "reactive-ballistic-lattice", name: "Reactive Ballistic Lattice", system: "damage", tier: 2, damage: "Ballistic",
-    effects: ["Gain Ballistic Resistance 2.", "Become Immune to Pinned caused by Ballistic attacks.", "The first Ballistic attack you make each Round deals +1 Damage."],
+    effects: ["Gain Ballistic Resistance.", "Become Immune to Pinned caused by Ballistic attacks.", "The first Ballistic attack you make each Round deals +1 Damage."],
   },
   {
     key: "kinetic-rejection-array", name: "Kinetic Rejection Array", system: "damage", tier: 3, damage: "Ballistic", requires: [{ keys: ["reactive-ballistic-lattice"], label: "Reactive Ballistic Lattice" }],
     effects: [
-      "Retain Ballistic Resistance 2 and Immunity to Pinned caused by Ballistic attacks.",
+      "Retain Ballistic Resistance and Immunity to Pinned caused by Ballistic attacks.",
       "Once per Round, reduce one Ballistic attack against you to 0 Damage; the array can't negate another until the beginning of your next turn.",
       "Your first successful Ballistic attack each Round deals +2 Damage.",
     ],
@@ -303,7 +303,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "powered-skeletal-lattice", name: "Powered Skeletal Lattice", system: "damage", tier: 2, damage: "Physical",
     effects: [
-      "Gain Physical Resistance 2.",
+      "Gain Physical Resistance.",
       "Become Immune to Prone caused by ordinary impacts.",
       "Once per Round, after dealing Physical Damage, apply Brittle or move the target one zone without spending an additional success. Too large or Anchored targets may resist.",
     ],
@@ -311,7 +311,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "inertial-dominance-frame", name: "Inertial Dominance Frame", system: "damage", tier: 3, damage: "Physical", requires: [{ keys: ["powered-skeletal-lattice"], label: "Powered Skeletal Lattice" }],
     effects: [
-      "Retain Physical Resistance 2. Become Immune to Prone and ordinary forced movement.",
+      "Retain Physical Resistance. Become Immune to Prone and ordinary forced movement.",
       "Your Physical attacks deal +1 Damage.",
       "Once per combat, after dealing Physical Damage, apply Crippled, Immobilized, or Disarmed without spending an additional success.",
       "Drawback: Electric Damage automatically applies Conductive to you.",
@@ -320,7 +320,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "heat-exchange-network", name: "Heat Exchange Network", system: "damage", tier: 2, damage: "Fire",
     effects: [
-      "Gain Fire Resistance 2. Immune to Burning caused by ordinary environmental fire.",
+      "Gain Fire Resistance. Immune to Burning caused by ordinary environmental fire.",
       "The first Fire attack you make each Round deals +1 Damage.",
       "When your Resistance reduces Fire Damage, gain 1 Heat (store up to 2). As a Fast Action, spend all Heat as extra Fire Damage on your next successful attack.",
     ],
@@ -328,7 +328,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "closed-thermal-reactor", name: "Closed Thermal Reactor", system: "damage", tier: 3, damage: "Fire", requires: [{ keys: ["heat-exchange-network"], label: "Heat Exchange Network" }],
     effects: [
-      "Immune to Fire Damage while you have fewer than 3 Heat; each prevented hit gains 1 Heat. At 3 Heat, become Overheated and lose the Immunity (keep Fire Resistance 2).",
+      "Immune to Fire Damage while you have fewer than 3 Heat; each prevented hit gains 1 Heat. At 3 Heat, become Overheated and lose the Immunity (keep Fire Resistance).",
       "Your Fire attacks deal +2 Damage.",
       "Slow Action: vent all Heat and Overheated, choosing 2 Fire Damage to everyone else in your zone, an Illuminated and Burning hazard in your zone, or +3 Fire Damage on your next successful Fire attack.",
     ],
@@ -352,7 +352,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "closed-circulatory-processor", name: "Closed Circulatory Processor", system: "damage", tier: 2, damage: "Chemical",
     effects: [
-      "Gain Chemical Resistance 2. Immune to ordinary Poisoned. Resistance to Contaminated.",
+      "Gain Chemical Resistance. Immune to ordinary Poisoned. Resistance to Contaminated.",
       "Once per Scene, when you would become Poisoned or Contaminated, store the substance instead (one at a time).",
       "Slow Action: expel it to deal 1 Chemical Damage to a target in your zone, apply Poisoned, or apply Corroded to equipment or a Mechanical target.",
     ],
@@ -408,9 +408,9 @@ export const FABRICATE_TASK: Record<CyberTier, string> = {
 };
 
 export const SURGERY_TASK: Record<CyberTier, string> = {
-  1: "Surgery (at least Skilled), 2 Energy, 1 segment, Grade I Medical Bay, Surgical Toolkit",
-  2: "Surgery (at least Skilled), 3 Energy, 1 segment, Grade II Medical Bay, Surgical Toolkit",
-  3: "Surgery (at least Skilled), 3 Energy, 2 segments, Grade III Medical Bay, Advanced Surgical Toolkit",
+  1: "Surgery (always Crisis), 2 Energy, 1 segment, Grade I Medical Bay, Surgical Toolkit",
+  2: "Surgery (always Crisis), 3 Energy, 1 segment, Grade II Medical Bay, Surgical Toolkit",
+  3: "Surgery (always Crisis), 3 Energy, 2 segments, Grade III Medical Bay, Advanced Surgical Toolkit",
 };
 
 export const implantName = (def: Pick<CyberDef, "name">, replacement = false) => `${def.name} implant${replacement ? " (Replacement)" : ""}`;

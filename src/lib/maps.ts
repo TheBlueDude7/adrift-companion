@@ -157,6 +157,12 @@ export function normalizeGame(g: GameState): GameState {
   }
   const heavy = new Set(g.catalog.filter((t) => t.heavy).map((t) => t.name));
   for (const i of g.items) if (i.heavy === undefined && (heavy.has(i.name) || i.name.endsWith("(mech module)"))) i.heavy = true;
+  for (const c of g.characters) {
+    for (const inj of c.injuries) {
+      if (!inj.location && !inj.legacy) inj.legacy = true;
+      if ((inj.state as string) === "Stabilized") inj.state = "Treated";
+    }
+  }
   return g;
 }
 

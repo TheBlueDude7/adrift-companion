@@ -5,6 +5,7 @@ import {
   MAX_SKILL_LEVEL,
   OVERLOAD_BONUS,
   pressureTip,
+  SEGMENTS,
   SKILLS,
   stressBand,
   type Attribute,
@@ -81,7 +82,7 @@ export function heavyRelief(state: GameState, characterId: string) {
 
 /** Base carrying capacity: Strength + a third of Scavenging. */
 export function inventorySlots(c: Character) {
-  const brokenArm = c.injuries.some((i) => i.name === "Broken Arm" && i.state !== "Treated") ? 2 : 0;
+  const brokenArm = c.injuries.some((i) => i.legacy && i.name === "Broken Arm" && i.state !== "Treated") ? 2 : 0;
   return Math.max(0, attributeValue(c, "STR") + Math.floor(skillLevel(c, "scavenging") / 3) - brokenArm);
 }
 
@@ -184,9 +185,16 @@ export const foodCount = (state: GameState, location = "ship") => FOOD_ITEMS.red
 export function characterAlerts(state: GameState, c: Character) {
   const alerts: { text: string; tone: "danger" | "warn"; tip: string }[] = [];
   if (c.dead) return [{ text: "Dead", tone: "danger" as const, tip: "This survivor has died. They take no tasks and are skipped at End of Day." }];
-  if (c.hp <= 0) alerts.push({ text: "Down — death checks", tone: "danger", tip: "At 0 HP. Make a flat Constitution death check each round until someone stabilizes or heals them." });
+  if (c.hp <= 0 && c.stabilized) alerts.push({ text: "Down — stabilized", tone: "warn", tip: "At 0 HP but stabilized by First Aid: no death checks. Any healing wakes them; taking damage ends the stabilization." });
+  else if (c.hp <= 0) alerts.push({ text: "Down — death checks", tone: "danger", tip: "At 0 HP. Make a flat Constitution death check each round until First Aid stabilizes them or healing brings them above 0 HP." });
   const untreated = c.injuries.filter((i) => i.state === "Untreated").length;
   if (untreated) alerts.push({ text: `${untreated} untreated injur${untreated > 1 ? "ies" : "y"}`, tone: "warn", tip: `Each untreated injury costs 1 HP at End of Day (−${untreated} tonight). Treat it with First Aid or Surgery to stop the loss.` });
+  for (const i of c.injuries) {
+    if (!i.deadline) continue;
+    const due = state.day > i.deadline.day || (state.day === i.deadline.day && state.segment >= i.deadline.segment);
+    const when = state.day === i.deadline.day ? `the end of ${SEGMENTS[i.deadline.segment]}` : `the end of ${SEGMENTS[i.deadline.segment]} on day ${i.deadline.day}`;
+    alerts.push({ text: due ? `${i.name}: Surgery now` : `${i.name}: Surgery by ${SEGMENTS[i.deadline.segment]}`, tone: "danger", tip: `${i.name} is Deadly. Without Surgery by ${when}, ${c.name} dies.` });
+  }
   if (c.energy <= 0) alerts.push({ text: "Exhausted", tone: "warn", tip: "No Energy left. They can't take tasks that cost Energy until they Rest or sleep." });
   if (c.pressure >= 4) alerts.push({ text: "Panicked", tone: "danger", tip: pressureTip(c.pressure) });
   if (c.stress >= 9) alerts.push({ text: `Stress ${c.stress}`, tone: "danger", tip: `${stressBand(c.stress).name}: ${stressBand(c.stress).effect}` });

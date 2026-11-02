@@ -147,6 +147,20 @@ function acceptsFirstAidFrom(game: GameState, ops: Op[], own: string | null, hea
   return !!was && !!now && JSON.stringify({ ...now, energy: was.energy }) === JSON.stringify(was);
 }
 
+/** The medkit a First Aid offer to `own` names, when these ops accept that offer. */
+function acceptedKit(game: GameState, after: GameState, own: string | null): { name: string; location: string } | null {
+  const kept = new Set((after.firstAidOffers ?? []).map((o) => o.id));
+  return (game.firstAidOffers ?? []).find((o) => o.patientId === own && o.kit && !kept.has(o.id))?.kit ?? null;
+}
+
+/** `b` is `a` with one use of the named kit spent (or gone, if that was the last). */
+function usesOneKit(a: Item, b: Item | undefined, kit: { name: string; location: string }): boolean {
+  if (a.name !== kit.name || a.location !== kit.location) return false;
+  if (!b) return a.qty === 1 && (a.charges ?? 1) <= 1;
+  if (b.qty === a.qty - 1) return JSON.stringify({ ...b, qty: a.qty, charges: a.charges }) === JSON.stringify(a);
+  return b.qty === a.qty && (b.charges ?? 0) === (a.charges ?? 0) - 1 && JSON.stringify({ ...b, charges: a.charges }) === JSON.stringify(a);
+}
+
 /** Players offer First Aid as their own character. The healer withdraws an offer; the patient accepts or declines it. */
 function firstAidOfferDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
   const before = new Map((game.firstAidOffers ?? []).map((o) => [o.id, o]));
@@ -208,10 +222,15 @@ function itemDenyReason(game: GameState, ops: Op[], own: string | null): string 
   const inPool = (loc: string) => pools.includes(loc);
   const was = new Map(game.items.map((i) => [i.id, i]));
   const now = new Map(after.items.map((i) => [i.id, i]));
+  let kitAllowance = acceptedKit(game, after, own);
   for (const id of new Set([...was.keys(), ...now.keys()])) {
     const a = was.get(id);
     const b = now.get(id);
     if (a && b && JSON.stringify(a) === JSON.stringify(b)) continue;
+    if (a && kitAllowance && usesOneKit(a, b, kitAllowance)) {
+      kitAllowance = null;
+      continue;
+    }
     if (a && !mine(a.location) && !(inPool(a.location) && a.shared)) return "You can only change items in the ship's hold, your own inventory, or your shared pool.";
     if (b && !mine(b.location) && !(inPool(b.location) && (b.shared || a?.shared))) return "Players can move items between the hold, their own inventory, and their shared pool.";
   }

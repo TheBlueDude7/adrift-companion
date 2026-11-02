@@ -111,7 +111,7 @@ export const BACKGROUNDS: Background[] = [
       summary: "When a reachable module or mech goes Offline or is disabled, keep one function running until the end of the segment or Scene.",
     },
     specialties: [
-      { name: "Redline Familiarity", frequency: "day", summary: "Overdrive a facility (+1 Grade for a Task), produce 3 items, boost a mech, or run a Keep It Running system at full output." },
+      { name: "Redline Familiarity", frequency: "day", summary: "Overdrive a facility (+1 Grade for a Task), fabricate one more item than normal (Energy for each), boost a mech, or run a Keep It Running system at full output. The system is Damaged afterward." },
       { name: "Field Improviser", frequency: "passive", summary: "Expedition repairs ignore the −3d6 penalty for lacking a Workshop or mech berth." },
       { name: "Modular Thinking", frequency: "expedition", summary: "Temporarily repurpose one mech module as another of the same Tier or lower." },
     ],
@@ -181,7 +181,7 @@ export const BACKGROUNDS: Background[] = [
     specialties: [
       { name: "Rally", frequency: "day", summary: "Prevent an ally's Mind Break and reduce their Pressure by 1." },
       { name: "Loadmaster", frequency: "passive", summary: "Each expedition member gives one slot to a shared pool; pool cargo passes between members in the same zone without an Action." },
-      { name: "Ration Discipline", frequency: "passive", summary: "Supervised rationing causes no second-day Stress and skips the Constitution roll." },
+      { name: "Ration Discipline", frequency: "passive", summary: "Supervised rationing causes no second-day Stress and skips the Constitution roll. Covers one stretch of rationing; ready again after 3 days in a row without rationing." },
     ],
   },
   {
@@ -227,10 +227,10 @@ export const pressureTip = (level: number) => {
 
 export const STRESS_BANDS = [
   { min: 0, max: 2, name: "Stable", effect: "No additional effect." },
-  { min: 3, max: 4, name: "Strained", effect: "The first time you gain Pressure each day, gain one additional level." },
+  { min: 3, max: 4, name: "Strained", effect: "The first time you gain Pressure each day, gain one additional level. This carries into every higher Stress state." },
   { min: 5, max: 6, name: "Frayed", effect: "Begin each expedition Shaken. After sleep, Pressure cannot recover below Shaken." },
   { min: 7, max: 8, name: "Unstable", effect: "Begin each expedition Pressured. The first Mind Break each expedition also causes an Affliction." },
-  { min: 9, max: 9, name: "Breaking", effect: "Begin every day Pressured. Every Mind Break causes an Affliction." },
+  { min: 9, max: 9, name: "Breaking", effect: "Every Mind Break causes an Affliction." },
   { min: 10, max: 10, name: "Collapsed", effect: "Immediately gain an Affliction. Further Stress gains cause a Mind Break instead." },
 ] as const;
 
@@ -260,7 +260,7 @@ export const INJURY_SEVERITIES = ["Minor", "Major", "Deadly"] as const;
 export type InjurySeverity = (typeof INJURY_SEVERITIES)[number];
 export const severityFromRoll = (d6: number): InjurySeverity => (d6 <= 3 ? "Minor" : d6 <= 5 ? "Major" : "Deadly");
 
-export const INJURY_STATES = ["Untreated", "Stabilized", "Treated"] as const;
+export const INJURY_STATES = ["Untreated", "Treated"] as const;
 export type InjuryState = (typeof INJURY_STATES)[number];
 
 export const CONDITION_DURATIONS = ["Brief", "Ongoing", "Scene", "Persistent"] as const;
@@ -379,9 +379,15 @@ export const PROJECT_TEMPLATES = [
   { name: "Custom Project", skill: "", threshold: 0, required: 4, contributorLimit: 2, energy: 2, facility: "", materials: "" },
 ] as const;
 
+/** Resistance halves damage and Vulnerability adds half, both rounded down. Having both cancels out. */
+export function scaleDamage(amount: number, resistant: boolean, vulnerable: boolean) {
+  if (resistant === vulnerable) return amount;
+  return vulnerable ? amount + Math.floor(amount / 2) : Math.floor(amount / 2);
+}
+
 export const FREQUENCY_LABEL: Record<Frequency, string> = {
   day: "Once per day",
-  expedition: "Once per expedition (resets at End of Day)",
+  expedition: "Once per expedition (resets when the GM ends it)",
   combat: "Once per combat",
   passive: "Passive",
 };

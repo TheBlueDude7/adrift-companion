@@ -22,12 +22,12 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
   "Fusion Reactor": {
     blurb: "Powers the ship. Without it, none of the other modules work properly. Broken: adding fuel rods is hazardous; whoever does it gains radiation poisoning and loses 1 HP.",
     levels: [
-      { name: "Broken", cost: r([5, "Scrap Metal"], [3, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 3, effect: "Powers 3 rooms, including itself. Refuelling is hazardous: radiation poisoning and −1 HP." },
-      { name: "Repaired", cost: r([8, "Scrap Metal"], [4, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 5, effect: "Powers 5 rooms, including itself." },
-      { name: "Operational", cost: r([6, "Reinforced Steel"], [6, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 7, effect: "Powers 7 rooms, including itself." },
-      { name: "Large", cost: r([8, "Reinforced Steel"], [4, "Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 9, effect: "Powers 9 rooms, including itself." },
-      { name: "Voltaic", cost: r([6, "Neutronium"], [8, "Components"], [1, "Advanced Adhesive"]), toolkit: 3, powerOutput: 11, effect: "Powers 11 rooms, including itself." },
-      { name: "Unlimited", cost: r([8, "Neutronium"], [8, "Quantum Components"], [1, "Advanced Adhesive"]), toolkit: 3, powerOutput: 13, effect: "Powers 13 rooms, including itself." },
+      { name: "Broken", cost: r([5, "Scrap Metal"], [3, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 3, effect: "Produces 3 Power. Each working room draws its Power Draw (the Reactor draws none). Refuelling is hazardous: radiation poisoning and −1 HP." },
+      { name: "Repaired", cost: r([8, "Scrap Metal"], [4, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 5, effect: "Produces 5 Power. Each working room draws its Power Draw (the Reactor draws none)." },
+      { name: "Operational", cost: r([6, "Reinforced Steel"], [6, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 7, effect: "Produces 7 Power. Each working room draws its Power Draw (the Reactor draws none)." },
+      { name: "Large", cost: r([8, "Reinforced Steel"], [4, "Components"], [1, "Basic Adhesive"]), toolkit: 3, powerOutput: 9, effect: "Produces 9 Power. Each working room draws its Power Draw (the Reactor draws none)." },
+      { name: "Voltaic", cost: r([6, "Neutronium"], [8, "Components"], [1, "Advanced Adhesive"]), toolkit: 3, powerOutput: 11, effect: "Produces 11 Power. Each working room draws its Power Draw (the Reactor draws none)." },
+      { name: "Unlimited", cost: r([8, "Neutronium"], [8, "Quantum Components"], [1, "Advanced Adhesive"]), toolkit: 3, powerOutput: 13, effect: "Produces 13 Power. Each working room draws its Power Draw (the Reactor draws none)." },
     ],
   },
   "Navigation & Sensor Suite": {
@@ -58,7 +58,7 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
       { name: "Operational", cost: r([4, "Scrap Metal"], [6, "Components"], [1, "Basic Adhesive"]), toolkit: 3, effect: "All characters gain 3 extra HP every rest." },
       { name: "Stabilized", cost: r([4, "Reinforced Steel"], [8, "Components"], [2, "Basic Adhesive"]), toolkit: 3, effect: "All characters gain 6 extra HP every rest." },
       { name: "Closed-Loop", cost: r([4, "Reinforced Steel"], [4, "Quantum Components"], [2, "Advanced Adhesive"]), toolkit: 3, effect: "All characters gain 14 extra HP every rest and cure a random minor Injury." },
-      { name: "Regenerating", cost: r([8, "Neutronium"], [8, "Quantum Components"], [2, "Advanced Adhesive"]), toolkit: 3, effect: "All characters fully heal every rest and cure all minor Injuries." },
+      { name: "Regenerating", cost: r([8, "Neutronium"], [8, "Quantum Components"], [2, "Advanced Adhesive"]), toolkit: 3, effect: "All characters fully heal every rest and cure all Minor Injuries." },
     ],
   },
   "Medical Bay": {
@@ -66,9 +66,9 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
     levels: [
       { name: "Base Setup", cost: r([2, "Scrap Metal"], [4, "Scrap Components"], [3, "Basic Adhesive"]), toolkit: 2, effect: "No surgery can happen here." },
       { name: "Field Setup", cost: r([3, "Scrap Metal"], [6, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, grade: "Grade I", effect: "Surgery is enabled. All surgery rolls get −2d6." },
-      { name: "Operational", cost: r([2, "Reinforced Steel"], [6, "Scrap Components"], [2, "Basic Adhesive"]), toolkit: 3, grade: "Grade II", effect: "Surgery rolls get −1d6. Successful surgeries only drain half HP." },
-      { name: "Sterile Suite", cost: r([4, "Reinforced Steel"], [6, "Scrap Components"], [2, "Advanced Adhesive"]), toolkit: 4, grade: "Grade III", effect: "All surgeries only drain half HP." },
-      { name: "Advanced Care", cost: r([3, "Neutronium"], [6, "Quantum Components"], [4, "Advanced Adhesive"]), toolkit: 0, grade: "Experimental", effect: "Surgeries no longer drain any HP, success or fail." },
+      { name: "Operational", cost: r([2, "Reinforced Steel"], [6, "Scrap Components"], [2, "Basic Adhesive"]), toolkit: 3, grade: "Grade II", effect: "Surgery rolls get −1d6. Successful surgeries only drop the patient to three-quarters of their Max HP, not half." },
+      { name: "Sterile Suite", cost: r([4, "Reinforced Steel"], [6, "Scrap Components"], [2, "Advanced Adhesive"]), toolkit: 4, grade: "Grade III", effect: "All surgeries only drop the patient to three-quarters of their Max HP, not half." },
+      { name: "Advanced Care", cost: r([3, "Neutronium"], [6, "Quantum Components"], [4, "Advanced Adhesive"]), toolkit: 0, grade: "Experimental", effect: "Surgery no longer lowers the patient's HP, success or fail." },
     ],
   },
   "Workshop / Fabrication Bay": {

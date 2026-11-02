@@ -1,6 +1,7 @@
 import { CHASSIS, MECH_DAMAGE_TYPES, MECH_TIERS, MODULE_BY_KEY, type MechModule } from "@/data/mechs";
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
 import { uid } from "./dice";
+import { scaleDamage } from "./rules";
 import type { Character, GameState, Mech, MechChassis, MechDamageType } from "./types";
 
 export const isMechExpert = (c: Character | undefined) => c?.specialty === "Mech Expert";
@@ -56,16 +57,22 @@ export function mechCapacity(g: GameState) {
 export const pilotedMech = (g: GameState, characterId: string) => g.mechs.find((m) => m.pilotId === characterId && m.deployed && m.hp > 0 && !m.upgrading);
 
 /**
- * Resolve an attack against a mech: Resistance, then Cover, then Mech HP.
+ * Resolve an attack against a mech: Vulnerability, Resistance, Cover (Ballistic only), Armor, then Mech HP.
+ * Any Resistance to the type counts once; extra sources don't stack.
+ * Mech Armor comes from its modules, so it absorbs 1 per hit without wearing down.
  * What's left after the mech hits 0 passes to the pilot. An Offline mech protects no one.
  */
-export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: MechDamageType | "Other", cover: number) {
+export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: MechDamageType | "Other", cover: number, vulnerable = false) {
   const s = mechStats(g, m);
-  if (m.hp <= 0) return { resisted: 0, toMech: 0, excess: Math.max(0, amount - cover) };
-  const resisted = type === "Other" ? 0 : Math.min(amount, s.resist[type]);
-  const after = Math.max(0, amount - resisted - cover);
+  const coverPoints = type === "Ballistic" ? cover : 0;
+  if (m.hp <= 0) return { vulnerable: 0, resisted: 0, covered: 0, armored: 0, toMech: 0, excess: Math.max(0, amount - coverPoints) };
+  const resistant = type !== "Other" && s.resist[type] > 0;
+  const scaled = scaleDamage(amount, resistant, vulnerable);
+  const covered = Math.min(scaled, coverPoints);
+  const armored = s.armor > 0 && scaled - covered > 0 ? 1 : 0;
+  const after = scaled - covered - armored;
   const toMech = Math.min(m.hp, after);
-  return { resisted, toMech, excess: after - toMech };
+  return { vulnerable: Math.max(0, scaled - amount), resisted: Math.max(0, amount - scaled), covered, armored, toMech, excess: after - toMech };
 }
 
 export function newMech(name: string, chassis: MechChassis, tier: 1 | 2 | 3, tierResist: MechDamageType[]): Mech {
