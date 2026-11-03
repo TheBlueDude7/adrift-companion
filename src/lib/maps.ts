@@ -1,3 +1,4 @@
+import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
 import { DEFAULT_ITEM_TEMPLATES } from "./rules";
 import type { GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, TilePos, TokenKind } from "./types";
@@ -161,6 +162,8 @@ export function normalizeGame(g: GameState): GameState {
     for (const inj of c.injuries) {
       if (!inj.location && !inj.legacy) inj.legacy = true;
       if ((inj.state as string) === "Stabilized") inj.state = "Treated";
+      const def = inj.location ? INJURY_BY_CODE[inj.code] : undefined;
+      if (def && def.name === inj.name) inj.effect = def.effect;
     }
   }
   return g;

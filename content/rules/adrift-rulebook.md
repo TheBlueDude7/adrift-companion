@@ -4200,7 +4200,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | --- | --- | --- | --- |
 | 1-1 | Minor | Mild Concussion | −1d6 to Intelligence rolls. |
 | 2-1 | Minor | Scalp Wound | −1d6 to Wits rolls. |
-| 3-1 | Minor | Whiplash | −1d6 to Piloting (you can't turn your head). |
+| 3-1 | Minor | Whiplash | −1d6 to Piloting. |
 | 4-1 | Major | Severe Concussion | −2d6 to Intelligence and Wits rolls. Disoriented until Surgery. |
 | 5-1 | Major | Fractured Jaw | −2d6 to Entertainer. Silenced until Surgery. |
 | 6-1 | Deadly | Brain Swelling | −2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within one segment or die. |
@@ -4211,7 +4211,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | --- | --- | --- | --- |
 | 1-2 | Minor | Ringing Ears | −1d6 to Perception. |
 | 2-2 | Minor | Scratched Eye | −1d6 to Light Firearms and Heavy Weaponry. |
-| 3-2 | Minor | Broken Nose | −1d6 to Scavenging and Biology (you can't smell). |
+| 3-2 | Minor | Broken Nose | −1d6 to Scavenging and Biology. |
 | 4-2 | Major | Severe Eye Injury | −2d6 to Perception, Light Firearms and Heavy Weaponry. One eye is unusable; if the other is covered, you're Blinded. |
 | 5-2 | Major | Ruptured Eardrum | −2d6 to Perception and Acrobatics. Deafened until Surgery. |
 | 6-2 | Deadly | Sensory Loss | −2d6 to Perception. Sight or hearing is lost (from the source, or the GM's choice): Blinded or Deafened permanently, until replaced by a cybernetic or graft. |
@@ -4233,7 +4233,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | --- | --- | --- | --- |
 | 1-4 | Minor | Sprained Ankle | −1d6 to Acrobatics. |
 | 2-4 | Minor | Pulled Hamstring | −1d6 to Close Combat. |
-| 3-4 | Minor | Gashed Calf | −1d6 to Stealth (you're limping). |
+| 3-4 | Minor | Gashed Calf | −1d6 to Stealth. |
 | 4-4 | Major | Broken Leg | −2d6 to Acrobatics, Close Combat and Stealth. Slowed until Surgery. |
 | 5-4 | Major | Fractured Pelvis | −2d6 to Acrobatics, Close Combat and Stealth. Immobilized without a brace or someone's help; Slowed with it. |
 | 6-4 | Deadly | Crushed Leg | −2d6 to Acrobatics, Close Combat and Stealth. The leg is lost: Immobilized without support, and Bleeding deals 2. Permanent until replaced by a cybernetic or graft. |
@@ -4242,9 +4242,9 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 
 | Roll | Severity | Injury | Effect |
 | --- | --- | --- | --- |
-| 1-5 | Minor | Bruised Ribs | −1d6 to Light Firearms and Heavy Weaponry (recoil hurts). |
+| 1-5 | Minor | Bruised Ribs | −1d6 to Light Firearms and Heavy Weaponry. |
 | 2-5 | Minor | Muscle Tear | −1d6 to Strength rolls. |
-| 3-5 | Minor | Back Spasm | −1d6 to Engineering and Botany (long work bent over). |
+| 3-5 | Minor | Back Spasm | −1d6 to Engineering and Botany. |
 | 4-5 | Major | Broken Ribs | −2d6 to Strength and Constitution rolls. Weakened until Surgery. |
 | 5-5 | Major | Punctured Lung | −2d6 to Constitution rolls. Suffocating after Sprinting or a second strenuous Slow Action in a Scene. |
 | 6-5 | Deadly | Crushed Torso | −2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within one segment or die. |
@@ -4253,7 +4253,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 
 | Roll | Severity | Injury | Effect |
 | --- | --- | --- | --- |
-| 1-6 | Minor | Minor Shock | −1d6 to Navigation and Entertainer (you can't focus). |
+| 1-6 | Minor | Minor Shock | −1d6 to Navigation and Entertainer. |
 | 2-6 | Minor | Bruised Organs | −1d6 to Constitution rolls. |
 | 3-6 | Minor | Mild Infection | −1d6 to Constitution rolls made to resist Poisoned or Contaminated. |
 | 4-6 | Major | Internal Bleeding | −2d6 to Constitution rolls. Bleeding again after every combat Scene until Surgery. |
