@@ -464,6 +464,16 @@ A Routine task succeeds automatically when all listed requirements are met. The 
 
 Meeting a Routine Threshold does not forbid anyone else from trying. A character below the threshold may attempt the same work as a Skilled task.
 
+<!-- updated: routine-benefits, mastery -->
+
+#### Routine Benefits
+
+A character who meets a task's Routine Threshold qualifies for Routine Benefits:
+
+- Practiced (3+ levels above the threshold): the task costs 1 less Energy. This applies to any Routine task, not only crafting.
+- Expert (6+ levels above): the task earns its Strong Result without rolling.
+- Project Efficiency (4+ levels above): +1 Progress per Routine segment, for 2 in total.
+
 ## Skilled Tasks
 
 A Skilled Task represents work whose outcome is genuinely uncertain but whose failure does not immediately create catastrophe.
@@ -492,7 +502,9 @@ If at least one 6 is rolled, the Task succeeds. The character receives the Task'
 
 If two or more 6s are rolled, the character scores a Strong Success.
 
-A Strong Success only provides an additional effect when the Task, item, ability, or subsystem lists a Strong Result. If no Strong Result is listed, additional successes do not change the outcome.
+<!-- updated: strong-results -->
+
+A Strong Success only provides an additional effect when the Task, item, ability, or subsystem lists a Strong Result. If no Strong Result is listed, additional successes do not change the outcome. Outside combat, the Compendium's skill stunt lists are each skill's default Strong Results.
 
 ## Strong Successes
 
@@ -531,7 +543,9 @@ When a combat rule allows Stunts, additional successes may be spent on the liste
 
 Combat Stunts are intentionally more flexible because positioning, damage, control, and immediate tactical opportunities change from moment to moment. Unless a combat rule specifically refers to a Strong Success, use the combat Stunt rules instead.
 
-Outside combat, additional successes do not create generic Stunts.
+<!-- updated: strong-results -->
+
+Outside combat, additional successes do not create generic Stunts; they only matter when a task lists a Strong Result. Generic Stunts are for combat.
 
 #### Task Modifiers
 
@@ -550,14 +564,18 @@ Modifiers normally stack to a maximum of -6d6 or +6d6. A task that has become im
 
 One character may spend a task assisting another character. The assistant must have at least 1 level in the relevant skill or a clearly useful method of helping.
 
+<!-- updated: assist -->
+
 - On a Skilled or Crisis task, add the assistant’s Skill Level as bonus dice, to a maximum of +4d6.
-- On a Project, a qualified assistant may contribute their own Progress instead of adding dice.
+- On a Project, an assistant adds Progress only if they meet its Routine Threshold.
 - Assistance never turns a Crisis task into a Routine task.
-- Only one assistant contributes dice unless a rule or Project explicitly allows a larger team.
+- Only one assistant adds dice to a task.
 
 ### Standard Shipboard Tasks
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
+
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
@@ -568,22 +586,22 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Purify Water | 1 | Biology 2 | Convert contaminated water when equipment is available. |
 | Filter Reclaimed Water | 1 | Cooking 1 | Process water produced by Life Support using a filter. |
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
-| First Aid: Minor Injury | 1 | First Aid 3 | Stabilize and treat an accessible Minor injury. |
-| Stop Bleeding | 1 | Always Crisis: First Aid | End Bleeding with a Medkit. |
+| First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. |
+| Stop Bleeding | 1 | First Aid | End Bleeding with a successful First Aid task or an appropriate Medkit use. |
 | Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. |
 | Craft Medicine | 1 | First Aid 3 or Surgery 5 | Produce medicine from a known recipe. |
 | Decontaminate | 1 | First Aid 5 or Biology 5 |   |
 | Analyze Known Biomass | 1 | Biology 5 | Extract known data from a studied specimen. |
 | Analyze Unknown Biomass | 1 | Always Skilled: Biology or Botany, depending on mass | Discover properties of an unfamiliar specimen. |
 | Scrap Biomass | 2 | Biology 3 | Recover biological crafting materials. |
-| Repair Ordinary Ship Damage | 2 | Mechanical Technician 5 | Repair a stable module or restore Hull HP if materials allow. |
-| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create an item from a known recipe. |
+| Repair a Damaged Module | 2 | Mechanical Technician 5 | Repair a Damaged module. Restoring Hull HP is the Hull Repair project (Mechanical Technician 3 or Engineering 4). |
+| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create one item from a known recipe. At 6+ levels above the threshold, make a second item in the same segment, paying the Energy for both. |
 | Deconstruct Common Item | 1 | Scavenging 1 | Recover the item’s listed salvage. |
 | Upgrade Module | 2 | Engineering 4 | Advance an eligible module upgrade Project. |
 | Salvage Ship | 2 | Scavenging 4 | Scavenge a ship using the scavenge rules |
 | Plot Safe Course | 1 | Piloting 4 | Move through scanned, stable space. |
 | Scan Nearby Tile | 1 | Navigation 4 | Reveal Basic information about an adjacent tile. |
-| Plot Unsafe Course |   | Always Skilled, Piloting | Move through unscanned, unknown space |
+| Plot Unsafe Course |   | Always Crisis: Piloting, −3d6 | Move through unscanned, unknown space. |
 | Analyze Technical Data | 1 | Engineering 3 or Biology 3 | Interpret known human data or studied alien data. |
 | Train Skill | 2 | Related Skill 0 | Gain 1 XP when training requirements are met. |
 | Reduce Pressure | 1 | Entertainer 1 | Reduce another character’s Pressure by 1 in safety. |
@@ -637,11 +655,15 @@ Energy measures how much meaningful work a character can perform before exhausti
 
 #### Rest and Energy Recovery
 
-Rest costs 0 Energy but consumes one segment. To benefit, the character must not be under immediate threat and must have consumed food and water within the previous day.
+<!-- updated: rest -->
 
-- The first completed Rest each day ensures the character begins the next day without suffering rest penalties.
-- Each additional completed Rest during the same day restores all Energy spent so far that day.
-- Each Rest restores 1 HP per rest.
+Rest costs 0 Energy but consumes one segment. It can be taken anywhere safe; Crew Quarters aren't required. To benefit, the character must not be under immediate threat and must have consumed Food and Water within the previous day. Otherwise the Rest only counts as sleep.
+
+Every Rest:
+
+- Restores 1 HP.
+- Restores all Energy.
+- Lowers Pressure by 1, but not below the Stress floor.
 
 ### Daily Survival Requirements
 
@@ -678,14 +700,18 @@ Pressure has five states: Calm, Shaken, Pressured, Overtaxed, and Panicked. Char
 
 Pressure Dice are added to skill rolls. They represent heightened focus and desperate effort. Pressure therefore makes a character more capable and more fragile at the same time.
 
+<!-- updated: overtaxed-routine -->
+
 Routine tasks are not rolled merely because a character has Pressure. However, Overtaxed or Panicked characters cannot perform Routine tasks automatically: their work becomes Skilled because they are no longer operating under controlled conditions.
 
 #### Gaining Pressure
 
 Gain one level of Pressure when a rule calls for it. Common triggers include:
 
+<!-- updated: damage-pressure -->
+
 - Pushing a task or roll.
-- Taking a large amount of damage
+- Losing 2 or more HP from one source (at most once per Round).
 - Being surprised by a credible threat.
 - Witnessing a grotesque or impossible event.
 - Entering decompression, suffocation, uncontrolled fire, or imminent structural collapse.
@@ -696,10 +722,12 @@ If a character would gain Pressure while already Panicked, they immediately trig
 
 #### Reducing Pressure
 
+<!-- updated: rest, stress-floor -->
+
 - When an immediate danger clearly ends, reduce Pressure by 1.
 - A successful Reduce Pressure task lowers another character’s Pressure by 1.
-- A safe Rest in Crew Quarters lowers Pressure by 1.
-- At the beginning of a new day, Pressure resets to Calm unless Stress establishes a minimum starting state.
+- Each Rest lowers Pressure by 1.
+- At the beginning of a new day, Pressure resets to the Stress floor: Calm, or higher at Stress 5+.
 - Special Brews, sedatives, abilities, cybernetics, and biological augmentations may modify Pressure as described in their own rules.
 
 ### Pushing
@@ -713,6 +741,10 @@ A Push may do one of the following:
 
 Each Push costs +1 Energy and immediately increases Pressure by 1. The Pressure increase occurs before a rerolled check is resolved, so the new Pressure Dice and failure consequence apply to the reroll.
 
+<!-- updated: exhausted-push -->
+
+A character at 0 Energy may still Push. Instead of the Energy, the Push costs an Affliction (roll on the Afflictions table), plus the usual +1 Pressure.
+
 - A roll may be pushed only once.
 - A character may gain only one additional task from Pushing in a segment.
 - Routine tasks do not require a reroll, but a character may Push to perform an extra Routine task.
@@ -724,18 +756,24 @@ Stress represents lasting psychological strain. It is tracked from 0 to 10 and d
 
 Pressure asks, “Can I survive this moment?” Stress asks, “How much of this can I carry forward?”
 
+<!-- updated: stress-floor, strained, breaking -->
+
 | Stress | Condition | Effect |
 | --- | --- | --- |
 | 0-2 | Stable | No additional effect. |
-| 3-4 | Strained | The first time you gain Pressure each day, gain one additional level. |
-| 5-6 | Frayed | Begin each expedition Shaken. After sleep, Pressure cannot recover below Shaken. |
-| 7-8 | Unstable | Begin each expedition Pressured. The first Mind Break each expedition also causes an Affliction. |
-| 9 | Breaking | Begin every day Pressured. Every Mind Break causes an Affliction. |
+| 3-4 | Strained | The first time you gain Pressure each day, gain one additional level. This carries into every higher Stress state. |
+| 5-6 | Frayed | Begin each expedition Shaken. Pressure cannot drop below Shaken. |
+| 7-8 | Unstable | Begin each expedition Pressured. Pressure cannot drop below Pressured. The first Mind Break each expedition also causes an Affliction. |
+| 9 | Breaking | Every Mind Break causes an Affliction. |
 | 10 | Collapsed | Immediately gain an Affliction. Stress cannot increase further; every further Stress gain causes a Mind Break instead. |
+
+Stress sets a Pressure floor at all times, not only at the start of the day: at Stress 5+ Pressure can't drop below Shaken, and at Stress 7+ it can't drop below Pressured.
 
 #### Gaining Stress
 
 Stress is gained from events that leave a lasting mark, not from every failed roll.
+
+<!-- updated: deprivation-stress -->
 
 | Event | Stress Gained |
 | --- | --- |
@@ -743,7 +781,7 @@ Stress is gained from events that leave a lasting mark, not from every failed ro
 | Witnessing a crewmate die | 1 |
 | Suffering a permanent injury or losing a limb or sense | 1 |
 | Failing Surgery on a Major or Deadly injury in a catastrophic way | 1 |
-| Three consecutive days without sufficient food or sleep | 1 |
+| The third day without sufficient Food or sleep, and every third day after | 1 |
 | Completing an expedition in which the character reached Panicked | 1, maximum once per expedition |
 | Respawning, being reconstructed, or returning from confirmed death | 2 |
 | Causing a mass casualty event or confronting a uniquely catastrophic revelation | 2-4, GM discretion |
@@ -771,12 +809,17 @@ Willpower represents a character’s capacity to refuse collapse when the body o
 
 Spend 1 Willpower to do one of the following:
 
+<!-- updated: willpower -->
+
 - Prevent 1 Stress immediately after it would be gained.
 - Contest a Mind Break with a flat Constitution roll. On success, delay the Mind Break until the end of the current round or task, then reduce Pressure to Overtaxed.
 - Reroll a failed death check while at 0 HP.
 - Remain conscious until the end of the current round after an effect would make you collapse.
+- Resist a Behavioral condition.
 
-Willpower cannot reduce Pressure directly. All spent Willpower is restored when the character completes a Stress Recovery Project or completes an Act.
+<!-- updated: act -->
+
+Willpower cannot reduce Pressure directly. All spent Willpower is restored when the character completes a Stress Recovery Project or completes an Act. An Act is a chapter of the campaign built around one major goal or threat; the GM declares it complete when the crew resolves that goal, usually every 3–5 sessions.
 
 ### Mind Breaks
 
@@ -869,12 +912,16 @@ Afflictions are not removed by ordinary Rest, First Aid, condition removal, or P
 
 Injuries represent physical harm that persists beyond lost HP. They describe lasting damage such as fractures, burns, damaged organs, torn muscles, and lost limbs.
 
-Whenever a character loses 3 or more HP from a single source, or when a rule explicitly forces an Injury, roll for one unless the source states otherwise.
+<!-- updated: injury-threshold -->
 
-Roll 1d6 and 1d10:
+Roll for an Injury whenever a single hit takes 3 or more HP after Cover and Armor, whenever a character drops to 0 HP, or when a rule explicitly forces an Injury, unless the source states otherwise.
 
-- The first die determines the Injury's Severity.
-- The second die determines the specific Injury from the appropriate table.
+<!-- updated: injuries, injury-severity -->
+
+Roll 2d6:
+
+- The first die sets the Injury's Severity.
+- The second die sets its Location: 1 Head, 2 Senses, 3 Arms, 4 Legs, 5 Torso, 6 Internal.
 
 | First Die | Severity |
 | --- | --- |
@@ -882,62 +929,73 @@ Roll 1d6 and 1d10:
 | 4–5 | Major Injury |
 | 6 | Deadly Injury |
 
-A Deadly Injury should only be used when the source of harm could reasonably cause catastrophic trauma. If a result does not fit what happened, reroll it or choose an appropriate Injury of the same Severity.
+Together the two dice pick one of the 36 Injuries on the Injury table in the Adrift Compendium.
 
-The complete Injury tables are found in the Adrift Compendium.
+A character carries at most 2 Minor Injuries and 1 Major Injury at a time. Going over that limit, or rolling an Injury the character already has, makes the new Injury one step worse in the same Location: a Minor result becomes Major, and a Major result becomes Deadly.
 
 #### Injury Severity
 
-Injury descriptions list their specific effects, but Severity provides a general guideline.
+<!-- updated: injuries -->
 
-Minor Injuries are painful but manageable. They commonly impose −1d6 when the Injury is directly relevant.
+Each Injury lists the rolls it affects. Severity sets the penalty:
 
-Major Injuries significantly interfere with normal function. They commonly impose −2d6 when directly relevant and generally require Surgery for full treatment.
+- Minor Injuries impose −1d6 on the rolls they list.
+- Major Injuries impose −2d6 on the rolls they list and apply the condition they list until Surgery. The character starts Bleeding.
+- Deadly Injuries impose −2d6 on the rolls they list and are catastrophic: either the character needs Surgery by the end of the next day segment or dies, or the Injury is a permanent loss that only a cybernetic or graft replaces. The character starts Bleeding.
 
-Deadly Injuries represent catastrophic trauma. Their effects are determined primarily by the Injury itself rather than a universal dice penalty. A destroyed leg may prevent walking, a collapsed lung may prevent strenuous activity, and a destroyed eye cannot be used to see.
-
-Individual Injuries may override these guidelines.
+The penalty lasts until the Injury heals, even once it is Treated.
 
 Injuries do not automatically reduce Maximum HP, Maximum Energy, or increase the Energy cost of unrelated Tasks.
 
 #### Injury States
 
-Untreated: The injury retains all listed penalties and normally deals 1 HP at the End of Day. Major and Deadly injuries may also cause Bleeding.
+<!-- updated: injury-severity, treated-injuries -->
 
-Stabilized: First Aid has stopped immediate deterioration and Bleeding, but the injury cannot recover until treated. When missing limb related injuries are stabilized, they also count as treated, but cannot naturally heal. They require a replacement cybernetic.
+Injuries are either Untreated or Treated.
 
-Treated: The injury no longer causes daily Max HP loss. Minor injuries may heal naturally. Major and Deadly injuries become treated Minor injuries after successful Surgery unless the injury says otherwise.
+Untreated: The Injury deals 1 HP at the End of Day.
+
+Treated: The Injury no longer deals HP at the End of Day, but keeps its dice penalty until it heals. First Aid's first 6 treats an Untreated Injury of any Severity. Major and Deadly Injuries still need Surgery, which turns them into Treated Minor Injuries.
+
+<!-- updated: injuries -->
 
 ### Duplicate Injuries
 
-If the same Injury is rolled twice, choose one:
-
-- Increase its Severity by one step when that makes physical sense, or
-- Reroll the specific Injury.
-
-The GM should avoid results that do not make physical sense. The Injuries table is located in the Adrift compendium.
+Rolling an Injury the character already has makes it one step worse in the same Location, as does going over the limit of 2 Minor and 1 Major Injury.
 
 #### Natural Recovery
 
-At the End of Day, a character with at least one treated Minor injury and access to functioning Crew Quarters makes one recovery roll.
+<!-- updated: natural-recovery -->
 
-Roll a number of d6 equal to your Constitution + the number of days since the oldest treated Minor injury was received. On any 6, remove one treated Minor injury.
+Each time a character Rests, if they have at least one Treated Minor Injury, they make one recovery roll. No Crew Quarters are needed.
 
-Only one Minor injury may be removed by natural recovery each day unless an ability states otherwise.
+Roll a number of d6 equal to your Constitution + the number of days since the oldest Treated Minor Injury was received. On any 6, remove that Injury. Major and Deadly Injuries made Minor by Surgery count; permanent losses never heal this way.
 
 #### Bleeding and First Aid
 
-When a character receives a Major or Deadly Injury, the character may obtain the status Bleeding.
+<!-- updated: bleeding, first-aid -->
 
-Stopping Bleeding is always a Crisis First Aid task and requires a Medkit. Success ends Bleeding and stabilizes the injury. Failure consumes one Medkit use and Bleeding continues.
+When a character receives a Major or Deadly Injury, they start Bleeding.
 
-Treating an ordinary Minor injury in a secure Medical Bay is Routine for a character with First Aid 2. First Aid cannot repair permanent structural damage, restore lost organs, or replace Surgery.
+Bleeding ends with a successful First Aid task or by spending an appropriate Medkit use.
+
+First Aid is a free action, usable any time outside the segment structure, with no Energy cost, but it uses up one medkit from the healer's inventory or ship storage. The kit heals its own HP (Improvised Medkit 1, Medkit 3, Glitterworld Medkit 5) and adds its dice (Medkit +1d6, Glitterworld Medkit +3d6). It is always a Skilled roll:
+
+- If treating an Untreated Injury of any Severity, the first 6 treats it. A Major or Deadly Injury still needs Surgery to become Minor.
+- Every other 6 heals 1 HP or removes one condition.
+- First Aid works with no Injury at all, purely to heal.
+- Giving First Aid to another player's character needs that player's agreement.
+- In combat, First Aid is a Slow Action.
+
+First Aid cannot repair permanent structural damage, restore lost organs, or replace Surgery.
 
 #### Surgery
 
-Surgery is always a Crisis task. It requires a functioning Medical Bay, Surgical Tools, appropriate supplies, and another character to operate.
+<!-- updated: surgery -->
 
-- The patient is reduced to 1 HP when Surgery begins, regardless of the outcome.
+Surgery is always a Crisis task. It requires a functioning Medical Bay, Surgical Tools, appropriate supplies, and another character to operate. A Mobile Surgical Cradle removes the need for a Medical Bay, but doesn't make Surgery easier.
+
+- When Surgery begins, the patient drops to half their Maximum HP if above it, regardless of the outcome.
 - The patient loses 2 current Energy, to a minimum of 0.
 - If already at 1 HP, the patient collapses and must spend the next 2 segments resting after the procedure.
 - Success converts one Major or Deadly injury into a treated Minor injury unless the injury says otherwise.
@@ -949,6 +1007,10 @@ Surgery is always a Crisis task. It requires a functioning Medical Bay, Surgical
 At 0 HP, a character is down but not immediately dead. At the end of each combat round or equivalent scene interval, make a flat Constitution roll. On failure, the character dies. One Willpower may be spent to reroll that failed check.
 
 A character at 0 HP cannot perform normal tasks and is vulnerable to further harm. Any additional HP damage may cause immediate death when the fiction supports it.
+
+<!-- updated: stabilize -->
+
+First Aid on a character at 0 HP needs a 6 to stabilize them, which uses that 6. A stabilized character stops making death checks. Any healing above 0 HP, the medkit's own healing included, wakes them; new damage ends the stabilization.
 
 ### End of Day Procedure
 
@@ -1023,7 +1085,9 @@ No roll is made.
 
 Being 3 levels above the routine crafting threshold for an item reduces the energy cost to produce it by 1.
 
-Being 6 levels above the routine crafting threshold allows you to make another item during the segment. You still pay the energy cost for the one you’re currently making.
+<!-- updated: fabricate -->
+
+Being 6 levels above the Routine crafting threshold lets you make a second item in the same segment. You pay the Energy cost for both items.
 
 ### Skilled Crafting
 
@@ -2135,7 +2199,9 @@ Some threats may remain undetected.
 
 Normal movement into a scanned, stable tile does not require a roll when the Pilot meets the listed Routine Threshold.
 
-A standard move normally consumes 1 Fuel Unit.
+<!-- updated: power-cells -->
+
+A standard move normally consumes 1 Power Cell.
 
 Movement becomes Skilled or Crisis when:
 
@@ -2376,7 +2442,9 @@ One Expedition Turn represents approximately twenty to forty minutes of cautious
 
 Eight Expedition Turns consume one day segment.
 
-After the fourth Expedition Turn:
+<!-- updated: expedition-turns -->
+
+After the eighth Expedition Turn:
 
 - Advance to the next day segment.
 - Resolve any effects tied to that segment.
@@ -2710,10 +2778,12 @@ Detection becomes Skilled when the threat is:
 
 Surprise occurs when one side begins combat without detecting the other.
 
+<!-- updated: surprised -->
+
 Surprised characters:
 
-- Immediately become Shaken.
-- Cannot use Reactions until after their first turn.
+- Become Shaken, if not already under more Pressure.
+- Cannot take a Reaction or Fast Action until the end of their first turn.
 - Draw one Initiative card normally.
 
 Characters participating in a successful ambush:
@@ -2843,9 +2913,12 @@ Slow Actions usually involve an attack, a skill roll, or sustained work.
 
 Common Slow Actions include:
 
+<!-- updated: combat-actions -->
+
 - Close Combat Attack.
 - Shoot Firearm.
-- Burst Fire.
+- Burst Fire: needs an automatic weapon and uses extra ammunition. The attack gains +2d6, and extra 6s can be split between targets in the same zone.
+- Grapple: win a contested Close Combat or Strength roll to make an adjacent target Grappled.
 - Throw Weapon or Object.
 - Reload.
 - Sprint.
@@ -2859,7 +2932,7 @@ Common Slow Actions include:
 - Drag a downed character.
 - Perform another meaningful Task.
 - Use a special ability to your discretion
-- Mark an enemy(A flat roll based off of your Perception)
+- Mark an enemy: a flat Perception roll. On a 6, the target is Marked.
 - Destroy a discarded or Disarmed weapon.
 
 #### Fast Actions
@@ -2868,13 +2941,15 @@ Fast Actions are brief movements or interactions.
 
 Common Fast Actions include:
 
+<!-- updated: combat-actions -->
+
 - Move one zone.
 - Get up.
 - Drop prone.
 - Draw or stow an item.
 - Pick up an accessible item.
 - Open or close an ordinary door.
-- Aim.
+- Aim: +1d6 to your next ranged attack this turn.
 - Take Cover.
 - Disengage.
 - Extinguish yourself.
@@ -3071,16 +3146,32 @@ A failed explosive throw may scatter, land in the wrong zone, fail to activate, 
 
 Weapons and hazards deal a fixed amount of Damage.
 
-After Armor and Cover are applied, remaining Damage reduces HP.
+<!-- updated: mech-damage, injury-threshold, damage-pressure -->
 
-If at least 2 HP is lost:
+Apply Damage in this order: Vulnerability, then Resistance, then Cover (against Ballistic Damage only), then worn Armor. Whatever remains reduces HP. The thresholds below count HP actually lost.
+
+If at least 2 HP is lost from one source:
 
 - Gain 1 Pressure, no more than once per Round from taking damage.
+
+If a single hit takes 3 or more HP, or the character drops to 0 HP:
+
 - Roll for an Injury using Chapter 2.
+
+After any HP loss:
+
 - Apply any damage-type effect.
 - Check whether the character reaches 0 HP.
 
 Damage cannot normally reduce HP below 0.
+
+<!-- updated: resistance -->
+
+#### Resistance and Vulnerability
+
+Resistance to a damage type halves each hit of that type, rounded down (3 becomes 1). Vulnerability adds half, rounded down (3 becomes 4). Resistance has no levels: any source gives it, and more sources don't stack. Resistance and Vulnerability to the same type cancel out. Immunity means that type deals no damage.
+
+The short-lived Vulnerable: Damage Type condition is separate: +1 damage on the next hit of that type.
 
 ### Armor
 
@@ -3116,7 +3207,9 @@ Cover Armor does not normally degrade.
 
 #### Armor-Piercing Attacks
 
-An Armor-Piercing attack ignores the listed amount of Cover and worn Armor.
+<!-- updated: armor-piercing -->
+
+Armor Piercing X ignores the first X points of protection: Cover first, then worn Armor.
 
 An attack with Armor Piercing 1 ignores the first point of protection.
 
@@ -3134,12 +3227,14 @@ Pressure functions as described in Chapter 2.
 
 Pressure Dice increase the character’s chance of success, but failed rolls become increasingly destructive.
 
+<!-- updated: pressure-table -->
+
 | Pressure State | Pressure Dice | Failure Consequence |
 | --- | --- | --- |
 | Calm | +0d6 | No additional consequence |
-| Shaken | +1d6 | No automatic consequence |
-| Pressured | +2d6 | Lose 1 current Energy |
-| Overtaxed | +3d6 | Lose all current Energy and gain 1 Pressure |
+| Shaken | +1d6 | Become Pressured |
+| Pressured | +2d6 | Lose 1 current Energy and gain 1 Stress |
+| Overtaxed | +3d6 | Lose all current Energy and gain 1 Pressure and 1 Stress |
 | Panicked | +4d6 | Lose all current Energy, suffer 2 HP Damage, gain 1 Stress, and trigger a Mind Break |
 
 Combat does not normally spend Energy.
@@ -3155,6 +3250,10 @@ Pressure does not automatically return to Calm merely because Initiative has end
 If the crew remains trapped, hunted, exposed, or unable to secure the area, the immediate danger may not have ended.
 
 A character who reaches Panicked during an expedition gains 1 Stress when the expedition ends, to a maximum of once per expedition.
+
+<!-- updated: expedition-reset -->
+
+Abilities usable once per expedition reset when the expedition ends.
 
 ### Downed Characters
 
@@ -3185,14 +3284,13 @@ Bulky equipment, low gravity, tight spaces, or severe injury may change this.
 
 #### Stabilizing Bleeding
 
-Stopping Bleeding is a Slow Action and a Crisis First Aid Task.
+<!-- updated: bleeding, injury-severity -->
 
-It requires a Medkit.
+Stopping Bleeding is a Slow Action. Bleeding ends with a successful First Aid task or by spending an appropriate Medkit use.
 
 On success:
 
 - Bleeding ends.
-- The Injury becomes Stabilized.
 - The character remains at their current HP.
 
 On failure:
@@ -3352,12 +3450,15 @@ An expedition ends when all surviving participants have returned to the ship or 
 
 Complete the following procedure:
 
+<!-- updated: expedition-reset -->
+
 - Record elapsed Expedition Turns and day segments.
 - Transfer recovered items and salvage into ship storage.
 - Record abandoned or destroyed equipment.
 - Resolve active Bleeding, contamination, fire, or suit breaches.
 - Reduce Pressure by 1 if immediate danger has ended.
 - Gain 1 Stress for reaching Panicked during the expedition, maximum once.
+- Reset once-per-expedition abilities.
 - Consume any required Food, Water, Oxygen, Fuel, or medical supplies.
 - Update the site’s Salvage Capacity and condition.
 - Decide whether the site is Secured, abandoned, or still active.
@@ -3657,12 +3758,14 @@ Choose one.
 
 #### Redline Familiarity
 
+<!-- updated: redline -->
+
 Once per day, you may overdrive a ship module, facility, or mech system.
 
 Choose one:
 
 - Treat a facility as one Grade higher for one Task.
-- Produce 3 items in one segment instead of 2
+- Fabricate one more item than your normal limit this segment, paying the Energy for each item.
 - Give a mech +2 Frame Strength and +2 Frame Constitution for one Scene.
 - Allow an Offline system maintained by Keep It Running to operate at full output.
 
@@ -3994,7 +4097,9 @@ When the crew deliberately rations Food or Water under your supervision:
 - Each character still suffers any Energy penalty explicitly caused by prolonged deprivation.
 - Rationing cannot prevent death from complete lack of Water or Oxygen.
 
-Once the crew goes three consecutive days without rationing, this protection may be used again.
+<!-- updated: ration-discipline -->
+
+Ration Discipline covers one stretch of rationing. Once the crew goes three consecutive days without rationing, it may be used again.
 
 ## Terraformer
 
@@ -4083,109 +4188,77 @@ Choose one effect:
 
 The introduced culture remains confined to the zone unless deliberately cultivated elsewhere.
 
-### Injuries
+## Injuries
 
-## Category 1: Minor Surface Trauma
+<!-- updated: injuries -->
 
-These Injuries are painful and inconvenient but rarely prevent a character from functioning.
+Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the second sets Location (1 Head, 2 Senses, 3 Arms, 4 Legs, 5 Torso, 6 Internal). The Roll column reads Severity die, then Location die. Minor Injuries impose −1d6 on the rolls they list; Major and Deadly Injuries impose −2d6.
 
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 1–1 | Bruised Ribs | Suffer −1d6 to Constitution-based rolls. The first strenuous Slow Action you perform each Scene costs +1 Energy. |
-| 1–2 | Lacerations | Become Bleeding. Once Bleeding is removed, reduce Maximum HP by an additional 2 until the Injury fully heals. |
-| 1–3 | Burned Hands or Arms | Suffer −1d6 to Tasks involving tools, weapons, or fine hand movements. Taking Fire Damage causes Staggered until the end of your next turn. |
-| 1–4 | Muscle Tear | Suffer -1d6 during Strength-based Tasks. Strength-based shipboard Tasks cost +1 Energy. |
-| 1–5 | Minor Shock | Become Staggered immediately. Your next Rest restores only half the normal Energy, rounded up, after which the Injury is healed. |
-| 1–6 | Open Abrasions | You lose Resistance or Immunity to Contaminated while this Injury remains. If you have no such Resistance, the first source of Contamination each expedition applies automatically without a roll. All chemical damage applied to you is doubled. |
-| 1–7 | Sprained Fingers | Suffer −1d6 when using two-handed weapons, firearms, Toolkits, or delicate equipment. On a failed attack using the injured hand, become Disarmed. |
-| 1–8 | Shallow Puncture | The first time each Expedition you Grapple, or perform a strenuous Physical Task, become Bleeding. |
-| 1–9 | Flash Burn | Become Blinded until the end of your next turn. Afterward, suffer −2d6 to sight-dependent Perception and ranged attacks. |
-| 1–10 | Lucky Hit | The wound is painful but superficial. It has no additional mechanical effect, though it still counts as an Injury for penalties, treatment and recovery. |
+### Head Injuries
 
-## Category 2: Minor Functional Trauma
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-1 | Minor | Mild Concussion | −1d6 to Intelligence rolls. |
+| 2-1 | Minor | Scalp Wound | −1d6 to Wits rolls. |
+| 3-1 | Minor | Whiplash | −1d6 to Piloting (you can't turn your head). |
+| 4-1 | Major | Severe Concussion | −2d6 to Intelligence and Wits rolls. Disoriented until Surgery. |
+| 5-1 | Major | Fractured Jaw | −2d6 to Entertainer. Silenced until Surgery. |
+| 6-1 | Deadly | Brain Swelling | −2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within one segment or die. |
 
-These Injuries interfere with movement, coordination, breathing, and sensory function.
+### Senses Injuries
 
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 2–1 | Sprained Joint | Become Slowed and suffer −1d6 to all Acrobatics rolls. Proper bracing removes Slowed but not the Acrobatics penalty. |
-| 2–2 | Mild Concussion | Become Disoriented until healed. The first failed Skilled or Crisis Task each Scene also causes Staggered. |
-| 2–3 | Whiplash | Suffer −1d6 to Perception and Navigation. You cannot use Overwatch against a target outside the direction you were already watching. |
-| 2–4 | Cracked Tooth or Jaw | Suffer −2d6 to speech-dependent Tasks. Eating solid Food requires a flat Constitution roll; failure causes 1 Physical Damage. Becoming Staggered also makes you Silenced until the end of your next turn. |
-| 2–5 | Shallow Shrapnel Wound | Metal fragments remain lodged in the body. When you take Electric Damage, also become Conductive. Removing the fragments requires Surgery. |
-| 2–6 | Nerve Shock | Choose one arm or leg. The first Task using it each Scene suffers −3d6. If that Task fails, become Staggered. |
-| 2–7 | Tinnitus | Become Deafened until the end of the Scene. Afterward, suffer −2d6 to sound-dependent Perception until healed. Explosions cause the Deafened condition to return for the Scene. |
-| 2–8 | Adrenal Dysregulation | The first time you take HP Damage in each Scene, become Enraged until the end of your next turn. When Enraged ends, become Drained. |
-| 2–9 | Lung Irritation | You cannot safely hold your breath. While exposed to smoke, gas, vacuum, or Suffocating, you are also Weakened. |
-| 2–10 | Minor Chemical Exposure | Become Contaminated until properly decontaminated. While Contaminated by this Injury, reduce Maximum Energy by 1. |
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-2 | Minor | Ringing Ears | −1d6 to Perception. |
+| 2-2 | Minor | Scratched Eye | −1d6 to Light Firearms and Heavy Weaponry. |
+| 3-2 | Minor | Broken Nose | −1d6 to Scavenging and Biology (you can't smell). |
+| 4-2 | Major | Severe Eye Injury | −2d6 to Perception, Light Firearms and Heavy Weaponry. One eye is unusable; if the other is covered, you're Blinded. |
+| 5-2 | Major | Ruptured Eardrum | −2d6 to Perception and Acrobatics. Deafened until Surgery. |
+| 6-2 | Deadly | Sensory Loss | −2d6 to Perception. Sight or hearing is lost (from the source, or the GM's choice): Blinded or Deafened permanently, until replaced by a cybernetic or graft. |
 
-## Category 3: Major Skeletal Trauma
+### Arms Injuries
 
-These Injuries seriously limit mobility, weapon use, carrying capacity, and physical independence.
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-3 | Minor | Sprained Fingers | −1d6 to Mechanical Technician, Engineering and Surgery. |
+| 2-3 | Minor | Bruised Shoulder | −1d6 to Close Combat and Scavenging. |
+| 3-3 | Minor | Burned Hands | −1d6 to First Aid and Cooking. |
+| 4-3 | Major | Broken Arm | −2d6 to Strength rolls. That arm is unusable: no two-handed weapons or tools. |
+| 5-3 | Major | Dislocated Shoulder | −2d6 to Strength rolls. The arm is unusable until a First Aid task resets it. |
+| 6-3 | Deadly | Traumatic Amputation | −2d6 to Strength rolls. The arm is lost, and Bleeding deals 2. Permanent until replaced by a cybernetic or graft. |
 
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 3–1 | Broken Leg | Become Slowed and cannot Sprint. Suffer −3d6 to Acrobatics. Moving without a brace, crutch, mech, or assistance causes 1 Physical Damage once per Scene. |
-| 3–2 | Broken Arm | The arm cannot use weapons, Toolkits, or equipment. You cannot use two-handed weapons. Reduce expedition inventory capacity by 2 slots. |
-| 3–3 | Broken Ribs | Become Weakened. The first time each Scene you Sprint, make a Physical attack, or perform another strenuous Slow Action, take 1 Physical Damage. |
-| 3–4 | Deep Laceration | Become Bleeding and reduce Maximum HP by 2. If Bleeding is applied again before the Injury is treated, immediately take 2 Physical Damage instead of 1. |
-| 3–5 | Torn Ligament | Become Slowed and cannot Dodge. A brace allows Dodge at −3d6 but does not remove Slowed. |
-| 3–6 | Fractured Pelvis | Become Immobilized without mobility support. With a brace, stretcher, mech, or another character’s assistance, replace Immobilized with Slowed. |
-| 3–7 | Crushed Hand | One hand is unusable. You cannot use two-handed weapons and suffer −3d6 to Tasks requiring fine control with the remaining hand. Surgery may preserve the hand. |
-| 3–8 | Dislocated Shoulder | One arm is unusable until a successful First Aid Task resets it. Afterward, treat the Injury as a Broken Arm until fully healed. |
-| 3–9 | Severe Concussion | Become Disoriented. Begin every combat Surprised. The first time you gain Pressure in each Scene, also become Confused until the end of your next turn. |
-| 3–10 | Penetrating Shrapnel | Reduce Maximum HP by 2. Electric Damage also applies Conductive. Removing the fragments requires Surgery; failed removal causes Bleeding. |
+### Legs Injuries
 
-## Category 4: Major Internal and Sensory Trauma
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-4 | Minor | Sprained Ankle | −1d6 to Acrobatics. |
+| 2-4 | Minor | Pulled Hamstring | −1d6 to Close Combat. |
+| 3-4 | Minor | Gashed Calf | −1d6 to Stealth (you're limping). |
+| 4-4 | Major | Broken Leg | −2d6 to Acrobatics, Close Combat and Stealth. Slowed until Surgery. |
+| 5-4 | Major | Fractured Pelvis | −2d6 to Acrobatics, Close Combat and Stealth. Immobilized without a brace or someone's help; Slowed with it. |
+| 6-4 | Deadly | Crushed Leg | −2d6 to Acrobatics, Close Combat and Stealth. The leg is lost: Immobilized without support, and Bleeding deals 2. Permanent until replaced by a cybernetic or graft. |
 
-These Injuries affect organs, senses, the nervous system, and the body’s ability to regulate itself.
+### Torso Injuries
 
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 4–1 | Internal Bleeding | Become Bleeding at the end of every Expedition Turn and after every combat Scene. First Aid can suppress this until the end of the current segment. Surgery is required to cure it. HP recovery is halved. |
-| 4–2 | Severe Burn | Reduce Maximum Energy by 2. Fire Resistance is reduced by 1, to a minimum of 0. Extinguishing Burning requires a Slow Action rather than a Fast Action. |
-| 4–3 | Severe Eye Injury | One eye is unusable. Suffer −3d6 to ranged attacks and sight-dependent Perception. If the remaining eye is also lost or covered, become Blinded. |
-| 4–4 | Ruptured Eardrum | Become Deafened until treated. Suffer −2d6 to Acrobatics and balance-related Tasks. Explosions and Electric Damage also cause Staggered. |
-| 4–5 | Punctured Lung | After Sprinting or performing two strenuous Slow Actions in the same Scene, become Suffocating. Reduce Maximum HP by 2 during expeditions. |
-| 4–6 | Chemical Burns | Become Contaminated until treated. Chemical Resistance is reduced by 1. If you have Chemical Immunity, treat it as Chemical Resistance 2 instead. |
-| 4–7 | Electrical Nerve Damage | Whenever you take Electric Damage, also become Staggered. You lose Immunity to Staggered; if you had no Immunity, Stagger Resistance is lost instead. |
-| 4–8 | Spinal Compression | Become Slowed. When you fail an Acrobatics or Strength-based movement Task, become Immobilized until an adjacent character spends a Slow Action helping you. |
-| 4–9 | Fractured Jaw | Become Silenced. You may communicate through gestures or equipment that does not require speech. Eating solid Food costs 1 Energy and causes 1 Physical Damage. |
-| 4–10 | Traumatic Fight Response | The first time you become Frightened, Surprised, or take 3 or more Damage in a Scene, become Enraged. When Enraged ends, become Confused until the end of your next turn. |
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-5 | Minor | Bruised Ribs | −1d6 to Light Firearms and Heavy Weaponry (recoil hurts). |
+| 2-5 | Minor | Muscle Tear | −1d6 to Strength rolls. |
+| 3-5 | Minor | Back Spasm | −1d6 to Engineering and Botany (long work bent over). |
+| 4-5 | Major | Broken Ribs | −2d6 to Strength and Constitution rolls. Weakened until Surgery. |
+| 5-5 | Major | Punctured Lung | −2d6 to Constitution rolls. Suffocating after Sprinting or a second strenuous Slow Action in a Scene. |
+| 6-5 | Deadly | Crushed Torso | −2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within one segment or die. |
 
-## Category 5: Severe Lasting Trauma
+### Internal Injuries
 
-These Injuries may permanently alter a character unless treated through advanced medicine, prosthetics, cybernetics, or biological replacement.
-
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 5–1 | Crushed Limb | One limb is Crippled and permanently unusable until reconstructed or replaced. Apply the relevant effects of Broken Arm or Broken Leg. |
-| 5–2 | Spinal Trauma | Become Immobilized without mobility support. All Tasks cost +1 Energy. You cannot join expeditions without a wheelchair, mech, powered brace, biological adaptation, or another appropriate support system. |
-| 5–3 | Organ Damage | Reduce Constitution and Strength by 1 each, to a minimum of 1. After completing a strenuous Task, become Weakened until the end of the Scene. |
-| 5–4 | Radiation Sickness | Become Contaminated. Reduce Maximum Energy by 2 and double daily Water requirements. Radiation treatment or organ replacement is required. |
-| 5–5 | Neural Trauma | Reduce Intelligence and Wits by 1 each, to a minimum of 1. Become Disoriented. You lose Immunity to Confused; if you had no Immunity, lose Confused Resistance instead. |
-| 5–6 | Sensory Loss | Permanently lose Sight, Hearing, Smell, or Touch, determined by the Injury source or randomly. Apply Blinded or Deafened when appropriate. Lost senses require cybernetic, biological, or equivalent replacement. |
-| 5–7 | Collapsed Lung | The first strenuous Slow Action you perform each Scene causes Suffocating. Reduce Maximum HP by 2. A portable Oxygen supply prevents Suffocating but not the Maximum HP loss. |
-| 5–8 | Kidney Damage | Reduce Maximum HP and Maximum Energy by 2. Chemical Resistance is reduced by 1. Poisoned and Contaminated effects advance twice as quickly. |
-| 5–9 | Systemic Infection | Gain a six-box Infection Clock. Advance it at the end of each day and whenever you gain Stress. At three boxes, become Poisoned. When filled, suffer Organ Failure. |
-| 5–10 | Traumatic Brain Injury | Begin each combat Confused. The first time you become Overtaxed or Panicked in a Scene, also become Enraged or Immobilized, chosen randomly. |
-
-## Category 6: Critical and Mortal Trauma
-
-These Injuries threaten immediate death or permanent catastrophic disability. They usually require Surgery within hours or minutes.
-
-| Roll | Injury | Effect |
-| --- | --- | --- |
-| 6–1 | Massive Hemorrhage | Become Bleeding, but Bleeding deals 2 Physical Damage. Every time this Bleeding deals Damage, reduce Maximum HP by the same amount. First Aid suppresses the Damage for one Expedition Turn. Surgery is required. |
-| 6–2 | Organ Failure | Become Poisoned and Drained. Surgery is required within one day segment or the character dies. After successful Surgery, the character must spend two segments Resting. |
-| 6–3 | Bilateral Punctured Lungs | Become Suffocating immediately. Without continuous Oxygen support, take 2 Physical Damage at the end of each Round. Everytime this character is hit, suffer from Suffocating until the end of the round. Surgery is required within one day segment, or the character dies. |
-| 6–4 | Crushed Torso | Become Immobilized, Weakened, and Bleeding. Surgery is required within one day segment or the character dies. After treatment, gain Spinal Trauma or Organ Damage. |
-| 6–5 | Severed Artery | Bleeding deals 3 Physical Damage instead of 1. A successful Crisis First Aid Task reduces this to normal Bleeding for one Expedition Turn. Surgery is required immediately. |
-| 6–6 | Traumatic Amputation | One limb is lost. Become Bleeding, with Bleeding dealing 2 Damage. Apply Crushed Limb permanently after Bleeding is stopped. |
-| 6–7 | Total Spinal Severance | Become permanently Immobilized below the point of Injury. You cannot perform lower-body movement and lose all expedition inventory granted by Strength until appropriate mobility support is acquired. |
-| 6–8 | Full-Thickness Burns | Reduce Maximum Energy by 2 and become Contaminated. You are Weakened and lose all Fire Resistance. Becoming Burning immediately deals 2 additional Fire Damage. |
-| 6–9 | Brain Swelling | Become Confused and Silenced. At the end of each Expedition Turn, lose 1 Maximum HP. Surgery is required before Maximum HP reaches 0. |
-| 6–10 | Catastrophic Trauma | Surgery is required within one day segment or the character dies. Immediately roll two additional Injuries of Major or Critical severity. Reroll further results of Catastrophic Trauma. |
+| Roll | Severity | Injury | Effect |
+| --- | --- | --- | --- |
+| 1-6 | Minor | Minor Shock | −1d6 to Navigation and Entertainer (you can't focus). |
+| 2-6 | Minor | Bruised Organs | −1d6 to Constitution rolls. |
+| 3-6 | Minor | Mild Infection | −1d6 to Constitution rolls made to resist Poisoned or Contaminated. |
+| 4-6 | Major | Internal Bleeding | −2d6 to Constitution rolls. Bleeding again after every combat Scene until Surgery. |
+| 5-6 | Major | Systemic Infection | −2d6 to Constitution rolls. Poisoned until Surgery. |
+| 6-6 | Deadly | Organ Failure | −2d6 to Constitution rolls. Poisoned and Drained. Surgery within one segment or die, and −2 Max HP afterward. |
 
 ### Afflictions
 

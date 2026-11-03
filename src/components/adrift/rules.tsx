@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenIcon, GavelIcon, SearchIcon } from "lucide-react";
+import { BookOpenIcon, HistoryIcon, SearchIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,35 +8,56 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CONDITIONS } from "@/data/compendium";
 import { INJURY_BY_CODE, INJURY_LOCATIONS, INJURY_TABLE } from "@/data/injuries";
-import { GM_RULINGS, type GmRuling } from "@/data/rulings";
+import { RULE_UPDATES, type RuleUpdate } from "@/data/rule-updates";
 import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN } from "@/data/tasks";
 import { MEDKITS } from "@/lib/actions";
 import { MIND_BREAKS, PRESSURE_STATES, severityFromRoll, STRESS_BANDS } from "@/lib/rules";
+import { cn } from "@/lib/utils";
+import { GlossaryText } from "./glossary";
+import { AffectingPanel } from "./rules-affecting";
+import { DamageTry, InjuryTry, PoolTry } from "./rules-tryit";
 
 const SEVERITY_FACES = [1, 2, 3, 4, 5, 6];
-import { cn } from "@/lib/utils";
 
-type Block =
+/** `updated` holds the ids of recent rule updates that changed this passage. */
+type Block = (
   | { kind: "h"; level: number; text: string }
   | { kind: "p"; text: string }
   | { kind: "ul"; items: string[] }
-  | { kind: "table"; head: string[]; rows: string[][] };
-type Section = { title: string; part: boolean; blocks: Block[] };
+  | { kind: "table"; head: string[]; rows: string[][] }
+) & { updated?: string[] };
+type Section = { title: string; part: boolean; blocks: Block[]; updated?: string[] };
 
 const cells = (line: string) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+
+/** `<!-- updated: id, id -->` marks the next passage (or the list it continues) as changed by those updates. */
+const UPDATED_MARKER = /^<!--\s*updated:\s*(.+?)\s*-->$/;
 
 function parseRulebook(md: string): Section[] {
   const blocks: Block[] = [];
   const lines = md.split(/\r?\n/);
+  let pending: string[] = [];
+  const add = (b: Block) => {
+    if (pending.length) b.updated = [...new Set([...(b.updated ?? []), ...pending])];
+    pending = [];
+    return b;
+  };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
+    const marker = UPDATED_MARKER.exec(line.trim());
+    if (marker) {
+      pending.push(...marker[1].split(",").map((s) => s.trim()).filter(Boolean));
+      continue;
+    }
     const h = /^(#{1,6}) (.*)$/.exec(line);
-    if (h) blocks.push({ kind: "h", level: h[1].length, text: h[2] });
+    if (h) blocks.push(add({ kind: "h", level: h[1].length, text: h[2] }));
     else if (line.startsWith("- ")) {
       const last = blocks[blocks.length - 1];
-      if (last?.kind === "ul") last.items.push(line.slice(2));
-      else blocks.push({ kind: "ul", items: [line.slice(2)] });
+      if (last?.kind === "ul") {
+        last.items.push(line.slice(2));
+        add(last);
+      } else blocks.push(add({ kind: "ul", items: [line.slice(2)] }));
     } else if (line.startsWith("|")) {
       const head = cells(line);
       const rows: string[][] = [];
@@ -44,13 +65,13 @@ function parseRulebook(md: string): Section[] {
         i++;
         if (!/^\|[\s|:-]+\|$/.test(lines[i].trim())) rows.push(cells(lines[i]));
       }
-      blocks.push({ kind: "table", head, rows });
-    } else blocks.push({ kind: "p", text: line });
+      blocks.push(add({ kind: "table", head, rows }));
+    } else blocks.push(add({ kind: "p", text: line }));
   }
 
   const sections: Section[] = [{ title: "Introduction", part: true, blocks: [] }];
   for (const b of blocks) {
-    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Human Space)\b/.test(b.text), blocks: [] });
+    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Human Space)\b/.test(b.text), blocks: [], updated: b.updated });
     else sections[sections.length - 1].blocks.push(b);
   }
   return sections.filter((s) => s.blocks.length || s.part);
@@ -58,13 +79,34 @@ function parseRulebook(md: string): Section[] {
 
 const blockText = (b: Block) => (b.kind === "ul" ? b.items.join(" ") : b.kind === "table" ? [...b.head, ...b.rows.flat()].join(" ") : b.text);
 
+const UPDATES_BY_ID = new Map(RULE_UPDATES.map((u) => [u.id, u]));
+
+function UpdateNote({ ids }: { ids: string[] }) {
+  const updates = ids.map((id) => UPDATES_BY_ID.get(id)).filter((u) => u !== undefined);
+  if (!updates.length) return null;
+  return (
+    <div className="grid gap-1">
+      {updates.map((u) => (
+        <details key={u.id} className="rounded-md border-l-2 border-l-primary bg-primary/5 px-2.5 py-1 text-xs">
+          <summary className="cursor-pointer font-medium text-primary select-none">
+            <HistoryIcon className="mr-1 inline size-3" />
+            Updated: <span className="text-foreground">{u.title}</span>
+          </summary>
+          <p className="mt-1 pb-0.5 text-sm text-muted-foreground"><GlossaryText text={u.text} /></p>
+        </details>
+      ))}
+    </div>
+  );
+}
+
 function Mark({ text, q }: { text: string; q: string }) {
   if (q.length < 2) return text;
   const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
   return parts.map((p, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-primary/30 text-foreground">{p}</mark> : <Fragment key={i}>{p}</Fragment>));
 }
 
-type RulesData = { markdown: string; rulings: GmRuling[] };
+/** `rulings` are updates approved through the Discord bot that aren't written into the rulebook yet. */
+type RulesData = { markdown: string; rulings: RuleUpdate[] };
 
 export function RulesTab() {
   const [data, setData] = useState<RulesData | null>(null);
@@ -77,18 +119,20 @@ export function RulesTab() {
       .catch(() => setError(true));
   }, []);
 
-  const rulings = [...GM_RULINGS, ...(data?.rulings ?? [])];
+  const updates = [...RULE_UPDATES, ...(data?.rulings ?? [])];
 
   return (
     <Tabs defaultValue="quick">
       <TabsList>
         <TabsTrigger value="quick" className="px-3">Quick reference</TabsTrigger>
         <TabsTrigger value="book" className="px-3">Rulebook</TabsTrigger>
+        <TabsTrigger value="me" className="px-3">What&apos;s affecting me</TabsTrigger>
       </TabsList>
-      <TabsContent value="quick" className="pt-3"><QuickReference rulings={rulings} /></TabsContent>
+      <TabsContent value="quick" className="pt-3"><QuickReference updates={updates} /></TabsContent>
       <TabsContent value="book" className="pt-3">
         {data ? <Rulebook markdown={data.markdown} /> : <p className="py-8 text-center text-sm text-muted-foreground">{error ? "The rulebook couldn't be loaded." : "Loading the rulebook…"}</p>}
       </TabsContent>
+      <TabsContent value="me" className="pt-3"><AffectingPanel /></TabsContent>
     </Tabs>
   );
 }
@@ -134,6 +178,7 @@ function Rulebook({ markdown }: { markdown: string }) {
               className={cn("rounded px-2 py-1 text-left text-sm hover:bg-muted", s.part ? "mt-2 font-semibold first:mt-0" : "pl-5 text-muted-foreground", i === open && "bg-muted text-foreground")}
             >
               {s.title}
+              {(s.updated || s.blocks.some((b) => b.updated)) && <HistoryIcon aria-label="Recently updated" className="ml-1.5 inline size-3 text-primary/80" />}
             </button>
           ))}
         </CardContent>
@@ -158,7 +203,13 @@ function Rulebook({ markdown }: { markdown: string }) {
           ) : (
             <article className="grid gap-3 text-sm leading-relaxed">
               <h2 className="font-heading text-xl font-semibold">{section.title}</h2>
-              {section.blocks.map((b, i) => <RuleBlock key={i} id={`rb-${open}-${i}`} block={b} />)}
+              {section.updated && <UpdateNote ids={section.updated} />}
+              {section.blocks.map((b, i) => (
+                <Fragment key={i}>
+                  {b.updated && <UpdateNote ids={b.updated} />}
+                  <RuleBlock id={`rb-${open}-${i}`} block={b} />
+                </Fragment>
+              ))}
               <div className="flex justify-between gap-2 border-t pt-3 text-sm">
                 {open > 0 ? <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => go(open - 1)}>← {sections[open - 1].title}</button> : <span />}
                 {open < sections.length - 1 && <button type="button" className="text-right text-muted-foreground hover:text-foreground" onClick={() => go(open + 1)}>{sections[open + 1].title} →</button>}
@@ -175,9 +226,9 @@ const HEADING_STYLE: Record<number, string> = { 3: "mt-3 text-base font-semibold
 
 function RuleBlock({ id, block: b }: { id: string; block: Block }) {
   if (b.kind === "h") return <h3 id={id} className={cn("scroll-mt-4", HEADING_STYLE[b.level] ?? HEADING_STYLE[5])}>{b.text}</h3>;
-  if (b.kind === "ul") return <ul id={id} className="grid list-disc gap-1 pl-5">{b.items.map((t, i) => <li key={i}>{t}</li>)}</ul>;
-  if (b.kind === "table") return <div id={id} className="scroll-mt-4"><RuleTable head={b.head} rows={b.rows} /></div>;
-  return <p id={id} className="scroll-mt-4">{b.text}</p>;
+  if (b.kind === "ul") return <ul id={id} className="grid list-disc gap-1 pl-5">{b.items.map((t, i) => <li key={i}><GlossaryText text={t} /></li>)}</ul>;
+  if (b.kind === "table") return <div id={id} className="scroll-mt-4"><RuleTable head={b.head} rows={b.rows.map((r) => r.map((t, i) => <GlossaryText key={i} text={t} />))} /></div>;
+  return <p id={id} className="scroll-mt-4"><GlossaryText text={b.text} /></p>;
 }
 
 function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
@@ -197,25 +248,29 @@ function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
   );
 }
 
-type QuickCard = { title: string; find: string; body: ReactNode };
+type QuickCard = { title: string; find: string; body: ReactNode; wide?: boolean };
 
-const Lines = ({ items }: { items: ReactNode[] }) => <ul className="grid list-disc gap-1 pl-5">{items.map((t, i) => <li key={i}>{t}</li>)}</ul>;
+const Lines = ({ items }: { items: ReactNode[] }) => <ul className="grid list-disc gap-1 pl-5">{items.map((t, i) => <li key={i}>{typeof t === "string" ? <GlossaryText text={t} /> : t}</li>)}</ul>;
 
 const QUICK: QuickCard[] = [
   {
     title: "Rolling dice",
     find: "roll pool attribute skill six success strong routine skilled crisis flat practiced expert project threshold",
     body: (
-      <Lines items={[
-        "Skill roll: Attribute + Skill + Pressure dice (d6). Each 6 is a success.",
-        "Two or more 6s is a Strong Success, which only matters when the task lists a Strong Result.",
-        "A flat roll is the Attribute alone, with no skill or Pressure dice.",
-        "Routine: at or above the task's Routine Threshold, with the right tools and no threat, it succeeds without a roll.",
-        `Practiced: ${PRACTICED_MARGIN}+ levels above the Routine Threshold costs 1 less Energy. Expert: ${EXPERT_MARGIN}+ above earns the Strong Result without rolling.`,
-        `Projects: ${PROJECT_MARGIN}+ levels above the threshold adds 2 Progress per Routine segment.`,
-        "Below the threshold, the task is Skilled and needs a roll. Crisis tasks always roll, even for experts.",
-        "Outside combat, extra 6s don't give stunts. In combat, they buy stunts.",
-      ]} />
+      <>
+        <Lines items={[
+          "Skill roll: Attribute + Skill + Pressure dice (d6). Each 6 is a success.",
+          "Two or more 6s is a Strong Success, which only matters when the task lists a Strong Result.",
+          "A flat roll is the Attribute alone, with no skill or Pressure dice.",
+          "Routine: at or above the task's Routine Threshold, with the right tools and no threat, it succeeds without a roll.",
+          `Practiced: ${PRACTICED_MARGIN}+ levels above the Routine Threshold costs 1 less Energy. Expert: ${EXPERT_MARGIN}+ above earns the Strong Result without rolling.`,
+          `Projects: ${PROJECT_MARGIN}+ levels above the threshold adds 2 Progress per Routine segment.`,
+          "Below the threshold, the task is Skilled and needs a roll. Crisis tasks always roll, even for experts.",
+          "Outside combat, extra 6s don't give stunts. In combat, they buy stunts.",
+          "Injuries take dice off the rolls they list (Minor −1d6, Major and Deadly −2d6).",
+        ]} />
+        <PoolTry />
+      </>
     ),
   },
   {
@@ -274,17 +329,21 @@ const QUICK: QuickCard[] = [
     title: "Damage, armor, and cover",
     find: "damage armor ablative cover partial strong full piercing injury threshold hp resistance resistant vulnerability vulnerable immunity",
     body: (
-      <Lines items={[
-        "Armor is ablative: each hit it protects against deals 1 less damage, and the Armor loses 1 point.",
-        "Cover Armor applies first and doesn't wear down: Partial Cover 1, Strong Cover 2 (against Ballistic). Full Cover blocks targeting.",
-        "Armor Piercing X ignores the first X points of Cover, then Armor.",
-        "Losing 2+ HP from one source raises Pressure by 1, at most once per round. Losing 3+ HP from one hit (after Cover and Armor), or dropping to 0 HP, causes an Injury roll.",
-        "Order: Vulnerability (+half), then Resistance (half), then Cover (Ballistic only), then Armor, then HP. Halves round down; Resistance and Vulnerability together cancel.",
-      ]} />
+      <>
+        <Lines items={[
+          "Armor is ablative: each hit it protects against deals 1 less damage, and the Armor loses 1 point.",
+          "Cover Armor applies first and doesn't wear down: Partial Cover 1, Strong Cover 2 (against Ballistic). Full Cover blocks targeting.",
+          "Armor Piercing X ignores the first X points of Cover, then Armor.",
+          "Losing 2+ HP from one source raises Pressure by 1, at most once per round. Losing 3+ HP from one hit (after Cover and Armor), or dropping to 0 HP, causes an Injury roll.",
+          "Order: Vulnerability (+half), then Resistance (half), then Cover (Ballistic only), then Armor, then HP. Halves round down; Resistance and Vulnerability together cancel.",
+        ]} />
+        <DamageTry />
+      </>
     ),
   },
   {
     title: "Injuries",
+    wide: true,
     find: `injury severity location minor major deadly untreated treated surgery natural recovery bleeding cap duplicate old table convert ${INJURY_TABLE.map((e) => e.name).join(" ")}`,
     body: (
       <>
@@ -301,6 +360,7 @@ const QUICK: QuickCard[] = [
           head={["Location", ...SEVERITY_FACES.map((f) => `${f} ${severityFromRoll(f)}`)]}
           rows={INJURY_LOCATIONS.map((loc, i) => [`${i + 1} ${loc}`, ...SEVERITY_FACES.map((f) => INJURY_BY_CODE[`${f}-${i + 1}`]?.name ?? "—")])}
         />
+        <InjuryTry />
       </>
     ),
   },
@@ -374,33 +434,33 @@ const QUICK: QuickCard[] = [
   },
 ];
 
-function QuickReference({ rulings }: { rulings: GmRuling[] }) {
+function QuickReference({ updates }: { updates: RuleUpdate[] }) {
   const [q, setQ] = useState("");
   const n = q.trim().toLowerCase();
   const matches = (s: string) => !n || s.toLowerCase().includes(n);
 
   const cards = QUICK.filter((c) => matches(`${c.title} ${c.find}`));
-  const shownRulings = rulings.filter((r) => matches(`${r.title} ${r.text}`));
+  const shownUpdates = updates.filter((r) => matches(`update ${r.title} ${r.text}`));
   const conditions = CONDITIONS.filter((c) => matches(`condition ${c.name} ${c.effect} ${c.removal}`));
 
   return (
     <div className="grid gap-4">
       <div className="relative">
         <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-8" placeholder="Search rules, rulings, and conditions…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input className="pl-8" placeholder="Search rules, updates, and conditions…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
-      {shownRulings.length > 0 && (
+      {shownUpdates.length > 0 && (
         <Card className="border-primary/40">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><GavelIcon className="size-4" /> GM rulings</CardTitle>
-            <p className="text-xs text-muted-foreground">These override the rulebook wherever the two disagree.</p>
+            <CardTitle className="flex items-center gap-2"><HistoryIcon className="size-4" /> Recent updates</CardTitle>
+            <p className="text-xs text-muted-foreground">Recent rules changes. Most are already written into the rulebook, where each changed passage is marked &quot;Updated&quot;.</p>
           </CardHeader>
           <CardContent className="grid gap-2.5 text-sm">
-            {shownRulings.map((r) => (
+            {shownUpdates.map((r) => (
               <div key={r.id} className="border-l-2 border-l-primary/60 pl-3">
                 <p className="font-medium">{r.title}</p>
-                <p className="text-muted-foreground">{r.text}</p>
+                <p className="text-muted-foreground"><GlossaryText text={r.text} /></p>
               </div>
             ))}
           </CardContent>
@@ -409,9 +469,9 @@ function QuickReference({ rulings }: { rulings: GmRuling[] }) {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
-          <Card key={c.title}>
+          <Card key={c.title} className={cn("min-w-0", c.wide && "md:col-span-2")}>
             <CardHeader><CardTitle className="flex items-center gap-2"><BookOpenIcon className="size-4 text-muted-foreground" /> {c.title}</CardTitle></CardHeader>
-            <CardContent className="grid gap-2 text-sm">{c.body}</CardContent>
+            <CardContent className="grid min-w-0 gap-2 text-sm [&>*]:min-w-0">{c.body}</CardContent>
           </Card>
         ))}
       </div>
@@ -431,7 +491,7 @@ function QuickReference({ rulings }: { rulings: GmRuling[] }) {
         </Card>
       )}
 
-      {n && !cards.length && !shownRulings.length && !conditions.length && <p className="py-6 text-center text-sm text-muted-foreground">Nothing in the quick reference matches. Try the Rulebook tab, which searches every page.</p>}
+      {n && !cards.length && !shownUpdates.length && !conditions.length && <p className="py-6 text-center text-sm text-muted-foreground">Nothing in the quick reference matches. Try the Rulebook tab, which searches every page.</p>}
     </div>
   );
 }

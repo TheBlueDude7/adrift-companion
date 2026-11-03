@@ -1,6 +1,7 @@
-// Converts the Adrift rulebook (.docx) into content/rules/adrift-rulebook.md, keeping headings, lists and tables.
-// Rerun after editing the rulebook:
-//   node scripts/import-rulebook.mjs "C:\Users\you\Downloads\Adrift.docx"
+// Converts the Adrift rulebook (.docx) into markdown, keeping headings, lists and tables.
+// content/rules/adrift-rulebook.md is now the master and is edited directly; running this over it
+// would discard those edits and their `<!-- updated: … -->` markers. Write to another file instead:
+//   node scripts/import-rulebook.mjs "C:\Users\you\Downloads\Adrift.docx" imported.md
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";

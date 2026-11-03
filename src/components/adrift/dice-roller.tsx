@@ -9,8 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { rollPool, sixes } from "@/lib/dice";
-import { attributeValue, skillLevel } from "@/lib/derive";
-import { injuryPenalty } from "@/lib/injuries";
+import { attributeValue, rollBreakdown, skillLevel } from "@/lib/derive";
 import { changePressure, changeStress, clampVitals, findChar, mindBreak, payPush } from "@/lib/mechanics";
 import { ATTRIBUTES, ATTRIBUTE_NAMES, PRESSURE_STATES, SKILLS, type Attribute, type SkillKey } from "@/lib/rules";
 import { useGame } from "@/lib/store";
@@ -38,11 +37,7 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
 
   const flat = what.startsWith("flat:");
   const attr: Attribute = flat ? (what.slice(5) as Attribute) : SKILLS.find((s) => s.key === what)!.attr;
-  const skill = flat ? 0 : skillLevel(character, what as SkillKey);
-  const attrVal = attributeValue(character, attr);
-  const pressureDice = flat ? 0 : PRESSURE_STATES[character.pressure].dice;
-  const hurt = injuryPenalty(character, flat ? null : (what as SkillKey), attr);
-  const pool = Math.max(0, attrVal + skill + pressureDice + modifier + assist - hurt.dice);
+  const { attrVal, level: skill, pressure: pressureDice, hurt, dice: pool } = rollBreakdown(character, flat ? null : (what as SkillKey), attr, modifier + assist);
   const label = flat ? `flat ${ATTRIBUTE_NAMES[attr]}` : SKILLS.find((s) => s.key === what)!.name;
 
   const successes = result ? sixes(result.dice) : 0;

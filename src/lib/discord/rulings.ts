@@ -3,7 +3,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { GM_RULINGS } from "@/data/rulings";
+import { RULE_UPDATES } from "@/data/rule-updates";
 
 export type Ruling = {
   id: string;
@@ -19,8 +19,8 @@ export type Ruling = {
   decidedAt?: number;
 };
 
-/** Rulings the GM made before the bot existed. They override the rulebook like any other ruling. */
-export const SEED_RULINGS: Pick<Ruling, "id" | "text">[] = GM_RULINGS;
+/** The recent rules updates. Most are already in the rulebook text; a few have no passage there. */
+export const SEED_RULINGS: Pick<Ruling, "id" | "text">[] = RULE_UPDATES;
 
 const volume = process.env.RAILWAY_VOLUME_MOUNT_PATH;
 const FILE = path.join(process.env.ADRIFT_DATA_DIR ?? (volume ? volume : path.join(process.cwd(), "data")), "rulings.json");

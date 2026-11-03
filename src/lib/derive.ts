@@ -4,6 +4,7 @@ import {
   HULL_TIERS,
   MAX_SKILL_LEVEL,
   OVERLOAD_BONUS,
+  PRESSURE_STATES,
   pressureTip,
   SEGMENTS,
   SKILLS,
@@ -12,6 +13,7 @@ import {
   type SkillKey,
 } from "./rules";
 import { cyberAttr, cyberMaxEnergy, cyberMaxHp } from "./cyber";
+import { injuryPenalty } from "./injuries";
 import { mechModules, mechStats, pilotedMech } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
@@ -36,6 +38,18 @@ export function attributeValue(c: Character, attr: Attribute) {
 
 export function allAttributes(c: Character) {
   return Object.fromEntries(ATTRIBUTES.map((a) => [a, attributeValue(c, a)])) as Record<Attribute, number>;
+}
+
+/**
+ * A roll's pool: Attribute + Skill + Pressure dice + `extra` (modifiers, assists) − injury penalties.
+ * With no `skill` it's a flat roll: the Attribute alone, though injuries to that attribute still count.
+ */
+export function rollBreakdown(c: Character, skill: SkillKey | null, attr: Attribute, extra = 0) {
+  const attrVal = attributeValue(c, attr);
+  const level = skill ? skillLevel(c, skill) : 0;
+  const pressure = skill ? PRESSURE_STATES[c.pressure].dice : 0;
+  const hurt = injuryPenalty(c, skill, attr);
+  return { attrVal, level, pressure, hurt, dice: Math.max(0, attrVal + level + pressure + extra - hurt.dice) };
 }
 
 export function maxHp(c: Character) {
