@@ -38,6 +38,8 @@ export const PRACTICED_MARGIN = 3;
 export const EXPERT_MARGIN = 6;
 /** Mastery: levels above a Project's threshold that add 2 Progress per Routine segment. */
 export const PROJECT_MARGIN = 4;
+/** Items one Fabricate task makes, each paying the task's Energy. An Expert adds one more for free. */
+export const FABRICATE_ITEMS = 2;
 
 type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free">;
 
@@ -53,7 +55,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Work on a project", "Ship", 0, [], 0, "Add Progress to a Project. Uses the Project's skill, threshold, and Energy. 4 levels above its threshold adds 2 Progress.", "routine", "project"),
   t("Upgrade Module", "Ship", 2, ["engineering"], 4, "Advance an eligible module upgrade Project. Engineering 4 up to the third level, then 6, 8, and 10.", "routine", "project", { strong: "Recover 20% of the materials, rounded down." }),
   t("Repair Ordinary Ship Damage", "Ship", 2, ["mechTech"], 5, "Repair a stable module (Mechanical Technician 5). Restoring Hull HP is the Hull Repair project instead: Mechanical Technician 3 or Engineering 4.", "routine", "project", { strong: "Regain the Energy spent." }),
-  t("Fabricate Common Item", "Ship", 2, ["mechTech"], 3, "Create one item from a known recipe, using its skill: Mechanical Technician 3 for Tier I, 6 for Tier II, 9 for Tier III. 6 levels above the threshold makes a second item in the same segment, paying its Energy too.", "routine", "craft"),
+  t("Fabricate Common Item", "Ship", 2, ["mechTech"], 3, "Create two items from known recipes, using their skill: Mechanical Technician 3 for Tier I, 6 for Tier II, 9 for Tier III, and paying the Energy for each. 6 levels above every threshold makes a third item in the same segment at no extra Energy.", "routine", "craft"),
   t("Deconstruct Common Item", "Ship", 1, ["scavenging"], 2, "Recover the item's listed salvage. Scavenging 2 for Tier I, 4 for Tier II, 6 for Tier III, 7+ for alien equipment.", "routine", null, { strong: "Recover another 25% of the materials." }),
   t("Salvage Ship", "Ship", 2, ["scavenging"], 4, "Scavenge a ship using the scavenge rules.", "routine", null, { strong: "Find additional or higher-quality materials.", gmResolves: true }),
   t("Tune the Reactor", "Ship", 1, ["engineering"], 6, "+1 Power Unit until the end of the day. Needs a Large reactor (Engineering 6), or Voltaic and up (Engineering 8).", "routine", "tune", { facility: { modules: ["Fusion Reactor"], level: 3, label: "a Large reactor or better" } }),

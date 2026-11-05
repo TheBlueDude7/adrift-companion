@@ -1,4 +1,4 @@
-import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
 import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
@@ -46,8 +46,8 @@ export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const cost = fabricateCost(a.crafts);
   const short = shortfalls(g, cost.inputs, cost.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
   const c = g.characters.find((x) => x.id === a.characterId);
-  const limit = c ? fabricateLimit(c, a.crafts) : 1;
-  const over = a.crafts.length > limit ? [`More than ${limit} item${limit > 1 ? "s" : ""} (a second needs 6 levels above every recipe's threshold)`] : [];
+  const limit = c ? fabricateLimit(c, a.crafts) : FABRICATE_ITEMS;
+  const over = a.crafts.length > limit ? [`More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`] : [];
   return [...new Set([...over, ...blockers, ...short])];
 }
 
@@ -245,10 +245,15 @@ const REDLINE = "Redline Familiarity";
 
 const REDLINE_KEY = `day:${REDLINE}`;
 
-/** Items one Fabricate task normally makes: one, or two when the crafter is 6 levels above every item's threshold. */
-function normalFabricateLimit(c: Character, crafts: string[]) {
+/** An Expert crafter stands 6 levels above every item's threshold, which earns one item beyond the usual two. */
+function expertCrafter(c: Character, crafts: string[]) {
   const recipes = crafts.map((n) => RECIPE_BY_NAME[n]).filter(Boolean);
-  return recipes.length > 0 && recipes.every((r) => craftMargin(c, r) >= EXPERT_MARGIN) ? 2 : 1;
+  return recipes.length > 0 && recipes.every((r) => craftMargin(c, r) >= EXPERT_MARGIN);
+}
+
+/** Items one Fabricate task normally makes: two, or three for an Expert. */
+function normalFabricateLimit(c: Character, crafts: string[]) {
+  return FABRICATE_ITEMS + (expertCrafter(c, crafts) ? 1 : 0);
 }
 
 /** Redline Familiarity's overdrive, once per day, adds one more item beyond the normal limit. */
@@ -258,17 +263,20 @@ export function fabricateLimit(c: Character, crafts: string[]) {
   return normalFabricateLimit(c, crafts) + (redlineReady(c) ? 1 : 0);
 }
 
-/** Each item pays the task's Energy. */
+/** Each item pays the task's Energy, except the extra item an Expert earns. */
 function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
   const terms = craftCheck(c, crafts, energy);
   if (c.pressure >= OVERTAXED) terms.routine = false;
   if (crafts.length <= 1) return terms;
-  return { ...terms, energy: terms.energy * crafts.length, perks: [...terms.perks, `${crafts.length} items: Energy for each`] };
+  const free = crafts.length > FABRICATE_ITEMS && expertCrafter(c, crafts) ? 1 : 0;
+  const paid = crafts.length - free;
+  const perk = free ? `${crafts.length} items: Energy for ${paid}, the Expert's extra item is free` : `${crafts.length} items: Energy for each`;
+  return { ...terms, energy: terms.energy * paid, perks: [...terms.perks, perk] };
 }
 
 /** Overdriving the bench spends Redline Familiarity for the day and leaves the Workshop Damaged. */
 function redlineOverdrive(g: GameState, c: Character, crafts: string[], out: string[]) {
-  if (c.specialty !== REDLINE || crafts.length <= normalFabricateLimit(c, crafts.slice(0, 1))) return;
+  if (c.specialty !== REDLINE || crafts.length <= normalFabricateLimit(c, crafts)) return;
   c.abilityUsed[REDLINE_KEY] = true;
   const bench = g.ship.rooms.find((r) => r.module === STATION_WORKSHOP && r.condition === "Operational");
   if (bench) bench.condition = "Damaged";

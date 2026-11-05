@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { EXPERT_MARGIN, SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, canPush, craftList, craftMargin, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
@@ -128,7 +128,7 @@ const CRAFT_CATEGORIES = Array.from(new Set(FABRICATE_RECIPES.map((r) => r.categ
 function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; onChange: (v: string[]) => void }) {
   const game = useGame((s) => s.game);
   const redline = redlineReady(c);
-  const limit = fabricateLimit(c, value.slice(0, 1));
+  const limit = fabricateLimit(c, value);
   const cost = fabricateCost(value);
   const short = new Map(shortfalls(game, cost.inputs, cost.toolkit).map((s) => [s.name, s]));
   const blockers = Array.from(new Set(value.map((n) => RECIPE_BY_NAME[n] && craftBlocker(game, RECIPE_BY_NAME[n])).filter(Boolean)));
@@ -137,7 +137,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
     const next = [...value];
     if (name) next[i] = name;
     else next.splice(i, 1);
-    onChange(next.slice(0, fabricateLimit(c, next.slice(0, 1))));
+    onChange(next.slice(0, fabricateLimit(c, next)));
   };
   return (
     <div className="grid gap-1.5">
@@ -151,7 +151,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
               <SelectGroup key={cat}>
                 <SelectLabel>{cat}</SelectLabel>
                 {FABRICATE_RECIPES.filter((r) => r.category === cat).map((r) => (
-                  <SelectItem key={r.name} value={r.name} disabled={i > 0 && !redline && craftMargin(c, r) < EXPERT_MARGIN}>
+                  <SelectItem key={r.name} value={r.name} disabled={i >= FABRICATE_ITEMS && !redline && craftMargin(c, r) < EXPERT_MARGIN}>
                     {r.name}
                     <span className="text-muted-foreground">{r.tier ? ` · ${r.tier}` : ""} · {recipeSkills(r).map((s) => `${SKILL_BY_KEY[s.skill].name} ${s.threshold}`).join(" or ")}</span>
                   </SelectItem>
@@ -180,9 +180,8 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        {redline
-          ? "Redline Familiarity can overdrive the bench once per day for one more item than normal, paying Energy for each. Afterward the Workshop is Damaged."
-          : `One item per task. Being ${EXPERT_MARGIN} levels above an item's threshold lets ${c.name.split(" ")[0]} make a second one ${EXPERT_MARGIN} above too, paying Energy for each.`}{" "}
+        {`Two items per task, paying Energy for each. Being ${EXPERT_MARGIN} levels above every item's threshold lets ${c.name.split(" ")[0]} add a third at no extra Energy.`}{" "}
+        {redline && "Redline Familiarity can overdrive the bench once per day for one more item than normal, paying its Energy, and the Workshop is Damaged afterward. "}
         A failed item loses half its materials (rounded up) and its toolkit charges.
       </p>
     </div>

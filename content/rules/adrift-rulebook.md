@@ -595,7 +595,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Analyze Unknown Biomass | 1 | Always Skilled: Biology or Botany, depending on mass | Discover properties of an unfamiliar specimen. |
 | Scrap Biomass | 2 | Biology 3 | Recover biological crafting materials. |
 | Repair a Damaged Module | 2 | Mechanical Technician 5 | Repair a Damaged module. Restoring Hull HP is the Hull Repair project (Mechanical Technician 3 or Engineering 4). |
-| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create one item from a known recipe. At 6+ levels above the threshold, make a second item in the same segment, paying the Energy for both. |
+| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes, paying the Energy for each. At 6+ levels above every threshold, make a third item in the same segment at no extra Energy. |
 | Deconstruct Common Item | 1 | Scavenging 1 | Recover the item’s listed salvage. |
 | Upgrade Module | 2 | Engineering 4 | Advance an eligible module upgrade Project. |
 | Salvage Ship | 2 | Scavenging 4 | Scavenge a ship using the scavenge rules |
@@ -1087,7 +1087,9 @@ Being 3 levels above the routine crafting threshold for an item reduces the ener
 
 <!-- updated: fabricate -->
 
-Being 6 levels above the Routine crafting threshold lets you make a second item in the same segment. You pay the Energy cost for both items.
+Fabricating makes two items in the same segment. You pay the Energy cost for each item.
+
+Being 6 levels above the Routine crafting threshold for every item lets you make a third one in the same segment at no additional Energy cost.
 
 ### Skilled Crafting
 
