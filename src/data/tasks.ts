@@ -51,7 +51,7 @@ const NAV_SUITE: TaskFacility = { modules: ["Navigation & Sensor Suite"], level:
 
 /** The Standard Shipboard Tasks table, plus project work, assisting, and free-form tasks. */
 export const SHIPBOARD_TASKS: ShipboardTask[] = [
-  t("Rest", "Recovery", 0, [], 0, "Qualify for Energy recovery and reduce Pressure by 1.", "routine", "rest"),
+  t("Rest", "Recovery", 0, [], 0, "Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor.", "routine", "rest"),
   t("Work on a project", "Ship", 0, [], 0, "Add Progress to a Project. Uses the Project's skill, threshold, and Energy. 4 levels above its threshold adds 2 Progress.", "routine", "project"),
   t("Upgrade Module", "Ship", 2, ["engineering"], 4, "Advance an eligible module upgrade Project. Engineering 4 up to the third level, then 6, 8, and 10.", "routine", "project", { strong: "Recover 20% of the materials, rounded down." }),
   t("Repair Ordinary Ship Damage", "Ship", 2, ["mechTech"], 5, "Repair a stable module (Mechanical Technician 5). Restoring Hull HP is the Hull Repair project instead: Mechanical Technician 3 or Engineering 4.", "routine", "project", { strong: "Regain the Energy spent." }),

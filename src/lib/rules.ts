@@ -228,8 +228,8 @@ export const pressureTip = (level: number) => {
 export const STRESS_BANDS = [
   { min: 0, max: 2, name: "Stable", effect: "No additional effect." },
   { min: 3, max: 4, name: "Strained", effect: "The first time you gain Pressure each day, gain one additional level. This carries into every higher Stress state." },
-  { min: 5, max: 6, name: "Frayed", effect: "Begin each expedition Shaken. After sleep, Pressure cannot recover below Shaken." },
-  { min: 7, max: 8, name: "Unstable", effect: "Begin each expedition Pressured. The first Mind Break each expedition also causes an Affliction." },
+  { min: 5, max: 6, name: "Frayed", effect: "Begin each expedition Shaken. Pressure cannot drop below Shaken, however it is reduced." },
+  { min: 7, max: 8, name: "Unstable", effect: "Begin each expedition Pressured. Pressure cannot drop below Pressured, however it is reduced. The first Mind Break each expedition also causes an Affliction." },
   { min: 9, max: 9, name: "Breaking", effect: "Every Mind Break causes an Affliction." },
   { min: 10, max: 10, name: "Collapsed", effect: "Immediately gain an Affliction. Further Stress gains cause a Mind Break instead." },
 ] as const;

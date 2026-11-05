@@ -579,7 +579,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
-| Rest | 0 | None | Qualify for Energy recovery and reduce Pressure by 1. |
+| Rest | 0 | None | Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor. |
 | Prepare Food | 1 | Cooking 1 | Prepare safe meals from available ingredients. |
 | Harvest Hydroponics | 1 | Botany 0 | Collect the module’s available Food Units. |
 | Maintain Crops | 2 | Botany 2 | Prevent ordinary crop loss and advance cultivation. |
@@ -729,6 +729,8 @@ If a character would gain Pressure while already Panicked, they immediately trig
 - Each Rest lowers Pressure by 1.
 - At the beginning of a new day, Pressure resets to the Stress floor: Calm, or higher at Stress 5+.
 - Special Brews, sedatives, abilities, cybernetics, and biological augmentations may modify Pressure as described in their own rules.
+
+No reduction takes Pressure below the Stress floor, Rest included: at Stress 5+ Pressure can’t drop below Shaken, and at Stress 7+ not below Pressured.
 
 ### Pushing
 
