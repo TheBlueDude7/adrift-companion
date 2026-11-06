@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { rollPool, sixes, uid } from "@/lib/dice";
-import { hullTier, power, roomWorks } from "@/lib/derive";
+import { hullTier, power, roomDraw, roomWorks } from "@/lib/derive";
 import {
   FACILITY_GRADES,
   HULL_TIERS,
@@ -23,11 +23,11 @@ import {
   REPAIR_PROGRESS,
   type FacilityGrade,
 } from "@/lib/rules";
-import { FACILITIES, ladderFor } from "@/data/ship-upgrades";
+import { FACILITIES, FACILITY_BY_NAME, ladderFor, ROOM_FITTINGS, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject } from "@/lib/actions";
 import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, growCrops, hydroponicsLevel } from "@/lib/crops";
-import { installLevels, moduleCost, nextRoomLevel, setRoomLevel } from "@/lib/modules";
+import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
 import { useGame } from "@/lib/store";
@@ -218,15 +218,16 @@ function PowerCard() {
   const p = power(ship);
   const reactorCritical = ship.rooms.some((r) => r.powerOutput > 0 && r.condition === "Critical");
   const over = p.surplus < 0;
+  const solarSets = solarRooms(game).length;
 
   function shed() {
     act("Shed load", (g) => {
       const out: string[] = [];
-      const candidates = g.ship.rooms.filter((r) => roomWorks(r) && !r.essential && r.powerDraw > 0).sort((a, b) => b.powerDraw - a.powerDraw);
+      const candidates = g.ship.rooms.filter((r) => roomWorks(r) && !r.essential && roomDraw(r) > 0).sort((a, b) => roomDraw(b) - roomDraw(a));
       for (const r of candidates) {
         if (power(g.ship).surplus >= 0) break;
         r.active = false;
-        out.push(`${r.name} powered down to save ${r.powerDraw} Power.`);
+        out.push(`${r.name} powered down to save ${roomDraw(r)} Power.`);
       }
       if (power(g.ship).surplus < 0) out.push("Still over capacity — essential systems must be cut or the grid overloaded.");
       return out;
@@ -248,6 +249,7 @@ function PowerCard() {
         </div>
         <Meter value={p.draw} max={Math.max(p.generated, p.draw, 1)} tone={over ? "hp" : "energy"} />
         {ship.tuned && <p className="text-xs text-emerald-300">Reactor tuned: +1 Power Unit until the end of the day.</p>}
+        {solarSets > 0 && <p className="text-xs text-amber-200">☀ {solarSets} set{solarSets > 1 ? "s" : ""} of solar panels: +{solarSets * SOLAR_FUEL_PER_DAY} Fuel Unit{solarSets * SOLAR_FUEL_PER_DAY > 1 ? "s" : ""} into the hold at End of Day.</p>}
         {over && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-500/10 p-3 text-xs text-rose-200">
             <span>Demand exceeds generation. Deactivate modules until within capacity.</span>
@@ -376,12 +378,23 @@ function BuildFacilityDialog() {
   const [roomId, setRoomId] = useState("new");
   const f = FACILITIES.find((x) => x.name === pick)!;
   const short = shortfalls(game, f.cost, f.toolkit);
+  // A fitting needs a room with a free spare slot; anything else can be a new room of its own.
+  const hosts = game.ship.rooms.filter((r) => !f.fitting || !r.fitting);
+  const host = hosts.find((r) => r.id === roomId);
+  const homeless = !!f.fitting && !host;
+
+  function choose(name: string) {
+    const next = FACILITIES.find((x) => x.name === name)!;
+    setPick(name);
+    setRoomId(next.fitting ? (game.ship.rooms.find((r) => !r.fitting)?.id ?? "none") : "new");
+  }
 
   function build(pay: boolean) {
     act(`Build ${f.name}`, (g) => {
       if (pay) spend(g, f.cost, f.toolkit);
       const host = g.ship.rooms.find((r) => r.id === roomId);
-      if (host) host.notes = [host.notes, `${f.name}: ${f.effect}`].filter(Boolean).join("\n");
+      if (host && f.fitting) host.fitting = f.name;
+      else if (host) host.notes = [host.notes, `${f.name}: ${f.effect}`].filter(Boolean).join("\n");
       else g.ship.rooms.push({ ...roomFromPreset(f.name), powerDraw: f.powerDraw, notes: f.effect });
       return `🏗 ${f.name} is built${host ? ` in ${host.name}` : ""}${pay ? ` from ${recipeText(f.cost, f.toolkit)}` : ""}.`;
     });
@@ -394,10 +407,10 @@ function BuildFacilityDialog() {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Build a facility</DialogTitle>
-          <DialogDescription>One-off installations from the ship upgrade sheet. Build one as a new room, or add it to an existing room.</DialogDescription>
+          <DialogDescription>One-off installations from the ship upgrade sheet. Build one as a new room, or add it to an existing room. Solar panels and defenses instead fill the spare slot in a room, one apiece.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <Select value={pick} onValueChange={(v) => setPick(v as string)}>
+          <Select value={pick} onValueChange={(v) => choose(v as string)}>
             <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>{FACILITIES.map((x) => <SelectItem key={x.name} value={x.name}>{x.name}</SelectItem>)}</SelectContent>
           </Select>
@@ -410,18 +423,19 @@ function BuildFacilityDialog() {
           </div>
           <div className="grid gap-1.5">
             <Label>Where</Label>
-            <Select value={roomId} onValueChange={(v) => setRoomId(v as string)}>
-              <SelectTrigger className="w-full"><SelectValue>{roomId === "new" ? "A new room" : game.ship.rooms.find((r) => r.id === roomId)?.name}</SelectValue></SelectTrigger>
+            <Select value={f.fitting ? (host?.id ?? "none") : roomId} onValueChange={(v) => setRoomId(v as string)}>
+              <SelectTrigger className="w-full"><SelectValue>{f.fitting ? (host ? `${host.name}'s spare slot` : "No room with a free slot") : roomId === "new" ? "A new room" : game.ship.rooms.find((r) => r.id === roomId)?.name}</SelectValue></SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">A new room</SelectItem>
-                {game.ship.rooms.map((r) => <SelectItem key={r.id} value={r.id}>Add to {r.name}</SelectItem>)}
+                {f.fitting ? <SelectItem value="none" disabled>No room with a free slot</SelectItem> : <SelectItem value="new">A new room</SelectItem>}
+                {hosts.map((r) => <SelectItem key={r.id} value={r.id}>{f.fitting ? `Fit in ${r.name}` : `Add to ${r.name}`}</SelectItem>)}
               </SelectContent>
             </Select>
+            {homeless && <p className="text-[11px] text-amber-300">Every spare slot aboard is taken. Clear one on its room card first.</p>}
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => build(false)}>Add without spending</Button>
-          <Button disabled={short.length > 0} onClick={() => build(true)}>{short.length ? "Missing materials" : "Spend and build"}</Button>
+          <Button variant="ghost" disabled={homeless} onClick={() => build(false)}>Add without spending</Button>
+          <Button disabled={short.length > 0 || homeless} onClick={() => build(true)}>{short.length ? "Missing materials" : "Spend and build"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -438,6 +452,7 @@ function RoomCard({ room }: { room: Room }) {
     });
   const works = roomWorks(room);
   const repair = REPAIR_PROGRESS[room.condition];
+  const fittingDraw = room.fitting ? (FACILITY_BY_NAME[room.fitting]?.powerDraw ?? 0) : 0;
   const ladder = ladderFor(room.module);
   const level = ladder && room.level !== undefined ? ladder.levels[room.level] : undefined;
   const next = ladder && room.level !== undefined ? ladder.levels[room.level + 1] : undefined;
@@ -451,6 +466,7 @@ function RoomCard({ room }: { room: Room }) {
             <Pill tone={CONDITION_TONE[room.condition]}>{room.condition}</Pill>
             {!room.active && <Pill>Inactive</Pill>}
             {room.essential && <Pill tone="info">Essential</Pill>}
+            {room.fitting && <Pill tone={room.fitting === SOLAR_PANELS ? "good" : "info"}>{room.fitting}</Pill>}
           </div>
         </fieldset>
         <Switch aria-label="Powered" checked={room.active} onCheckedChange={(v) => edit(`${room.name} power`, (r) => { r.active = v; return `${r.name} ${v ? "powered up" : "powered down"}.`; })} />
@@ -485,6 +501,17 @@ function RoomCard({ room }: { room: Room }) {
           {!next && level && <p className="text-[11px] text-muted-foreground">Fully upgraded.</p>}
         </div>
       )}
+
+      <div className="grid gap-1.5">
+        <Select value={room.fitting ?? "none"} onValueChange={(v) => edit("Room fitting", (r) => { r.fitting = v === "none" ? undefined : (v as string); return r.fitting ? `${r.name} is fitted with ${r.fitting}.` : `${r.name}'s spare slot is cleared.`; })}>
+          <SelectTrigger size="sm" className="w-full" aria-label="Spare slot"><SelectValue>{room.fitting ?? "Spare slot: empty"}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Spare slot: empty</SelectItem>
+            {ROOM_FITTINGS.map((f) => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {room.fitting && <p className="text-[11px] text-muted-foreground">{FACILITY_BY_NAME[room.fitting]?.effect}</p>}
+      </div>
       {room.notes && <p className="text-[11px] whitespace-pre-line text-muted-foreground">{room.notes}</p>}
 
       <div className="flex items-center justify-between gap-2">
@@ -500,7 +527,10 @@ function RoomCard({ room }: { room: Room }) {
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><PowerIcon className="size-3" /> Draw <Stepper value={room.powerDraw} min={0} max={8} size="xs" label="power draw" onChange={(v) => edit("Power draw", (r) => { r.powerDraw = v; })} /></span>
+        <span className="flex items-center gap-1">
+          <PowerIcon className="size-3" /> Draw <Stepper value={room.powerDraw} min={0} max={8} size="xs" label="power draw" onChange={(v) => edit("Power draw", (r) => { r.powerDraw = v; })} />
+          {fittingDraw > 0 && <span>+{fittingDraw} for the {room.fitting}</span>}
+        </span>
         {(room.powerOutput > 0 || room.module === "Fusion Reactor") && (
           <span className={cn("flex items-center gap-1", works ? "text-primary" : "")}><ZapIcon className="size-3" /> Output <Stepper value={room.powerOutput} min={0} max={20} size="xs" label="power output" onChange={(v) => edit("Power output", (r) => { r.powerOutput = v; })} /></span>
         )}
@@ -696,6 +726,7 @@ function AddProjectDialog() {
 
 export function ProjectRow({ p }: { p: Project }) {
   const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
   const rooms = useGame((s) => s.game.ship.rooms);
   const room = rooms.find((r) => r.id === p.roomId);
   const patient = useGame((s) => s.game.characters.find((c) => c.id === p.patientId));
@@ -705,7 +736,9 @@ export function ProjectRow({ p }: { p: Project }) {
   return (
     <div className={cn("grid gap-2 rounded-lg border bg-background/40 p-3", p.done && "opacity-60")}>
       <div className="flex flex-wrap items-center gap-2">
-        <CommitInput aria-label="Project name" value={p.name} onCommit={(v) => edit("Rename project", (x) => { x.name = v || x.name; })} className="h-7 min-w-40 flex-1 border-transparent bg-transparent px-0 font-medium dark:bg-transparent" />
+        <fieldset disabled={!isGM} className="h-7 min-w-40 flex-1">
+          <CommitInput aria-label="Project name" value={p.name} onCommit={(v) => edit("Rename project", (x) => { x.name = v || x.name; })} className="h-7 w-full border-transparent bg-transparent px-0 font-medium dark:bg-transparent" />
+        </fieldset>
         {room && <Pill>{room.name}</Pill>}
         {p.patientId && <Pill tone={patient ? "info" : "danger"}>{patient ? `Patient: ${patient.name} · Stress ${patient.stress}` : "Patient gone"}</Pill>}
         {p.done && <Pill tone="good">Complete</Pill>}
@@ -716,7 +749,11 @@ export function ProjectRow({ p }: { p: Project }) {
         {p.skill && `${p.skill} · Routine ${p.threshold} · `}{p.contributorLimit} contributor{p.contributorLimit > 1 ? "s" : ""} · {p.energy} Energy each{p.facility && ` · ${p.facility}`}
       </p>
       {p.materials && <p className="text-[11px] text-muted-foreground">{p.materials}</p>}
-      <div className="flex flex-wrap gap-1.5">
+      <fieldset
+        disabled={!isGM}
+        className={cn("flex flex-wrap gap-1.5", !isGM && READ_ONLY)}
+        title={isGM ? undefined : "Only the GM changes a project's Progress. Crew add Progress with the Work on a project task."}
+      >
         <Button
           size="xs"
           disabled={p.done}
@@ -731,7 +768,7 @@ export function ProjectRow({ p }: { p: Project }) {
         <Button size="xs" variant="ghost" className="ml-auto" onClick={() => act("Remove project", (g) => { g.ship.projects = g.ship.projects.filter((x) => x.id !== p.id); return `${p.done ? "Archived" : "Abandoned"} project: ${p.name}.`; })}>
           <Trash2Icon /> {p.done ? "Archive" : "Abandon"}
         </Button>
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -777,7 +814,7 @@ export function ShipTab() {
       </section>
 
       <section>
-        <SectionTitle action={<AddProjectDialog />}>Projects · {projects.filter((p) => !p.done).length} active</SectionTitle>
+        <SectionTitle action={isGM && <AddProjectDialog />}>Projects · {projects.filter((p) => !p.done).length} active</SectionTitle>
         {projects.length === 0 ? (
           <EmptyState title="No projects underway" body="Track room construction, module installs, hull repairs, and Stress Recovery here." />
         ) : (

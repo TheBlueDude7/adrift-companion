@@ -82,6 +82,22 @@ export function spend(g: GameState, recipe: Recipe, toolkit = 0) {
   g.items = g.items.filter((i) => i.qty > 0);
 }
 
+/**
+ * Use up one charge of an item, or the item itself when it has no charges left to give.
+ * A fresh unit comes with a full load of charges. Returns false when there's none to use.
+ */
+export function spendUse(g: GameState, name: string, location = "ship") {
+  const item = g.items.find((i) => i.location === location && i.name === name && i.qty > 0 && !i.broken);
+  if (!item) return false;
+  if ((item.charges ?? 1) > 1) item.charges! -= 1;
+  else {
+    item.qty -= 1;
+    if (item.maxCharges) item.charges = item.maxCharges;
+  }
+  g.items = g.items.filter((i) => i.qty > 0);
+  return true;
+}
+
 /** Take one of a named item out of ship storage. Returns false if there isn't one. */
 export function takeOne(g: GameState, name: string) {
   const item = g.items.find((i) => i.location === "ship" && i.name === name && i.qty > 0 && !i.broken);

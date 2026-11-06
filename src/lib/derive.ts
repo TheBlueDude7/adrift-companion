@@ -1,3 +1,4 @@
+import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import {
   ATTRIBUTES,
   BACKGROUND_BY_KEY,
@@ -177,9 +178,12 @@ export function roomWorks(r: Room) {
   return r.active && r.condition !== "Offline" && r.condition !== "Destroyed";
 }
 
+/** A room's own draw plus whatever its fitting pulls: a Defensive Gun needs power, solar panels don't. */
+export const roomDraw = (r: Room) => r.powerDraw + (r.fitting ? (FACILITY_BY_NAME[r.fitting]?.powerDraw ?? 0) : 0);
+
 export function power(ship: Ship) {
   const generated = ship.rooms.filter(roomWorks).reduce((s, r) => s + r.powerOutput, 0) + (ship.overloaded ? OVERLOAD_BONUS : 0) + (ship.tuned ? 1 : 0);
-  const draw = ship.rooms.filter(roomWorks).reduce((s, r) => s + r.powerDraw, 0);
+  const draw = ship.rooms.filter(roomWorks).reduce((s, r) => s + roomDraw(r), 0);
   return { generated, draw, surplus: generated - draw };
 }
 
@@ -191,8 +195,8 @@ export function supplyCount(state: GameState, name: string, location = "ship") {
   return state.items.filter((i) => i.name === name && (location === "*" || i.location === location)).reduce((s, i) => s + i.qty, 0);
 }
 
-/** Items that feed a survivor for a day. */
-const FOOD_ITEMS = ["Prepared Meal", "Food Unit"] as const;
+/** Items that feed a survivor for a day, in the order the crew eats through them: plain fare first. */
+export const FOOD_ITEMS = ["Prepared Meal", "Food Unit", "Delicious Meal", "Delectable Meal"] as const;
 
 export const foodCount = (state: GameState, location = "ship") => FOOD_ITEMS.reduce((s, n) => s + supplyCount(state, n, location), 0);
 

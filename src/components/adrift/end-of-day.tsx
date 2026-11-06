@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { foodCount, supplyCount } from "@/lib/derive";
-import { endOfDay, type EndOfDayInput } from "@/lib/mechanics";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FOOD_ITEMS, foodCount, supplyCount } from "@/lib/derive";
+import { endOfDay, MEAL_EFFECTS, type EndOfDayInput } from "@/lib/mechanics";
+import { nextGridCell, powerDaysLeft } from "@/lib/power";
+import { SKILLS, type SkillKey } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { FoodIntake, GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -55,18 +58,31 @@ export function EndOfDayDialog() {
   const foodSaved = game.ship.rationsStretched ? Math.floor(foodEaten / 4) : 0;
   const foodNeeded = foodEaten - foodSaved;
   const waterNeeded = Object.values(input).filter((i) => i.water).length;
+  /** Meals a survivor can ask for by name, because eating one does something extra. */
+  const specials = FOOD_ITEMS.filter((n) => MEAL_EFFECTS[n] && supplyCount(game, n) > 0);
+  const picks = Object.values(input).filter((i) => i.food === "full" && i.meal).map((i) => i.meal!);
   const foodHave = foodCount(game);
   const waterHave = supplyCount(game, "Water Unit");
+  const powerDays = powerDaysLeft(game);
+  const nextCell = nextGridCell(game);
 
   function run() {
     let lines: string[] = [];
     act(`End of Day ${game.day}`, (g) => {
       const out: string[] = [];
       if (draw) {
-        const meals = consume(g, "Prepared Meal", foodNeeded);
-        const f = meals + consume(g, "Food Unit", foodNeeded - meals);
+        const tally = new Map<string, number>();
+        const take = (name: string, qty: number) => {
+          const got = consume(g, name, qty);
+          if (got > 0) tally.set(name, (tally.get(name) ?? 0) + got);
+          return got;
+        };
+        let f = 0;
+        for (const name of picks) if (f < foodNeeded) f += take(name, 1);
+        for (const name of FOOD_ITEMS) if (f < foodNeeded) f += take(name, foodNeeded - f);
         const w = consume(g, "Water Unit", waterNeeded);
-        if (f || w) out.push(`Drew ${f} Food${meals ? ` (${meals} Prepared Meal${meals > 1 ? "s" : ""})` : ""} and ${w} Water from ship storage${foodSaved ? `; stretched rations saved ${foodSaved} Food` : ""}.`);
+        const detail = [...tally].map(([n, q]) => `${q}× ${n}`).join(", ");
+        if (f || w) out.push(`Drew ${f} Food${detail ? ` (${detail})` : ""} and ${w} Water from ship storage${foodSaved ? `; stretched rations saved ${foodSaved} Food` : ""}.`);
       }
       out.push(...endOfDay(g, input));
       lines = out;
@@ -84,7 +100,7 @@ export function EndOfDayDialog() {
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>End of Day {game.day}</DialogTitle>
-          <DialogDescription>Check Food, Water, and Sleep for each survivor. Penalties, untreated injuries, natural recovery, Energy, and Pressure are applied automatically.</DialogDescription>
+          <DialogDescription>Check Food, Water, and Sleep for each survivor. Penalties, untreated injuries, natural recovery, Energy, Pressure, crops, solar panels, and the grid&apos;s daily Power Cell charge are applied automatically.</DialogDescription>
         </DialogHeader>
         {report ? (
           <>
@@ -114,13 +130,37 @@ export function EndOfDayDialog() {
                   if (!i) return null;
                   return (
                     <div key={c.id} className="grid items-center gap-2 rounded-lg border bg-background/40 p-3 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-3">
-                      <div>
-                        <p className="font-medium">{c.name}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {c.survival.rests} rest{c.survival.rests === 1 ? "" : "s"} · {c.injuries.filter((x) => x.state === "Untreated").length} untreated
-                          {c.survival.foodMissStreak > 0 && ` · hungry ${c.survival.foodMissStreak}d`}
-                          {c.survival.waterMissStreak > 0 && ` · thirsty ${c.survival.waterMissStreak}d`}
-                        </p>
+                      <div className="grid gap-1.5">
+                        <div>
+                          <p className="font-medium">{c.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {c.survival.rests} rest{c.survival.rests === 1 ? "" : "s"} · {c.injuries.filter((x) => x.state === "Untreated").length} untreated
+                            {c.survival.foodMissStreak > 0 && ` · hungry ${c.survival.foodMissStreak}d`}
+                            {c.survival.waterMissStreak > 0 && ` · thirsty ${c.survival.waterMissStreak}d`}
+                          </p>
+                        </div>
+                        {i.food === "full" && specials.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Select value={i.meal ?? "plain"} onValueChange={(v) => set(c.id, { meal: v === "plain" ? undefined : (v as string), mealSkill: undefined })}>
+                              <SelectTrigger size="sm" className="w-44" aria-label={`What ${c.name} eats`}><SelectValue>{i.meal ?? "Plain rations"}</SelectValue></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="plain">Plain rations</SelectItem>
+                                {specials.map((n) => <SelectItem key={n} value={n}>{n} ({supplyCount(game, n)} in hold)</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            {i.meal && MEAL_EFFECTS[i.meal]?.xp > 0 && (
+                              <Select value={i.mealSkill ?? "none"} onValueChange={(v) => set(c.id, { mealSkill: v === "none" ? undefined : (v as SkillKey) })}>
+                                <SelectTrigger size="sm" className="w-44" aria-label={`Skill ${c.name} gains XP in`}>
+                                  <SelectValue>{i.mealSkill ? SKILLS.find((s) => s.key === i.mealSkill)!.name : `${MEAL_EFFECTS[i.meal].xp} XP: pick a skill`}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Decide later</SelectItem>
+                                  {SKILLS.map((s) => <SelectItem key={s.key} value={s.key}>{s.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="grid w-40 grid-cols-3 gap-1">
                         {foods.map((f) => (
@@ -134,11 +174,20 @@ export function EndOfDayDialog() {
                 })}
               </div>
             </ScrollArea>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 p-3 text-xs">
-              <label className="flex items-center gap-2"><Checkbox checked={draw} onCheckedChange={(v) => setDraw(!!v)} /> Draw meals from ship storage</label>
-              <span className={cn(foodNeeded > foodHave || waterNeeded > waterHave ? "text-rose-300" : "text-muted-foreground")}>
-                Needs {foodNeeded} Food{foodSaved > 0 && ` (${foodSaved} saved by stretched rations)`} / {waterNeeded} Water · Hold has {foodHave} / {waterHave}
-              </span>
+            <div className="grid gap-2 rounded-lg bg-muted/40 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2"><Checkbox checked={draw} onCheckedChange={(v) => setDraw(!!v)} /> Draw meals from ship storage</label>
+                <span className={cn(foodNeeded > foodHave || waterNeeded > waterHave ? "text-rose-300" : "text-muted-foreground")}>
+                  Needs {foodNeeded} Food{foodSaved > 0 && ` (${foodSaved} saved by stretched rations)`} / {waterNeeded} Water · Hold has {foodHave} / {waterHave}
+                </span>
+              </div>
+              <p className={cn(powerDays === 0 && !nextCell ? "text-rose-300" : "text-muted-foreground")}>
+                Grid: {powerDays > 0
+                  ? `${powerDays} day${powerDays === 1 ? "" : "s"} of charge left, one spent tonight`
+                  : nextCell
+                    ? `no charge left, so tonight loads a ${nextCell.name} from the hold (${nextCell.days} day${nextCell.days === 1 ? "" : "s"} of power)`
+                    : "no charge and no Power Cell in the hold — the ship runs dark tonight"}
+              </p>
             </div>
             <DialogFooter>
               <Button onClick={run}>Resolve End of Day</Button>

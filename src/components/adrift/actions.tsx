@@ -1,21 +1,22 @@
 "use client";
 
 import { CheckIcon, ClipboardListIcon, DicesIcon, FlameIcon, HandIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, type ShipboardTask } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, canPush, craftList, craftMargin, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { payPush } from "@/lib/mechanics";
-import { craftBlocker, FABRICATE_RECIPES, fabricateCost, RECIPE_BY_NAME, recipeSkills } from "@/lib/crafting";
+import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
@@ -23,7 +24,8 @@ import { PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type S
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import { resolveOwnTask, type TaskStep } from "@/lib/sync/client";
-import type { Character, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
+import type { CraftRecipe } from "@/data/crafting";
+import type { Character, GameState, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { Dice, EmptyState, Pill, Stepper } from "./common";
@@ -180,10 +182,150 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        {`Two items per task, paying Energy for each. Being ${EXPERT_MARGIN} levels above every item's threshold lets ${c.name.split(" ")[0]} add a third at no extra Energy.`}{" "}
-        {redline && "Redline Familiarity can overdrive the bench once per day for one more item than normal, paying its Energy, and the Workshop is Damaged afterward. "}
+        {`Two items per task for the one Energy cost. Being ${EXPERT_MARGIN} levels above every item's threshold lets ${c.name.split(" ")[0]} add a third, covered by the same Energy.`}{" "}
+        {redline && "Redline Familiarity can overdrive the bench once per day for one more item than normal, which costs the Energy again, and the Workshop is Damaged afterward. "}
         A failed item loses half its materials (rounded up) and its toolkit charges.
       </p>
+    </div>
+  );
+}
+
+function CookPicker({ c, value, onChange }: { c: Character; value: string[]; onChange: (v: string[]) => void }) {
+  const game = useGame((s) => s.game);
+  const recipe = value[0] ? RECIPE_BY_NAME[value[0]] : undefined;
+  const level = stationLevel(game, "kitchen");
+  const penalty = galleyPenalty(level);
+  const blocker = recipe ? craftBlocker(game, recipe) : null;
+  const short = new Map(recipe ? shortfalls(game, recipe.inputs, recipe.toolkit).map((s) => [s.name, s]) : []);
+  return (
+    <div className="grid gap-1.5">
+      <Label>Recipe</Label>
+      <Select value={value[0] ?? "none"} onValueChange={(v) => onChange(v === "none" ? [] : [v as string])}>
+        <SelectTrigger className="w-full" aria-label="Recipe"><SelectValue>{value[0] ?? "Pick a recipe"}</SelectValue></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Pick a recipe</SelectItem>
+          {COOK_RECIPES.map((r) => (
+            <SelectItem key={r.name} value={r.name} disabled={!!craftBlocker(game, r)}>
+              {r.name}
+              <span className="text-muted-foreground"> · {recipeSkills(r).map((s) => `${SKILL_BY_KEY[s.skill].name} ${s.threshold}`).join(" or ")}{craftBlocker(game, r) ? ` · ${craftBlocker(game, r)}` : ""}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {recipe && (
+        <div className="grid gap-0.5 rounded-md bg-muted/30 p-2 text-[11px]">
+          <p className="text-muted-foreground">Drawn from ship storage when the task is resolved</p>
+          {recipe.inputs.map((p) => (
+            <p key={p.name} className="flex justify-between">
+              <span>{p.qty}× {p.name}</span>
+              <span className={cn("font-mono", short.has(p.name) ? "text-rose-300" : "text-muted-foreground")}>{haveInStorage(game, p.name)} in hold</span>
+            </p>
+          ))}
+          <p className="mt-0.5">
+            Makes {recipe.output}× {recipe.name}, {recipe.output + 1} on a Strong Result
+            {recipe.onFailure && `; a botched check makes ${recipe.onFailure.qty ? `${recipe.onFailure.qty}× ${recipe.onFailure.name}` : "nothing"}`}.
+          </p>
+          {blocker && <p className="text-amber-300">{blocker}.</p>}
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        {penalty > 0
+          ? `The ${stationLevelName("kitchen", level)} costs −${penalty}d6 on every roll made in it, so cooking there is never Routine.`
+          : `The ${stationLevelName("kitchen", level)} costs nothing, so ${c.name.split(" ")[0]} cooks Routinely at or above the recipe's threshold.`}{" "}
+        Ingredients are spent either way.
+      </p>
+    </div>
+  );
+}
+
+/** Who a task is performed on: another survivor for Reduce Pressure, anyone for Stop Bleeding. */
+function SubjectPicker({ c, value, onChange, self, label }: { c: Character; value: string | null | undefined; onChange: (v: string | null) => void; self: boolean; label: string }) {
+  const game = useGame((s) => s.game);
+  const crew = game.characters.filter((x) => !x.dead && (self || x.id !== c.id));
+  const subject = crew.find((x) => x.id === value);
+  return (
+    <div className="grid gap-1.5">
+      <Label>{label}</Label>
+      {crew.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nobody else is aboard to help.</p>
+      ) : (
+        <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : (v as string))}>
+          <SelectTrigger className="w-full" aria-label={label}><SelectValue>{subject?.name ?? "Pick a survivor"}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Pick a survivor</SelectItem>
+            {crew.map((x) => (
+              <SelectItem key={x.id} value={x.id}>
+                {x.name}
+                <span className="text-muted-foreground"> · {PRESSURE_STATES[x.pressure].name}{x.conditions.some((y) => y.name === "Bleeding") ? " · Bleeding" : ""}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
+/** What an Assist will and won't do for the task it's helping, before anyone spends a segment on it. */
+function AssistPreview({ a }: { a: SegmentAction }) {
+  const game = useGame((s) => s.game);
+  const effect = assistEffect(game, a);
+  const lines = [...effect.notes, ...effect.warnings];
+  if (lines.length === 0) return null;
+  return (
+    <div className="grid gap-0.5 text-[11px]">
+      {effect.notes.map((n) => <p key={n} className="text-muted-foreground">{n}</p>)}
+      {effect.warnings.map((w) => <p key={w} className="text-amber-300">{w}</p>)}
+    </div>
+  );
+}
+
+const recovered = (recipe: CraftRecipe, strong = false) => {
+  const parts = salvageParts(recipe, strong);
+  return parts.length ? recipeText(parts) : "nothing";
+};
+
+/** One recipe out of a short list, drawing its materials from the hold: medicines and salvage. */
+function RecipePicker({ label, recipes, value, onChange, stocked, note }: { label: string; recipes: CraftRecipe[]; value: string[]; onChange: (v: string[]) => void; stocked?: boolean; note: string }) {
+  const game = useGame((s) => s.game);
+  const recipe = value[0] ? RECIPE_BY_NAME[value[0]] : undefined;
+  const short = new Map(recipe && !stocked ? shortfalls(game, recipe.inputs, recipe.toolkit).map((s) => [s.name, s]) : []);
+  const list = stocked ? recipes.filter((r) => haveInStorage(game, r.name) > 0 || r.name === value[0]) : recipes;
+  return (
+    <div className="grid gap-1.5">
+      <Label>{label}</Label>
+      {list.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nothing in the hold can be taken apart.</p>
+      ) : (
+        <Select value={value[0] ?? "none"} onValueChange={(v) => onChange(v === "none" ? [] : [v as string])}>
+          <SelectTrigger className="w-full" aria-label={label}><SelectValue>{value[0] ?? "Pick an item"}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Pick an item</SelectItem>
+            {list.map((r) => (
+              <SelectItem key={r.name} value={r.name}>
+                {r.name}
+                <span className="text-muted-foreground">{r.tier ? ` · ${r.tier}` : ""}{stocked ? ` · ${haveInStorage(game, r.name)} in hold` : ` · ${recipeText(r.inputs, r.toolkit)}`}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {recipe && !stocked && (
+        <div className="grid gap-0.5 rounded-md bg-muted/30 p-2 text-[11px]">
+          {recipe.inputs.map((p) => (
+            <p key={p.name} className="flex justify-between">
+              <span>{p.qty}× {p.name}</span>
+              <span className={cn("font-mono", short.has(p.name) ? "text-rose-300" : "text-muted-foreground")}>{haveInStorage(game, p.name)} in hold</span>
+            </p>
+          ))}
+        </div>
+      )}
+      {recipe && stocked && (
+        <p className="text-[11px] text-muted-foreground">
+          Recovers {recovered(recipe)}, or {recovered(recipe, true)} on a Strong Result.
+        </p>
+      )}
+      <p className="text-[11px] text-muted-foreground">{note}</p>
     </div>
   );
 }
@@ -219,6 +361,78 @@ function TrainPicker({ c, value, onChange }: { c: Character; value: SkillKey | u
   );
 }
 
+/** Energy ceilings a player can filter the task list by. The task they already picked stays visible regardless. */
+const ENERGY_FILTERS = [0, 1, 2] as const;
+
+/**
+ * Every task the survivor can plan, with what it costs them, what a success does, and what a Strong
+ * Result adds. The Energy filter answers the question a crewmate on their last point actually asks.
+ */
+function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAction; onPick: (task: string) => void }) {
+  const [ceiling, setCeiling] = useState<number | null>(null);
+  const picked = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    picked.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+  const spare = game.characters.find((x) => x.id === draft.characterId)?.energy ?? 0;
+  // Judge every task as this survivor, but only carry the draft's recipes over to the task they were picked for.
+  const termsFor = (x: ShipboardTask) => taskTerms(game, { ...draft, task: x.name, crafts: x.name === draft.task ? draft.crafts : undefined });
+  // A Project charges whatever it charges, so project work has no cost of its own to filter by.
+  const varies = (x: ShipboardTask) => x.effect === "project" && x.energy === 0 && !draft.projectId;
+  const groups = TASK_GROUPS.map((grp) => ({
+    name: grp,
+    tasks: SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task) && (ceiling === null || x.name === draft.task || varies(x) || termsFor(x).energy <= ceiling)),
+  })).filter((grp) => grp.tasks.length > 0);
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label>Task</Label>
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          Costs at most
+          {ENERGY_FILTERS.map((n) => (
+            <Button key={n} size="xs" variant={ceiling === n ? "secondary" : "ghost"} onClick={() => setCeiling(n)} aria-pressed={ceiling === n}>{n}</Button>
+          ))}
+          <Button size="xs" variant={ceiling === null ? "secondary" : "ghost"} onClick={() => setCeiling(null)} aria-pressed={ceiling === null}>Any</Button>
+        </span>
+      </div>
+      <ScrollArea className="h-64 rounded-lg border">
+        <div className="grid gap-2 p-2">
+          {groups.map((grp) => (
+            <div key={grp.name} className="grid gap-1">
+              <p className="px-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{grp.name}</p>
+              {grp.tasks.map((x) => {
+                const mine = x.name === draft.task;
+                const terms = termsFor(x);
+                // An Assist with nobody to help isn't blocked, just unfilled: the picker below asks for the target.
+                const blocker = x.effect === "assist" && !draft.assists ? null : terms.blocker;
+                return (
+                  <button
+                    key={x.name}
+                    ref={mine ? picked : undefined}
+                    type="button"
+                    onClick={() => onPick(x.name)}
+                    className={cn("grid gap-0.5 rounded-md border p-2 text-left transition-colors", mine ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-muted/50")}
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-medium">{x.name}</span>
+                      <span className={cn("shrink-0 font-mono text-[11px]", !varies(x) && terms.energy > spare ? "text-rose-300" : "text-muted-foreground")}>
+                        {terms.skill ? `${SKILL_BY_KEY[terms.skill].name} ${terms.threshold} · ` : ""}{varies(x) ? "the Project's Energy" : `${terms.energy} Energy`}
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Success:</span> {x.result}</span>
+                    <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Strong Result:</span> {x.strong ?? "the GM's call."}</span>
+                    {blocker && <span className="text-[11px] text-amber-300">{blocker}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
 function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; existing?: SegmentAction; extra?: boolean; trigger: React.ReactElement }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
@@ -232,7 +446,14 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
   const projects = game.ship.projects.filter((p) => !p.done);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
-  const missing = (def.effect === "project" && !draft.projectId) || (def.effect === "course" && !draft.target) || (def.effect === "assist" && !draft.assists) || (def.effect === "craft" && !draft.crafts?.length) || (def.effect === "train" && !draft.trainSkill);
+  const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage";
+  const missing =
+    (def.effect === "project" && !draft.projectId) ||
+    (def.effect === "course" && !draft.target) ||
+    (def.effect === "assist" && !draft.assists) ||
+    (needsRecipe && !draft.crafts?.length) ||
+    ((def.effect === "calm" || def.effect === "bleed") && !draft.subjectId) ||
+    (def.effect === "train" && !draft.trainSkill);
 
   function save(ask = false) {
     const d = { ...draft, detail: draft.detail.trim() };
@@ -242,7 +463,8 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (def.effect !== "project") d.projectId = null;
     if (def.effect !== "course" && def.effect !== "scan") d.target = null;
     if (def.effect !== "assist") d.assists = null;
-    if (def.effect !== "craft") delete d.crafts;
+    if (!needsRecipe) delete d.crafts;
+    if (def.effect !== "calm" && def.effect !== "bleed") d.subjectId = null;
     if (def.effect !== "train") delete d.trainSkill;
     const pushing = extra && !existing;
     if (pushing) d.extra = true;
@@ -277,22 +499,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label>Task</Label>
-            <Select value={draft.task} onValueChange={(v) => set({ task: v as string })}>
-              <SelectTrigger className="w-full" aria-label="Task"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TASK_GROUPS.map((grp) => (
-                  <SelectGroup key={grp}>
-                    <SelectLabel>{grp}</SelectLabel>
-                    {SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task)).map((x) => <SelectItem key={x.name} value={x.name}>{x.name}</SelectItem>)}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{def.result}</p>
-            {def.strong && <p className="text-xs text-muted-foreground"><span className="text-foreground/80">Strong Result:</span> {def.strong}</p>}
-          </div>
+          <TaskPicker game={view} draft={draft} onPick={(task) => set({ task })} />
           {def.effect === "project" && (
             <div className="grid gap-1.5">
               <Label>Project</Label>
@@ -311,6 +518,35 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
           )}
           {def.effect === "train" && <TrainPicker c={c} value={draft.trainSkill} onChange={(v) => set({ trainSkill: v })} />}
           {def.effect === "craft" && <CraftPicker c={c} value={draft.crafts ?? []} onChange={(v) => set({ crafts: v })} />}
+          {def.effect === "cook" && <CookPicker c={c} value={draft.crafts ?? []} onChange={(v) => set({ crafts: v })} />}
+          {def.effect === "medicine" && (
+            <RecipePicker
+              label="Medicine"
+              recipes={MEDICINE_RECIPES}
+              value={draft.crafts ?? []}
+              onChange={(v) => set({ crafts: v })}
+              note="Drawn from ship storage when the task is resolved. A failed attempt loses half the materials, rounded up."
+            />
+          )}
+          {def.effect === "salvage" && (
+            <RecipePicker
+              label="Item to take apart"
+              recipes={SALVAGE_RECIPES}
+              value={draft.crafts ?? []}
+              onChange={(v) => set({ crafts: v })}
+              stocked
+              note="The item is used up whether or not the salvage comes out. Toolkit charges never come back."
+            />
+          )}
+          {(def.effect === "calm" || def.effect === "bleed") && (
+            <SubjectPicker
+              c={c}
+              value={draft.subjectId}
+              onChange={(v) => set({ subjectId: v })}
+              self={def.effect === "bleed"}
+              label={def.effect === "bleed" ? "Who is bleeding" : "Who to settle"}
+            />
+          )}
           {(def.effect === "course" || def.effect === "scan") && (
             <TargetPicker move={def.effect === "course"} value={draft.target ? { x: draft.target.x, y: draft.target.y } : null} onChange={(p) => { const m = shipMap(game); set({ target: p && m ? { mapId: m.id, ...p } : null }); }} />
           )}
@@ -328,6 +564,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
                   </SelectContent>
                 </Select>
               )}
+              {draft.assists && <AssistPreview a={draft} />}
             </div>
           )}
           <div className="grid gap-1.5">
@@ -370,10 +607,16 @@ function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onSte
     await onStep(s);
     setBusy(false);
   };
+  const waiting = pendingAssists(game, a);
   if (!a.roll) {
     return (
       <div className="grid gap-2 rounded-lg bg-muted/40 p-3">
         <p className="font-mono text-xs text-muted-foreground">{pool.parts.join(" + ")}</p>
+        {waiting.length > 0 && (
+          <p className="text-[11px] text-amber-300">
+            {waiting.join(" and ")} {waiting.length > 1 ? "have" : "has"} not resolved their Assist yet. Their dice only join the pool once it succeeds.
+          </p>
+        )}
         <Button disabled={busy || pool.dice <= 0} onClick={() => step("roll")}><DicesIcon /> {pool.dice > 0 ? `Roll ${pool.dice}d6` : "No dice: this can't succeed"}</Button>
         <p className="text-[11px] text-muted-foreground">
           Each 6 is a success; two or more earn the Strong Result. The dice decide the task as they land. If any fail, you can Push once{c.energy > 0 ? "" : "; while Exhausted, a Push costs an Affliction instead of Energy"}.
@@ -470,6 +713,16 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
               <p className="text-[11px] text-muted-foreground">On a success, uncheck anything that still didn&apos;t come out right. Failed items lose half their materials and their toolkit charges.</p>
             </div>
           )}
+          {def.effect === "cook" && (() => {
+            const recipe = crafts[0] ? RECIPE_BY_NAME[crafts[0]] : undefined;
+            if (!recipe) return null;
+            return (
+              <p className="text-[11px] text-muted-foreground">
+                Success stocks {recipe.output}× {recipe.name}, {recipe.output + 1} on a Strong Result
+                {recipe.onFailure && `; a botched check stocks ${recipe.onFailure.qty ? `${recipe.onFailure.qty}× ${recipe.onFailure.name}` : "nothing"}`}. The ingredients are spent either way.
+              </p>
+            );
+          })()}
           {def.effect === "scan" && (
             <div className="grid gap-1.5">
               <Label>{isGM ? "Scan result" : "If the scan succeeds, record"} for {targetName(game, a.target)}</Label>
@@ -522,6 +775,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const c = game.characters.find((x) => x.id === a.characterId);
   const project = game.ship.projects.find((p) => p.id === a.projectId);
   const assisted = game.actions.find((x) => x.id === a.assists);
+  const subject = game.characters.find((x) => x.id === a.subjectId);
   const where = targetName(game, a.target);
   const terms = taskTerms(game, a);
   const planned = a.status === "planned";
@@ -533,7 +787,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
     act(allow ? "Allow task" : "Refuse task", (g) => {
       const name = g.characters.find((x) => x.id === a.characterId)?.name ?? "Someone";
       if (!allow) {
-        g.actions = g.actions.filter((x) => x.id !== a.id);
+        dropAction(g, a.id);
         return `The GM refuses ${name}'s plan to ${a.task.toLowerCase()}${why ? ` (${why.toLowerCase()})` : ""}.`;
       }
       const x = g.actions.find((y) => y.id === a.id);
@@ -565,17 +819,18 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
         {canEdit && c && (
           <span className="ml-auto flex gap-0.5">
             <PlanDialog c={c} existing={a} trigger={<Button size="icon-xs" variant="ghost" aria-label={`Edit ${a.task}`}><PencilIcon /></Button>} />
-            <Button size="icon-xs" variant="ghost" aria-label={`Withdraw ${a.task}`} onClick={() => act("Withdraw task", (g) => { g.actions = g.actions.filter((x) => x.id !== a.id); return `${c.name} withdraws their plan to ${a.task.toLowerCase()}.`; })}><Trash2Icon /></Button>
+            <Button size="icon-xs" variant="ghost" aria-label={`Withdraw ${a.task}`} onClick={() => act("Withdraw task", (g) => { const helpers = g.actions.filter((x) => x.assists === a.id).map((x) => g.characters.find((h) => h.id === x.characterId)?.name ?? "Someone"); dropAction(g, a.id); return [`${c.name} withdraws their plan to ${a.task.toLowerCase()}.`, ...(helpers.length ? [`${helpers.join(" and ")} ${helpers.length > 1 ? "have" : "has"} nothing to assist now.`] : [])]; })}><Trash2Icon /></Button>
           </span>
         )}
       </div>
-      {(project || where || assisted || a.crafts?.length || a.trainSkill) && (
+      {(project || where || assisted || subject || a.crafts?.length || a.trainSkill) && (
         <p className="text-xs text-muted-foreground">
-          {a.crafts?.length ? `Making ${craftList(a.crafts)}` : null}
+          {a.crafts?.length ? `${taskFor(a).effect === "cook" ? "Cooking" : "Making"} ${craftList(a.crafts)}` : null}
           {a.trainSkill && c && (() => { const cost = trainingCost(c, a.trainSkill); return `Training ${SKILL_BY_KEY[a.trainSkill].name}${cost ? ` · uses 1 ${cost.name} (${haveInStorage(game, cost.name)} in hold)` : ""}`; })()}
           {project && `${project.name} · ${project.progress}/${project.required}`}
           {where && `Toward ${where}`}
           {assisted && `Helping ${game.characters.find((x) => x.id === assisted.characterId)?.name}: ${assisted.task}`}
+          {subject && `On ${subject.name} · ${PRESSURE_STATES[subject.pressure].name}`}
         </p>
       )}
       {a.detail && <p className="text-xs">“{a.detail}”</p>}

@@ -2,11 +2,11 @@ import { ladderFor } from "@/data/ship-upgrades";
 import { tileDistance, tileLabel } from "./maps";
 import type { GameState, Item, StarMap, TilePos } from "./types";
 
-/** Tiles of movement per cell, and the highest mech tier each cell can run. */
+/** Tiles of movement per cell, days of grid power it holds, and the highest mech tier it can run. */
 export const POWER_CELLS = [
-  { name: "Flickering Power Cell", tier: 1, tiles: 1 },
-  { name: "Power Cell", tier: 2, tiles: 2 },
-  { name: "Advanced Power Cell", tier: 3, tiles: 4 },
+  { name: "Flickering Power Cell", tier: 1, tiles: 1, days: 1 },
+  { name: "Power Cell", tier: 2, tiles: 2, days: 2 },
+  { name: "Advanced Power Cell", tier: 3, tiles: 4, days: 4 },
 ] as const;
 
 export type PowerCell = (typeof POWER_CELLS)[number];
@@ -25,6 +25,35 @@ export const cellCount = (g: GameState) => cellsInHold(g).reduce((s, c) => s + c
 /** The weakest cell in the hold that satisfies `ok`, so stronger cells are saved for when they're needed. */
 export function pickCell(g: GameState, ok: (c: PowerCell) => boolean): PowerCell | null {
   return cellsInHold(g).find((c) => c.qty > 0 && ok(c)) ?? null;
+}
+
+/** Days of grid power left in the cell the ship is running on. */
+export const powerDaysLeft = (g: GameState) => g.ship.powerDays ?? 0;
+
+/** The cell the grid loads next: the weakest in the hold, so stronger ones stay available for travel. */
+export const nextGridCell = (g: GameState) => pickCell(g, () => true);
+
+/**
+ * Keeping the ship running costs a day of a Power Cell's charge at every End of Day. When the
+ * charge runs out the grid loads another cell; with none in the hold, the ship goes dark.
+ */
+export function burnDailyPower(g: GameState, out: string[]) {
+  let left = powerDaysLeft(g);
+  let loaded = "";
+  if (left <= 0) {
+    const cell = nextGridCell(g);
+    if (!cell) {
+      g.ship.powerDays = 0;
+      out.push("⚠ The grid has no charge and the hold has no Power Cell: the ship runs dark until the crew finds one.");
+      return;
+    }
+    burnCell(g, cell.name);
+    left = cell.days;
+    loaded = `A ${cell.name} is loaded into the grid (${cell.days} day${cell.days > 1 ? "s" : ""} of power). `;
+  }
+  g.ship.powerDays = left - 1;
+  const after = g.ship.powerDays;
+  out.push(`🔌 ${loaded}${after > 0 ? `The grid has ${after} day${after > 1 ? "s" : ""} of charge left.` : "That charge is spent: tomorrow needs another Power Cell."}`);
 }
 
 export function burnCell(g: GameState, name: string) {

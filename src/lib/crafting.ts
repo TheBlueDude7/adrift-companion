@@ -66,11 +66,44 @@ export function stockOutput(g: GameState, recipe: CraftRecipe, name: string, qty
 
 /** Recipes the Fabricate Common Item task can make. Kitchen recipes are cooked with Prepare Food instead. */
 export const FABRICATE_RECIPES = RECIPES.filter((r) => r.station !== "kitchen");
+
+/** Recipes the Prepare Food task cooks. */
+export const COOK_RECIPES = RECIPES.filter((r) => r.station === "kitchen");
+
+/** Medicines the Craft Medicine task makes: the ones that need no station at all. */
+export const MEDICINE_RECIPES = RECIPES.filter((r) => r.category === "Medical" && !r.station);
+
+/** Items a Deconstruct task can take apart. Nobody unpicks a cooked meal. */
+export const SALVAGE_RECIPES = RECIPES.filter((r) => r.station !== "kitchen");
+
+/** Dice a rough galley costs every roll made in it: −4d6 Improvised, −2d6 Operational, none in a Processing Suite. */
+export const galleyPenalty = (level: number) => (level >= 3 ? 0 : level === 2 ? 2 : 4);
+
+/**
+ * Cook one kitchen recipe. The ingredients are spent either way; a botched check makes what the
+ * recipe lists for a failure, which for the better meals is a pair of Prepared Meals.
+ * A Strong Result adds `extra` to the output.
+ */
+export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra = 0, allowed = false): string {
+  const blocker = craftBlocker(g, recipe);
+  if (blocker && !allowed) return `⚠ ${recipe.name} wasn't cooked: ${blocker.toLowerCase()}.`;
+  const short = shortfalls(g, recipe.inputs, recipe.toolkit);
+  if (short.length && !allowed) return `⚠ ${recipe.name} wasn't cooked: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`;
+  spend(g, recipe.inputs, recipe.toolkit);
+  const spent = `spent ${recipeText(recipe.inputs, recipe.toolkit)}${blocker || short.length ? "; the GM allowed it despite what was missing" : ""}`;
+  const made = success ? { name: recipe.name, qty: recipe.output + extra } : (recipe.onFailure ?? { name: recipe.name, qty: 0 });
+  if (made.qty <= 0) return `${recipe.name} is botched: nothing comes of it (${spent}).`;
+  stockOutput(g, RECIPE_BY_NAME[made.name] ?? recipe, made.name, made.qty);
+  return `${success ? "Cooked" : "Botched"} ${recipe.name}: ${made.qty}× ${made.name} added to ship storage (${spent}).`;
+}
 export const RECIPE_BY_NAME = Object.fromEntries(RECIPES.map((r) => [r.name, r])) as Record<string, CraftRecipe>;
 
 const TIER_THRESHOLD: Record<string, number> = { "Tier I": 3, "Tier II": 6, "Tier III": 9 };
 
-/** Skills that can make a recipe, with their Routine Thresholds. Recipes without a listed skill use Mechanical Technician by tier. */
+/**
+ * Skills that can make a recipe, with their Routine Thresholds. Recipes without a listed skill fall
+ * back to the station's trade by tier: Cooking in the galley, Mechanical Technician everywhere else.
+ */
 export function recipeSkills(recipe: CraftRecipe): { skill: SkillKey; threshold: number }[] {
   const out: { skill: SkillKey; threshold: number }[] = [];
   for (const part of (recipe.skill ?? "").split(/\s+or\s+/)) {
@@ -78,7 +111,25 @@ export function recipeSkills(recipe: CraftRecipe): { skill: SkillKey; threshold:
     const key = m && SKILLS.find((s) => s.name.toLowerCase() === m[1].toLowerCase())?.key;
     if (key) out.push({ skill: key, threshold: Number(m[2]) });
   }
-  return out.length ? out : [{ skill: "mechTech", threshold: TIER_THRESHOLD[recipe.tier ?? ""] ?? 3 }];
+  const trade: SkillKey = recipe.station === "kitchen" ? "cooking" : "mechTech";
+  return out.length ? out : [{ skill: trade, threshold: TIER_THRESHOLD[recipe.tier ?? ""] ?? 3 }];
+}
+
+/**
+ * What taking one unit apart gives back: half the materials it was made from, rounded down, or three
+ * quarters on a Strong Result. The budget comes off the bulkiest inputs first, and toolkit charges never return.
+ */
+export function salvageParts(recipe: CraftRecipe, strong = false): Recipe {
+  const perUnit = recipe.inputs.map((p) => ({ name: p.name, qty: p.qty / recipe.output }));
+  let budget = Math.floor(perUnit.reduce((n, p) => n + p.qty, 0) * (strong ? 0.75 : 0.5));
+  const out: Recipe = [];
+  for (const p of [...perUnit].sort((a, b) => b.qty - a.qty)) {
+    const take = Math.min(budget, Math.floor(p.qty));
+    if (take <= 0) continue;
+    out.push({ name: p.name, qty: take });
+    budget -= take;
+  }
+  return out;
 }
 
 /** Combined materials and toolkit charges for a list of recipe names. */

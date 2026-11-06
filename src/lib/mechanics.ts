@@ -5,6 +5,8 @@ import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, type InjuryRoll } from "./injuries";
+import { runSolarPanels } from "./modules";
+import { burnDailyPower } from "./power";
 import {
   MIND_BREAK_BY_NAME,
   MIND_BREAKS,
@@ -292,7 +294,24 @@ export function previousSegment(g: GameState): string[] {
   return [`Back to ${SEGMENTS[g.segment]}.`];
 }
 
-export type EndOfDayInput = Record<string, { food: FoodIntake; water: boolean; slept: boolean }>;
+export type EndOfDayInput = Record<string, { food: FoodIntake; water: boolean; slept: boolean; meal?: string; mealSkill?: SkillKey }>;
+
+/** What a cooked meal does for whoever eats it, beyond feeding them for the day. */
+export const MEAL_EFFECTS: Record<string, { xp: number; stress: number }> = {
+  "Delicious Meal": { xp: 1, stress: 0 },
+  "Delectable Meal": { xp: 2, stress: -1 },
+};
+
+/** A good meal's XP goes into any skill the survivor chooses, and the best of them lifts Stress. */
+function eatMeal(c: Character, meal: string | undefined, skill: SkillKey | undefined, out: string[]) {
+  const effect = meal ? MEAL_EFFECTS[meal] : undefined;
+  if (!effect) return;
+  out.push(`${c.name} eats a ${meal}.`);
+  if (effect.stress) changeStress(c, effect.stress, out);
+  if (!effect.xp) return;
+  if (!skill) out.push(`${c.name} has ${effect.xp} XP to spend in any skill from the meal.`);
+  else for (let i = 0; i < effect.xp; i++) out.push(gainXp(c, skill));
+}
 
 export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
   const out: string[] = [`— End of Day ${g.day} —`];
@@ -317,6 +336,7 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
     if (i.food === "full") {
       s.foodMissStreak = 0;
       s.rationStreak = 0;
+      eatMeal(c, i.meal, i.mealSkill, out);
     } else if (i.food === "half" && rationDiscipline) {
       s.foodMissStreak = 0;
       s.rationStreak += 1;
@@ -395,9 +415,12 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
     clampVitals(c);
   }
   growCrops(g, out);
+  runSolarPanels(g, out);
+  burnDailyPower(g, out);
   if (g.ship.tuned) out.push("The reactor settles back to its normal output.");
   delete g.ship.tuned;
   delete g.ship.rationsStretched;
+  delete g.ship.reclaimed;
   g.day += 1;
   g.segment = 0;
   out.push(`Day ${g.day} begins. Morning.`);

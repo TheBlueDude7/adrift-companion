@@ -1,6 +1,7 @@
 import type { Recipe } from "@/data/cybernetics";
-import { FACILITIES, ladderFor } from "@/data/ship-upgrades";
+import { FACILITIES, ladderFor, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { MODULE_PRESETS } from "./rules";
+import { stockItem } from "./stock";
 import type { GameState, Project, Room } from "./types";
 
 /** Move a room to a level on its module's ladder, taking that level's facility grade and reactor output. */
@@ -34,6 +35,22 @@ export function nextRoomLevel(r: Room) {
   if (r.level === undefined) return undefined;
   const step = ladderFor(r.module)?.levels[r.level + 1];
   return step ? { index: r.level + 1, step } : undefined;
+}
+
+/**
+ * Rooms whose solar panels are collecting. Panels need no power, but a dead room gathers nothing.
+ * Campaigns that built panels before they had a slot of their own still have them as a room's module.
+ */
+export const solarRooms = (g: GameState) =>
+  g.ship.rooms.filter((r) => (r.fitting === SOLAR_PANELS || r.module === SOLAR_PANELS) && r.condition !== "Offline" && r.condition !== "Destroyed");
+
+/** Overnight, every working set of solar panels adds its Fuel to the hold. */
+export function runSolarPanels(g: GameState, out: string[]) {
+  const sets = solarRooms(g).length;
+  if (sets === 0) return;
+  const fuel = sets * SOLAR_FUEL_PER_DAY;
+  stockItem(g, "Fuel Unit", fuel, { category: "Supply" });
+  out.push(`☀ ${sets} set${sets > 1 ? "s" : ""} of solar panels collect ${fuel} Fuel Unit${fuel > 1 ? "s" : ""} into ship storage.`);
 }
 
 const PLACEHOLDER_NAMES = new Set(["Empty Room", "New Room"]);

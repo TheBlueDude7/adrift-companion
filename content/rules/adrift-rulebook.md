@@ -566,28 +566,31 @@ One character may spend a task assisting another character. The assistant must h
 
 <!-- updated: assist -->
 
-- On a Skilled or Crisis task, add the assistant’s Skill Level as bonus dice, to a maximum of +4d6.
-- On a Project, an assistant adds Progress only if they meet its Routine Threshold.
+- Assisting costs 1 Energy.
+- The assistant resolves their Assist against the helped task's skill, Routine Threshold 1, and only a successful Assist does anything.
+- On a Skilled or Crisis task, a successful Assist adds the assistant's Skill Level as bonus dice, to a maximum of +4d6.
+- Only one assistant adds dice to a task: the highest Skill Level among those who succeeded.
+- On a Project, a successful Assist adds 1 Progress if the assistant meets the Project's Routine Threshold, and takes one of its contributor slots.
 - Assistance never turns a Crisis task into a Routine task.
-- Only one assistant adds dice to a task.
+- Resolve Assists before the task they help, so the helped character knows their pool.
 
 ### Standard Shipboard Tasks
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
-<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate -->
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
 | Rest | 0 | None | Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor. |
-| Prepare Food | 1 | Cooking 1 | Prepare safe meals from available ingredients. |
+| Prepare Food | 1 | Cooking 1 | Cook one galley recipe, at the recipe’s own Cooking threshold and the galley’s penalty. A botched check still makes what the recipe lists. |
 | Harvest Hydroponics | 1 | Botany 0 | Collect the module’s available Food Units. |
 | Maintain Crops | 2 | Botany 2 | Prevent ordinary crop loss and advance cultivation. |
-| Purify Water | 1 | Biology 2 | Convert contaminated water when equipment is available. |
-| Filter Reclaimed Water | 1 | Cooking 1 | Process water produced by Life Support using a filter. |
+| Purify Water | 1 | Biology 2 | Use up one charge of a water filter: 4 Water Units from a Crude Water Filter, 6 from a Water Filter. |
+| Filter Reclaimed Water | 1 | Cooking 1 | Draw the day’s reclaimed water out of Life Support: 2 Water Units, once a day. |
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
 | First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. |
-| Stop Bleeding | 1 | First Aid | End Bleeding with a successful First Aid task or an appropriate Medkit use. |
+| Stop Bleeding | 1 | First Aid | Use up a medkit to end one survivor’s Bleeding. |
 | Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. |
 | Craft Medicine | 1 | First Aid 3 or Surgery 5 | Produce medicine from a known recipe. |
 | Decontaminate | 1 | First Aid 5 or Biology 5 |   |
@@ -595,8 +598,8 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Analyze Unknown Biomass | 1 | Always Skilled: Biology or Botany, depending on mass | Discover properties of an unfamiliar specimen. |
 | Scrap Biomass | 2 | Biology 3 | Recover biological crafting materials. |
 | Repair a Damaged Module | 2 | Mechanical Technician 5 | Repair a Damaged module. Restoring Hull HP is the Hull Repair project (Mechanical Technician 3 or Engineering 4). |
-| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes, paying the Energy for each. At 6+ levels above every threshold, make a third item in the same segment at no extra Energy. |
-| Deconstruct Common Item | 1 | Scavenging 1 | Recover the item’s listed salvage. |
+| Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes for the listed Energy. At 6+ levels above every threshold, make a third item in the same segment, also covered. |
+| Deconstruct Common Item | 1 | Scavenging 2 for T1, 4 for T2, 6 for T3 | Take an item in the hold apart for half the materials it was made from, rounded down; three quarters on a Strong Result. |
 | Upgrade Module | 2 | Engineering 4 | Advance an eligible module upgrade Project. |
 | Salvage Ship | 2 | Scavenging 4 | Scavenge a ship using the scavenge rules |
 | Plot Safe Course | 1 | Piloting 4 | Move through scanned, stable space. |
@@ -604,8 +607,9 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Plot Unsafe Course |   | Always Crisis: Piloting, −3d6 | Move through unscanned, unknown space. |
 | Analyze Technical Data | 1 | Engineering 3 or Biology 3 | Interpret known human data or studied alien data. |
 | Train Skill | 2 | Related Skill 0 | Gain 1 XP when training requirements are met. |
-| Reduce Pressure | 1 | Entertainer 1 | Reduce another character’s Pressure by 1 in safety. |
+| Reduce Pressure | 1 | Entertainer 1 | Reduce another character’s Pressure by 1 in safety, never below their Stress floor. A Strong Result also gives them +1d6 on their next roll. |
 | Treat Long-Term Stress | 2 | Entertainer 3 | Advance a Stress Recovery Project. |
+| Assist | 1 | The helped task’s skill, Routine Threshold 1 | Add your Skill Level as bonus dice to another character’s task, up to +4d6. See Assistance. |
 
 ### The Competence Rule
 
@@ -1089,9 +1093,9 @@ Being 3 levels above the routine crafting threshold for an item reduces the ener
 
 <!-- updated: fabricate -->
 
-Fabricating makes two items in the same segment. You pay the Energy cost for each item.
+Fabricating makes two items in the same segment. The task's Energy cost covers both of them, not one each.
 
-Being 6 levels above the Routine crafting threshold for every item lets you make a third one in the same segment at no additional Energy cost.
+Being 6 levels above the Routine crafting threshold for every item lets you make a third one in the same segment, covered by the same Energy cost.
 
 ### Skilled Crafting
 
@@ -1464,6 +1468,20 @@ Power Draw uses the following general scale:
 
 Individual modules may differ.
 
+#### Running the Grid
+
+<!-- updated: daily-power -->
+
+Keeping the ship powered spends one day of a Power Cell's charge, taken at End of Day. A cell holds as many days of ship power as it moves the ship in tiles:
+
+| Power Cell | Days of ship power |
+| --- | --- |
+| Flickering Power Cell | 1 |
+| Power Cell | 2 |
+| Advanced Power Cell | 4 |
+
+When the loaded cell runs out, the next cell in the hold takes over, weakest first, so stronger cells stay available for travel and mechs. With no charge and no cell aboard, the ship runs dark.
+
 #### Power Capacity
 
 At the beginning of each day, compare:
@@ -1793,7 +1811,9 @@ Larger Projects may permit more.
 
 Two characters contributing independently are not Assisting one another. Each resolves their own Project Task.
 
-A character may instead Assist another contributor using the normal rules, but does not make a separate contribution.
+<!-- updated: assist -->
+
+A character may instead Assist another contributor using the normal rules. They make no contribution of their own, but a successful Assist adds 1 Progress if the assistant meets the Project's Routine Threshold, and that takes one of the Project's contributor slots.
 
 #### Occupied Workspaces
 
@@ -3769,7 +3789,7 @@ Once per day, you may overdrive a ship module, facility, or mech system.
 Choose one:
 
 - Treat a facility as one Grade higher for one Task.
-- Fabricate one more item than your normal limit this segment, paying the Energy for each item.
+- Fabricate one more item than your normal limit this segment. That item is past what the task's Energy covers, so pay the task's Energy again for it.
 - Give a mech +2 Frame Strength and +2 Frame Constitution for one Scene.
 - Allow an Offline system maintained by Keep It Running to operate at full output.
 

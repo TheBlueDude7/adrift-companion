@@ -2,7 +2,7 @@ import { needsPermission, permissionReasons, segmentTasks } from "../actions";
 import { poolFor } from "../derive";
 import { coreMapId } from "../maps";
 import { completeModuleWork } from "../modules";
-import type { GameState, Item, StarMap, TilePos } from "../types";
+import type { GameState, Item, SegmentAction, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
 
 export type Role = "gm" | "player";
@@ -15,9 +15,10 @@ const idOf = (s: Seg | undefined) => (s && typeof s === "object" ? s.id : undefi
  *
  * Players can edit their own character (spending Energy, but never restoring it), items in the ship's hold or their own inventory (without
  * conjuring new items into the hold), shared-pool cargo carried by anyone in their Loadmaster pool,
- * ship projects, powering rooms on and off, mechs, cybernetic research, maps (but not the
+ * powering rooms on and off, mechs, cybernetic research, maps (but not the
  * neutron star, chart size, or ship position, and they delete only maps they made, never the core system map), the item catalog, the log, and their own planned
- * segment tasks (the GM resolves them).
+ * segment tasks (the GM resolves them). Projects are the GM's: Progress comes from resolving a
+ * Work on a project task, which the server applies itself.
  * Returns a reason when the change is not allowed.
  */
 export function denyReason(game: GameState, ops: Op[], actor: Actor): string | null {
@@ -49,7 +50,8 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       case "actions":
         continue;
       case "ship": {
-        if (second === "projects" || second === "rooms") continue;
+        if (second === "projects") return "Only the GM changes projects. Add Progress with a Work on a project task instead.";
+        if (second === "rooms") continue;
         if (second === "hullHp" && o.path.length === 2 && o.op === "set" && typeof o.value === "number" && o.value > game.ship.hullHp) continue;
         if (second === "catastrophicEvents" && o.path.length === 2 && o.op === "set" && o.value === 0) continue;
         return "Only the GM can change the hull, power, or the ship's position.";
@@ -179,6 +181,12 @@ function completesRecoveryFor(game: GameState, ops: Op[], patientId: string | un
   return after.ship.projects.some((p) => p.done && p.patientId === patientId && game.ship.projects.some((q) => q.id === p.id && !q.done));
 }
 
+/** Withdrawing a task clears the assists that were helping it, even though those belong to other characters. */
+function orphanedAssist(a: SegmentAction, b: SegmentAction, now: Map<string, SegmentAction>) {
+  const gone = a.assists;
+  return !!gone && b.assists === null && !now.has(gone) && JSON.stringify({ ...b, assists: gone }) === JSON.stringify(a);
+}
+
 /** Players plan, edit, and withdraw their own tasks while they're still planned. Only the GM resolves them. */
 function actionDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
   if (own === null) return "Pick your character in Play together to plan tasks.";
@@ -189,6 +197,7 @@ function actionDenyReason(game: GameState, ops: Op[], own: string | null): strin
     const a = was.get(id);
     const b = now.get(id);
     if (a && b && JSON.stringify(a) === JSON.stringify(b)) continue;
+    if (a && b && orphanedAssist(a, b, now)) continue;
     for (const x of [a, b]) {
       if (!x) continue;
       if (x.characterId !== own) return "You can only plan tasks for your own character.";

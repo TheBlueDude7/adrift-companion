@@ -111,18 +111,36 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
   },
 };
 
-export type Facility = { name: string; cost: Recipe; toolkit: number; effect: string; powerDraw: number };
+export type Facility = {
+  name: string;
+  cost: Recipe;
+  toolkit: number;
+  effect: string;
+  powerDraw: number;
+  /** Takes a room's spare slot rather than its module slot. One per room: solar panels or defenses, never both. */
+  fitting?: boolean;
+};
 
-/** One-off facilities. Building one adds a room housing it. */
+/** One-off facilities. Building one adds a room housing it, unless it fits a room's spare slot. */
 export const FACILITIES: Facility[] = [
   { name: "Cybernetics Lab", cost: r([10, "Reinforced Steel"], [1, "Aluminum Alloy"], [1, "Durasteel Alloy"], [3, "Components"]), toolkit: 0, powerDraw: 2, effect: "Allows crafting Cybernetic Cores (10 Scrap Metal + 5 Components) and Cybernetic Research." },
   { name: "Biological Lab", cost: r([7, "Reinforced Steel"], [1, "Aluminum Alloy"], [1, "Durasteel Alloy"], [6, "Components"]), toolkit: 0, powerDraw: 3, effect: "Allows biological research and crafting DNA-altering substances." },
   { name: "Bioconverter", cost: r([10, "Scrap Metal"], [2, "Basic Adhesive"], [5, "Components"]), toolkit: 0, powerDraw: 1, effect: "Unlocks the “Turn food to fuel” action." },
-  { name: "Makeshift Solar Panels", cost: r([10, "Scrap Metal"], [5, "Scrap Components"]), toolkit: 0, powerDraw: 0, effect: "Take up no space, but limited to one set per room. Incompatible with traps. Generate 0.5 Fuel a day." },
+  { name: "Makeshift Solar Panels", cost: r([10, "Scrap Metal"], [5, "Scrap Components"]), toolkit: 0, powerDraw: 0, fitting: true, effect: "Take up no space and need no power: one set per room, in the room's spare slot rather than its module slot. A room fitted with panels can't also hold defenses. Collect 1 Fuel Unit a day unless the room is Offline or Destroyed." },
   { name: "Crewmate Quarters", cost: r([20, "Scrap Metal"], [10, "Scrap Components"]), toolkit: 0, powerDraw: 1, effect: "Characters heal +4 HP on rest." },
   { name: "Crewmate Quarters Expanded", cost: r([5, "Durasteel Alloy"], [5, "Components"]), toolkit: 0, powerDraw: 1, effect: "Requires Crewmate Quarters. Characters heal +5 HP on rest and reduce Pressure by an additional 1 on rest." },
-  { name: "Traps", cost: r([6, "Scrap Metal"], [2, "Aluminum Alloy"], [3, "Scrap Components"]), toolkit: 0, powerDraw: 0, effect: "Provide defenses in that room during combat." },
-  { name: "Defensive Gun", cost: r([6, "Scrap Metal"], [2, "Aluminum Alloy"], [3, "Scrap Components"]), toolkit: 0, powerDraw: 2, effect: "Defends the room against threats larger than you. Base 4 damage of a type chosen when built. Higher-grade materials add +2 damage per upgrade." },
+  { name: "Traps", cost: r([6, "Scrap Metal"], [2, "Aluminum Alloy"], [3, "Scrap Components"]), toolkit: 0, powerDraw: 0, fitting: true, effect: "Provide defenses in that room during combat. Take the room's spare slot, so the room can't also carry solar panels." },
+  { name: "Defensive Gun", cost: r([6, "Scrap Metal"], [2, "Aluminum Alloy"], [3, "Scrap Components"]), toolkit: 0, powerDraw: 2, fitting: true, effect: "Defends the room against threats larger than you. Base 4 damage of a type chosen when built. Higher-grade materials add +2 damage per upgrade. Takes the room's spare slot, so the room can't also carry solar panels." },
 ];
+
+export const FACILITY_BY_NAME = Object.fromEntries(FACILITIES.map((f) => [f.name, f])) as Record<string, Facility>;
+
+/** What can fill a room's spare slot: one set of solar panels, or defenses. */
+export const ROOM_FITTINGS = FACILITIES.filter((f) => f.fitting);
+
+export const SOLAR_PANELS = "Makeshift Solar Panels";
+
+/** Fuel Units one set of solar panels collects each day. */
+export const SOLAR_FUEL_PER_DAY = 1;
 
 export const ladderFor = (module: string | null) => (module ? UPGRADE_LADDERS[module] : undefined);

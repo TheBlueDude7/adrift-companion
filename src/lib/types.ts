@@ -98,6 +98,8 @@ export type Character = {
   stabilized?: boolean;
   /** Already gained Pressure from losing 2+ HP this round (cleared at End of Round and End Scene). */
   damagePressureRound?: boolean;
+  /** Talked up by a Strong Reduce Pressure: +1d6 on their next roll, then it's spent. */
+  encouraged?: boolean;
   notes: string;
   /** Quartermaster's Contingency Pack, while packed. */
   contingency?: Contingency;
@@ -201,6 +203,8 @@ export type Room = {
   notes: string;
   /** Index into the module's upgrade ladder, for modules that have one. */
   level?: number;
+  /** Solar panels or defenses in the room's spare slot, which the module slot doesn't use. */
+  fitting?: string;
 };
 
 export type Project = {
@@ -233,8 +237,12 @@ export type Ship = {
   overloaded: boolean;
   /** Tune the Reactor: +1 Power Unit until the end of the day. */
   tuned?: boolean;
+  /** Days of charge left in the Power Cell running the grid. End of Day burns one. */
+  powerDays?: number;
   /** Stretch Rations: tonight every 3 Food Units feed 4 survivors. */
   rationsStretched?: boolean;
+  /** Life Support's reclaimed water has already been drawn today. */
+  reclaimed?: boolean;
   /** The crop growing in Hydroponics. */
   crop?: Crop;
   location: string;
@@ -360,7 +368,9 @@ export type SegmentAction = {
   target?: { mapId: string; x: number; y: number } | null;
   /** Another action this one assists. */
   assists?: string | null;
-  /** Recipe names to fabricate, duplicates allowed. */
+  /** The crewmate a task is performed on: Reduce Pressure, Stop Bleeding. */
+  subjectId?: string | null;
+  /** Recipe names to fabricate, duplicates allowed. Cooking, medicine, and salvage use the first. */
   crafts?: string[];
   /** Skill a Train Skill task practices. */
   trainSkill?: SkillKey;

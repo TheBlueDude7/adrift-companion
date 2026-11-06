@@ -1,6 +1,6 @@
 import { EXPERT_MARGIN, FABRICATE_ITEMS, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
-import { craftBlocker, fabricate, fabricateCost, moduleLevel, RECIPE_BY_NAME, recipeSkills } from "./crafting";
+import { cook, craftBlocker, fabricate, fabricateCost, galleyPenalty, moduleLevel, RECIPE_BY_NAME, recipeSkills, salvageParts, stationLevel, stationLevelName } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
 import { attributeValue, maxHp, maxWillpower, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
@@ -9,7 +9,7 @@ import { injuryPenalty } from "./injuries";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip } from "./power";
-import { haveInStorage, shortfalls, spend, stockItem } from "./stock";
+import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, takeOne } from "./stock";
 import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { CraftRecipe } from "@/data/crafting";
@@ -39,22 +39,161 @@ export function energyShort(g: GameState, a: SegmentAction) {
   return Math.max(0, taskTerms(g, a).energy - Math.max(0, c.energy - committed));
 }
 
-/** What stops a Fabricate task from working on its own: missing stations and a short hold. */
+/** What stops a Fabricate or Prepare Food task from working on its own: missing stations and a short hold. */
 export function craftProblems(g: GameState, a: SegmentAction): string[] {
-  if (taskFor(a).effect !== "craft" || !a.crafts?.length) return [];
+  const effect = taskFor(a).effect;
+  if ((effect !== "craft" && effect !== "cook") || !a.crafts?.length) return [];
   const blockers = a.crafts.map((n) => RECIPE_BY_NAME[n] && craftBlocker(g, RECIPE_BY_NAME[n])).filter((b): b is string => !!b);
   const cost = fabricateCost(a.crafts);
   const short = shortfalls(g, cost.inputs, cost.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
   const c = g.characters.find((x) => x.id === a.characterId);
-  const limit = c ? fabricateLimit(c, a.crafts) : FABRICATE_ITEMS;
-  const over = a.crafts.length > limit ? [`More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`] : [];
+  const limit = effect === "craft" ? (c ? fabricateLimit(c, a.crafts) : FABRICATE_ITEMS) : 1;
+  const over =
+    a.crafts.length > limit
+      ? [effect === "cook" ? "More than one recipe in a cook" : `More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`]
+      : [];
   return [...new Set([...over, ...blockers, ...short])];
+}
+
+/** Water filters in the hold, best first. One charge purifies the units its own notes promise. */
+export const WATER_FILTERS = [
+  { name: "Water Filter", units: 6 },
+  { name: "Crude Water Filter", units: 4 },
+] as const;
+
+export const bestWaterFilter = (g: GameState) =>
+  WATER_FILTERS.find((f) => g.items.some((i) => i.location === "ship" && i.name === f.name && i.qty > 0 && !i.broken && (i.charges ?? 1) > 0)) ?? null;
+
+/** Water Units one Filter Reclaimed Water task draws out of Life Support, once a day. */
+export const RECLAIMED_WATER = 2;
+
+/** Scavenging needed to take an item apart, by the tier of what it's made of. */
+const SALVAGE_THRESHOLD: Record<string, number> = { "Tier I": 2, "Tier II": 4, "Tier III": 6 };
+
+/** Craft Medicine works off either trade, each with its own threshold. */
+const MEDICINE_SKILLS: { skill: SkillKey; threshold: number }[] = [
+  { skill: "firstAid", threshold: 3 },
+  { skill: "surgery", threshold: 5 },
+];
+
+/** The humblest medkit the medic can reach: Stop Bleeding doesn't care how good it is. */
+const plainestKit = (g: GameState, healerId: string) => medkitsFor(g, healerId).sort((a, b) => a.dice - b.dice)[0] ?? null;
+
+/** What a task needs out of the hold before it can work at all. */
+export function supplyProblems(g: GameState, a: SegmentAction): string[] {
+  const def = taskFor(a);
+  const name = a.crafts?.[0];
+  switch (def.effect) {
+    case "purify":
+      return bestWaterFilter(g) ? [] : ["No water filter in the hold"];
+    case "reclaim":
+      return g.ship.reclaimed ? ["Life Support's reclaimed water is already drawn today"] : [];
+    case "bleed":
+      return plainestKit(g, a.characterId) ? [] : ["No medkit to hand"];
+    case "salvage":
+      return !name || haveInStorage(g, name) > 0 ? [] : [`No ${name} in the hold`];
+    case "medicine": {
+      const r = name ? RECIPE_BY_NAME[name] : undefined;
+      return r ? shortfalls(g, r.inputs, r.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`) : [];
+    }
+    default:
+      return [];
+  }
+}
+
+/** The most bonus dice one assistant can add to a task. */
+export const ASSIST_MAX_DICE = 4;
+
+/** The task an Assist is helping, if it still stands. */
+export const assistTarget = (g: GameState, a: SegmentAction) => g.actions.find((x) => x.id === a.assists && x.status !== "cancelled") ?? null;
+
+/** Withdrawing a task leaves its assistants with nothing to help, so point them back at nothing. */
+export function dropAction(g: GameState, id: string) {
+  g.actions = g.actions.filter((x) => x.id !== id);
+  for (const x of g.actions) if (x.assists === id) x.assists = null;
+}
+
+export type AssistEffect = {
+  /** Bonus dice the helped task gains, once this Assist has succeeded. */
+  dice: number;
+  /** Progress this Assist adds to the helped Project. */
+  progress: number;
+  /** What the GM has to allow before a player can plan it. */
+  problems: string[];
+  /** What it won't do, worth saying before anyone spends a segment on it. */
+  warnings: string[];
+  /** What it is worth. */
+  notes: string[];
+};
+
+/**
+ * What one Assist is worth. The assistant needs a level in the task's skill, or a useful method the GM
+ * allows; their Skill Level becomes bonus dice (up to +4d6) once the Assist itself succeeds; and on a
+ * Project they add 1 Progress if they meet its Routine Threshold.
+ */
+export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
+  const c = g.characters.find((x) => x.id === a.characterId);
+  const target = assistTarget(g, a);
+  if (!target) return { dice: 0, progress: 0, problems: ["Nothing to assist: that task is gone"], warnings: [], notes: [] };
+  const t = taskTerms(g, target);
+  const who = g.characters.find((x) => x.id === target.characterId)?.name ?? "Someone";
+  const level = c && t.skill ? skillLevel(c, t.skill) : 0;
+  const project = projectWorkedOn(g, target);
+  const dice = Math.min(ASSIST_MAX_DICE, level);
+  const progress = project && !project.done && t.skill && level >= t.threshold ? 1 : 0;
+  const problems: string[] = [];
+  const warnings: string[] = [];
+  const notes: string[] = [];
+  if (level === 0) problems.push(`No level in ${t.skill ? SKILL_BY_KEY[t.skill].name : "a skill the task uses"}, so it takes a useful method the GM allows`);
+  if (dice > 0) notes.push(`+${dice}d6 on ${who}'s roll, once this Assist succeeds`);
+  if (project) {
+    if (progress > 0) notes.push(`+1 Progress on ${project.name}, using one of its contributor slots`);
+    else warnings.push(`No Progress on ${project.name}: that needs ${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : `its Routine ${t.threshold}`}`);
+  } else if (t.routine) warnings.push(`${who}'s task is already Routine, so the dice only matter if they roll for a Strong Result`);
+  if (target.roll) warnings.push(`${who} has already rolled, so the dice come too late`);
+  return { dice, progress, problems, warnings, notes };
+}
+
+/** The Project a task adds Progress to: its own, or the one its Assist helps. */
+function projectWorkedOn(g: GameState, a: SegmentAction): Project | null {
+  const work = taskFor(a).effect === "assist" ? assistTarget(g, a) : a;
+  if (!work?.projectId || taskFor(work).effect !== "project") return null;
+  return g.ship.projects.find((p) => p.id === work.projectId) ?? null;
+}
+
+/** Everyone whose task adds Progress to this Project in one segment: contributors and assistants who qualify. */
+export function projectContributors(g: GameState, projectId: string, day: number, segment: number, exceptId?: string) {
+  const ids = new Set<string>();
+  for (const x of g.actions) {
+    if (x.id === exceptId || x.status === "cancelled" || x.day !== day || x.segment !== segment) continue;
+    if (projectWorkedOn(g, x)?.id !== projectId) continue;
+    if (taskFor(x).effect === "assist" && assistEffect(g, x).progress === 0) continue;
+    ids.add(x.characterId);
+  }
+  return ids;
+}
+
+/** Most Projects take two contributors a segment. An assistant who adds Progress uses a slot too. */
+export function contributorProblem(g: GameState, a: SegmentAction): string | null {
+  const p = projectWorkedOn(g, a);
+  if (!p || p.done) return null;
+  if (taskFor(a).effect === "assist" && assistEffect(g, a).progress === 0) return null;
+  const others = projectContributors(g, p.id, a.day, a.segment, a.id);
+  if (others.has(a.characterId) || others.size < p.contributorLimit) return null;
+  return `${p.name} already has ${p.contributorLimit} contributor${p.contributorLimit > 1 ? "s" : ""} this segment`;
 }
 
 /** Why a player needs the GM's permission for this task, if they do. */
 export function permissionReasons(g: GameState, a: SegmentAction): string[] {
   const short = energyShort(g, a);
-  return [...(short > 0 ? [`${short} Energy short`] : []), ...craftProblems(g, a)];
+  const crowded = contributorProblem(g, a);
+  return [
+    ...(short > 0 ? [`${short} Energy short`] : []),
+    ...craftProblems(g, a),
+    ...supplyProblems(g, a),
+    ...(taskFor(a).effect === "assist" ? assistEffect(g, a).problems : []),
+    ...(crowded ? [crowded] : []),
+  ];
 }
 
 /** A player may take on a task they can't afford, or can't craft on their own, only with the GM's permission. */
@@ -194,15 +333,23 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     energy = project.energy;
   }
   if (def.effect === "assist") {
-    const target = g.actions.find((x) => x.id === a.assists);
+    const target = assistTarget(g, a);
     if (target) {
       const t = taskTerms(g, target);
       skills = t.skill ? [t.skill] : [];
-      energy = t.energy;
       mode = t.mode === "crisis" ? "crisis" : "routine";
       threshold = 1;
-    }
+    } else blocker ??= "Nothing to assist: that task is gone";
     mastery = false;
+  }
+  if (def.effect === "salvage") {
+    const recipe = a.crafts?.[0] ? RECIPE_BY_NAME[a.crafts[0]] : undefined;
+    threshold = SALVAGE_THRESHOLD[recipe?.tier ?? ""] ?? threshold;
+  }
+  if (def.effect === "medicine" && c) {
+    const pick = MEDICINE_SKILLS.reduce((b, o) => (skillLevel(c, o.skill) - o.threshold > skillLevel(c, b.skill) - b.threshold ? o : b));
+    skills = [pick.skill];
+    threshold = pick.threshold;
   }
   if (def.effect === "train") {
     mastery = false;
@@ -212,6 +359,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     }
   }
   if (def.effect === "craft" && c && a.crafts?.length) return craftTerms(c, a.crafts, energy);
+  if (def.effect === "cook" && c && a.crafts?.length) return cookTerms(g, c, a.crafts, energy);
   if (def.name === "Plot Unsafe Course" && unscannedTarget(g, a)) mode = "crisis";
   const best = c && skills.length ? skills.reduce((b, k) => (skillLevel(c, k) > skillLevel(c, b) ? k : b)) : null;
   const level = c && best ? skillLevel(c, best) : 0;
@@ -263,15 +411,17 @@ export function fabricateLimit(c: Character, crafts: string[]) {
   return normalFabricateLimit(c, crafts) + (redlineReady(c) ? 1 : 0);
 }
 
-/** Each item pays the task's Energy, except the extra item an Expert earns. */
+/**
+ * The task's Energy covers every item the crafter is allowed: two normally, three for an Expert.
+ * Only an item beyond that limit, which Redline Familiarity's overdrive buys, pays the Energy again.
+ */
 function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
-  const terms = craftCheck(c, crafts, energy);
+  const terms = craftCheck(c, crafts, energy, TASK_BY_NAME["Fabricate Common Item"]);
   if (c.pressure >= OVERTAXED) terms.routine = false;
   if (crafts.length <= 1) return terms;
-  const free = crafts.length > FABRICATE_ITEMS && expertCrafter(c, crafts) ? 1 : 0;
-  const paid = crafts.length - free;
-  const perk = free ? `${crafts.length} items: Energy for ${paid}, the Expert's extra item is free` : `${crafts.length} items: Energy for each`;
-  return { ...terms, energy: terms.energy * paid, perks: [...terms.perks, perk] };
+  const extra = Math.max(0, crafts.length - normalFabricateLimit(c, crafts));
+  const perk = extra > 0 ? `${crafts.length} items: ${extra} past the limit, at full Energy each` : `${crafts.length} items for one Energy cost`;
+  return { ...terms, energy: terms.energy * (1 + extra), perks: [...terms.perks, perk] };
 }
 
 /** Overdriving the bench spends Redline Familiarity for the day and leaves the Workshop Damaged. */
@@ -288,8 +438,9 @@ const STATION_WORKSHOP = "Workshop / Fabrication Bay";
 /**
  * One check covers every item. Its terms come from the hardest item: Routine when the crafter meets
  * every recipe's threshold, −1 Energy when they clear them all by 3, otherwise −1d6 per level short.
+ * `hindrance` is a station's own penalty, which costs dice and keeps the work off Routine.
  */
-function craftCheck(c: Character, crafts: string[], energy: number): TaskTerms {
+function craftCheck(c: Character, crafts: string[], energy: number, def: ShipboardTask, hindrance?: { dice: number; label: string }, blocker: string | null = null): TaskTerms {
   let worst: { skill: SkillKey; threshold: number; margin: number } | null = null;
   for (const name of crafts) {
     const r = RECIPE_BY_NAME[name];
@@ -299,27 +450,48 @@ function craftCheck(c: Character, crafts: string[], energy: number): TaskTerms {
       .reduce((b, s) => (s.margin > b.margin ? s : b));
     if (!worst || pick.margin < worst.margin) worst = pick;
   }
-  const def = TASK_BY_NAME["Fabricate Common Item"];
-  if (!worst) return withMastery({ energy, skill: null, threshold: 0, mode: "routine", routine: true, dice: 0, poolLabel: "No skill", blocker: null }, def, null, false);
+  if (!worst) return withMastery({ energy, skill: null, threshold: 0, mode: "routine", routine: true, dice: 0, poolLabel: "No skill", blocker }, def, null, false);
   const level = skillLevel(c, worst.skill);
   const attr = SKILL_BY_KEY[worst.skill].attr;
   const attrValue = attributeValue(c, attr);
   const short = Math.max(0, -worst.margin);
+  const rough = hindrance?.dice ?? 0;
+  const against = short + rough;
   return withMastery(
     {
       energy,
       skill: worst.skill,
       threshold: worst.threshold,
-      mode: short ? "skilled" : "routine",
-      routine: short === 0,
-      dice: Math.max(0, attrValue + level - short),
-      poolLabel: `${attr} ${attrValue} + ${SKILL_BY_KEY[worst.skill].name} ${level}${short ? ` − ${short}d6 below ${worst.threshold}` : ""}`,
-      blocker: null,
+      mode: against ? "skilled" : "routine",
+      routine: against === 0,
+      dice: Math.max(0, attrValue + level - against),
+      poolLabel: `${attr} ${attrValue} + ${SKILL_BY_KEY[worst.skill].name} ${level}${short ? ` − ${short}d6 below ${worst.threshold}` : ""}${rough ? ` − ${rough}d6 ${hindrance!.label}` : ""}`,
+      blocker,
     },
     def,
     worst.margin,
     false,
   );
+}
+
+/**
+ * Cooking one recipe: Cooking at the recipe's own threshold, and the galley's own penalty on every
+ * roll made in it, which also keeps the work off Routine until the crew has a Processing Suite.
+ */
+function cookTerms(g: GameState, c: Character, crafts: string[], energy: number): TaskTerms {
+  const level = stationLevel(g, "kitchen");
+  const penalty = galleyPenalty(level);
+  const recipe = RECIPE_BY_NAME[crafts[0]];
+  const terms = craftCheck(
+    c,
+    crafts,
+    energy,
+    TASK_BY_NAME["Prepare Food"],
+    penalty > 0 ? { dice: penalty, label: `${stationLevelName("kitchen", level)}` } : undefined,
+    recipe ? craftBlocker(g, recipe) : null,
+  );
+  if (c.pressure >= OVERTAXED) terms.routine = false;
+  return terms;
 }
 
 function restore(g: GameState, roomId: string | null) {
@@ -464,6 +636,67 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       out.push(`${food} Food Units become ${fuel} Fuel Unit${fuel > 1 ? "s" : ""}.`);
     }
   }
+  if (ok && def.effect === "purify") {
+    const filter = bestWaterFilter(g);
+    if (!filter) out.push("⚠ No water filter in the hold, so nothing is purified.");
+    else {
+      spendUse(g, filter.name);
+      stockItem(g, "Water Unit", filter.units, { category: "Supply" });
+      out.push(`One charge of a ${filter.name} purifies ${filter.units} Water Units into ship storage.`);
+    }
+  }
+  if (ok && def.effect === "reclaim") {
+    if (g.ship.reclaimed) out.push("⚠ Life Support's reclaimed water was already drawn today.");
+    else {
+      const units = RECLAIMED_WATER + (strong ? 1 : 0);
+      g.ship.reclaimed = true;
+      stockItem(g, "Water Unit", units, { category: "Supply" });
+      out.push(`${units} Water Units come out of Life Support's reclamation tanks, all it holds today.`);
+    }
+  }
+  if (ok && def.effect === "salvage") {
+    const recipe = a.crafts?.[0] ? RECIPE_BY_NAME[a.crafts[0]] : undefined;
+    const allowed = a.approval === "granted";
+    if (!recipe) out.push("⚠ Nothing came apart: no item was chosen.");
+    else if (!takeOne(g, recipe.name) && !allowed) out.push(`⚠ No ${recipe.name} in the hold to take apart.`);
+    else {
+      const parts = salvageParts(recipe, strong);
+      for (const p of parts) stockItem(g, p.name, p.qty, { category: "Material" });
+      out.push(parts.length ? `${recipe.name} comes apart into ${recipeText(parts)}, added to ship storage.` : `${recipe.name} comes apart, but nothing usable survives.`);
+    }
+  }
+  if (def.effect === "medicine") {
+    for (const name of a.crafts ?? []) {
+      const recipe = RECIPE_BY_NAME[name];
+      if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted"));
+    }
+  }
+  if (ok && def.effect === "calm") {
+    const subject = g.characters.find((x) => x.id === a.subjectId);
+    if (!subject || subject.dead) out.push("⚠ Nobody was there to settle.");
+    else {
+      if (subject.pressure > pressureFloor(subject.stress)) {
+        subject.pressure -= 1;
+        out.push(`${subject.name}'s Pressure eases to ${PRESSURE_STATES[subject.pressure].name}.`);
+      } else out.push(`${subject.name} is already as settled as their Stress allows.`);
+      if (strong) {
+        subject.encouraged = true;
+        out.push(`${subject.name} takes heart: +1d6 on their next roll.`);
+      }
+    }
+  }
+  if (ok && def.effect === "bleed") {
+    const subject = g.characters.find((x) => x.id === a.subjectId);
+    const kit = plainestKit(g, a.characterId);
+    if (!subject || subject.dead) out.push("⚠ Nobody was there to treat.");
+    else if (!kit || !spendKit(g, kit)) out.push(`⚠ ${c?.name ?? "The medic"} has no medkit to hand, so the Bleeding goes on.`);
+    else {
+      const bleeding = subject.conditions.some((x) => x.name === "Bleeding");
+      subject.conditions = subject.conditions.filter((x) => x.name !== "Bleeding");
+      const used = kit.location === "ship" ? `the ship's ${kit.name}` : `their own ${kit.name}`;
+      out.push(bleeding ? `${subject.name} stops Bleeding, using ${used}.` : `${subject.name} wasn't Bleeding, but ${used} is used up patching them anyway.`);
+    }
+  }
   if (ok && def.effect === "morale") {
     const lifted = g.characters.filter((x) => !x.dead && x.id !== c?.id && x.pressure > pressureFloor(x.stress));
     for (const x of lifted) x.pressure -= 1;
@@ -486,14 +719,15 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     g.ship.rationsStretched = true;
     out.push("Rations are stretched: tonight every 3 Food Units feed 4 survivors.");
   }
-  if (ok && def.effect === "assist") {
-    const target = g.actions.find((x) => x.id === a.assists);
-    if (target?.projectId && taskFor(target).effect === "project" && c) {
-      const t = taskTerms(g, target);
-      if (t.skill && skillLevel(c, t.skill) >= t.threshold) out.push(...advanceProject(g, target.projectId, 1));
-      else out.push(`${c.name} helps, but isn't qualified (${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : "no skill"}) to add Progress.`);
-    }
+  if (ok && def.effect === "assist" && c) {
+    const target = assistTarget(g, a);
+    const effect = assistEffect(g, a);
+    const who = g.characters.find((x) => x.id === target?.characterId)?.name ?? "them";
+    if (target && effect.progress > 0 && target.projectId) out.push(...advanceProject(g, target.projectId, effect.progress));
+    else for (const warning of effect.warnings) out.push(`${c.name} helps, but ${warning.replace(/^[A-Z]/, (m) => m.toLowerCase())}.`);
+    if (effect.dice > 0) out.push(`${c.name}'s help is ready: +${effect.dice}d6 on ${who}'s roll.`);
   }
+  if (!ok && def.effect === "assist" && c) out.push(`${c.name}'s help comes to nothing: no bonus dice.`);
   if (def.effect === "course" && a.target) {
     const unsafe = a.task === "Plot Unsafe Course";
     if (ok) {
@@ -515,6 +749,12 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted"));
     });
     if (c) redlineOverdrive(g, c, a.crafts ?? [], out);
+  }
+  if (def.effect === "cook") {
+    for (const name of a.crafts ?? []) {
+      const recipe = RECIPE_BY_NAME[name];
+      if (recipe) out.push(cook(g, recipe, ok, strong ? 1 : 0, a.approval === "granted"));
+    }
   }
   if (def.effect === "scan" && a.target && r.scan !== undefined) {
     const map = g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star");
@@ -544,6 +784,10 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice -= hurt.dice;
     parts.push(...hurt.sources);
   }
+  if (c?.encouraged) {
+    dice += 1;
+    parts.push("Encouraged +1");
+  }
   const helper = bestAssistant(g, a, terms.skill);
   if (helper) {
     dice += helper.dice;
@@ -556,16 +800,23 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
   return { dice: Math.max(0, dice), parts };
 }
 
-/** Only one assistant adds dice: whoever has the most in the task's skill, up to +4d6. */
+/** Only one assistant adds dice, and only once their own Assist has succeeded: the best Skill Level, up to +4d6. */
 function bestAssistant(g: GameState, a: SegmentAction, skill: SkillKey | null) {
   let best: { name: string; dice: number } | null = null;
   for (const x of g.actions) {
-    if (x.assists !== a.id || x.status === "cancelled") continue;
+    if (x.assists !== a.id || !(x.status === "success" || x.status === "strong")) continue;
     const helper = g.characters.find((h) => h.id === x.characterId);
-    const level = helper && skill ? Math.min(4, skillLevel(helper, skill)) : 0;
+    const level = helper && skill ? Math.min(ASSIST_MAX_DICE, skillLevel(helper, skill)) : 0;
     if (helper && level > (best?.dice ?? 0)) best = { name: helper.name, dice: level };
   }
   return best;
+}
+
+/** Assists on this task that nobody has rolled yet: their dice are not in the pool. */
+export function pendingAssists(g: GameState, a: SegmentAction) {
+  return g.actions
+    .filter((x) => x.assists === a.id && x.status === "planned")
+    .map((x) => g.characters.find((h) => h.id === x.characterId)?.name ?? "Someone");
 }
 
 function unscannedTarget(g: GameState, a: SegmentAction) {
@@ -598,7 +849,12 @@ export function rollTask(g: GameState, id: string): string[] {
   if (!a || !c) return [];
   const pool = taskPool(g, a);
   a.roll = { dice: rollPool(pool.dice), pushed: false };
-  return [`${c.name} rolls for ${describe(g, a)} (${pool.dice}d6): ${rollText(a.roll.dice)}.`];
+  const out = [`${c.name} rolls for ${describe(g, a)} (${pool.dice}d6): ${rollText(a.roll.dice)}.`];
+  if (c.encouraged) {
+    delete c.encouraged;
+    out.push(`${c.name}'s encouragement is spent.`);
+  }
+  return out;
 }
 
 /** Push: −1 Energy and +1 Pressure, then reroll every die that isn't a 6, plus any new Pressure dice. */
@@ -644,17 +900,7 @@ export function medkitsFor(g: GameState, healerId: string): (KitSource & { qty: 
   return out;
 }
 
-function spendKit(g: GameState, kit: KitSource): boolean {
-  const item = g.items.find((i) => i.location === kit.location && i.name === kit.name && i.qty > 0 && !i.broken);
-  if (!item) return false;
-  if ((item.charges ?? 1) > 1) item.charges! -= 1;
-  else {
-    item.qty -= 1;
-    if (item.maxCharges) item.charges = item.maxCharges;
-  }
-  g.items = g.items.filter((i) => i.qty > 0);
-  return true;
-}
+const spendKit = (g: GameState, kit: KitSource) => spendUse(g, kit.name, kit.location);
 
 /**
  * First Aid is a free skilled roll (no segment, no Energy) that spends one medkit from the healer's
@@ -674,6 +920,10 @@ export function giveFirstAid(g: GameState, healerId: string, patientId: string, 
   const who = healer.id === patient.id ? `${healer.name} gives themselves First Aid${target}` : `${healer.name} gives ${patient.name} First Aid${target}`;
   const out = [`🩹 ${who}, using ${kit.location === "ship" ? `the ship's ${kit.name}` : `their ${kit.name}`}.`];
   const dice = rollPool(firstAidPool(g, healer).dice + def.dice);
+  if (healer.encouraged) {
+    delete healer.encouraged;
+    out.push(`${healer.name}'s encouragement is spent.`);
+  }
   let extra = sixes(dice);
   const shown = `[${dice.join(", ")}]`;
   if (patient.hp === 0) {

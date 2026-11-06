@@ -5,18 +5,18 @@ The Adrift Companion is a web app that tracks a crew's survival: characters, shi
 ## Playing together
 - The GM opens **Play together** in the header and creates a shared campaign. It gets a six-character code.
 - Players open **Play together**, enter the code, press **Find**, and join. Each player then claims their character on the Crew tab ("You now play …").
-- In a shared campaign, players edit only their own character, items in ship storage or their own inventory, ship projects, and their own planned tasks. The GM can change anything.
+- In a shared campaign, players edit only their own character, items in ship storage or their own inventory, and their own planned tasks. Projects are the GM's: crew add Progress by resolving a Work on a project task. The GM can change anything.
 - **New campaign** leaves the shared campaign and starts a fresh local one; it never overwrites the shared game.
 
 ## The day
 - The header shows the day and segment (Morning, Afternoon, Evening, Night). **Next segment** advances it.
-- **End day** opens the End of Day check: who ate, drank, and rested, then applies starvation, dehydration, sleep, and untreated-injury effects, resets Pressure to the Stress floor, and starts the next Morning.
+- **End day** opens the End of Day check: who ate, drank, and rested, then applies starvation, dehydration, sleep, and untreated-injury effects, resets Pressure to the Stress floor, grows crops, collects solar Fuel, spends a day of the grid's Power Cell charge, and starts the next Morning.
 
 ## Tabs
 - **Overview**: the crew and ship at a glance, with alerts (down, dehydrated, and so on).
 - **Actions**: plan each survivor's task for the current segment. **Plan a task** picks a shipboard task; **Push for an extra task** costs 1 Energy and 1 Pressure. Players roll and resolve their own tasks with **Resolve**; Routine tasks succeed without a roll. Some tasks need the GM's permission (**Ask the GM for permission**).
 - **Crew**: character sheets. HP, Energy, Willpower, Armor, Pressure and Stress sit at the top, then attributes, skills, survival, conditions, injuries, afflictions, abilities, cybernetics, and inventory. **New survivor** creates a character.
-- **Ship**: rooms and their conditions, power, Hydroponics crops, projects (**New project**, including Install Module and Upgrade Module), **Build facility**, and **Take a Hit** for hull damage.
+- **Ship**: rooms and their conditions, power, Hydroponics crops, projects (**New project**, including Install Module and Upgrade Module), **Build facility**, and **Take a Hit** for hull damage. Each room also has a spare slot beside its module for one set of Makeshift Solar Panels or one set of defenses; panels collect 1 Fuel Unit a day at End of Day.
 - **Mechs**: mech frames, modules, repairs, deployment, and players' mech requests to the GM.
 - **Storage**: ship storage, sorted alphabetically, and **Add item**.
 - **Map**: grid maps for expeditions and star charts for navigation.
