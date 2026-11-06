@@ -12,15 +12,61 @@ export const hydroponicsLevel = (g: GameState) => moduleLevel(g, "Hydroponics");
 
 export const cropOf = (g: GameState): Crop => g.ship.crop ?? { growing: false, day: 0, plantedDay: 0, tended: [], ready: 0 };
 
+export type CropTending = {
+  /** Whether this Hydroponics level ever needs Maintain Crops to keep a planted crop growing. */
+  needed: boolean;
+  /** A Maintain Crops task is owed: without one, this crop loses growth sooner or later. */
+  due: boolean;
+  /** Tonight's growth is the one that stalls, so the task can't wait another day. */
+  urgent: boolean;
+  /** The level's standing requirement, true whether or not anything is planted. */
+  rule: string;
+  /** Where this crop stands against that requirement. */
+  status: string;
+};
+
+/**
+ * What Maintain Crops is owed at the current Hydroponics level. Seeded needs it daily, Operational
+ * once before the crop ripens, and Expanded and up tend themselves.
+ */
+export function cropTending(g: GameState): CropTending {
+  const level = hydroponicsLevel(g);
+  const crop = cropOf(g);
+  if (level < 1) {
+    return { needed: false, due: false, urgent: false, rule: "Nothing grows until it works and is seeded.", status: level < 0 ? "No working Hydroponics aboard" : "Hydroponics is Dead" };
+  }
+  if (level >= 3) {
+    return { needed: false, due: false, urgent: false, rule: "It tends itself, so Maintain Crops is never needed to keep a crop growing.", status: "Tends itself" };
+  }
+  if (level === 1) {
+    const tendedToday = crop.tended.includes(g.day);
+    const rule = "Crops need Maintain Crops every day, or they lose that day's growth.";
+    if (!crop.growing) return { needed: true, due: false, urgent: false, rule, status: "Nothing planted" };
+    return { needed: true, due: !tendedToday, urgent: !tendedToday, rule, status: tendedToday ? "Tended today" : "Tending due today" };
+  }
+  // Operational: one tending after the day it was planted carries the crop to harvest.
+  const tendedSince = crop.tended.some((d) => d > crop.plantedDay);
+  const rule = "Crops need Maintain Crops once after planting, on their second or third day.";
+  if (!crop.growing) return { needed: true, due: false, urgent: false, rule, status: "Nothing planted" };
+  const lastDay = crop.day === CROP_DAYS - 1;
+  return {
+    needed: true,
+    due: !tendedSince,
+    urgent: !tendedSince && lastDay,
+    rule,
+    status: tendedSince ? "Tended for this crop" : lastDay ? "Tending due today" : "Tending due before it ripens",
+  };
+}
+
 /** Why tonight's growth would stall, or null if the crop grows. */
 export function cropStall(g: GameState): string | null {
   const level = hydroponicsLevel(g);
   const crop = cropOf(g);
   if (level < 1) return level < 0 ? "No working Hydroponics aboard" : "Hydroponics is Dead";
   if (!crop.growing) return level >= 4 ? null : "Nothing is planted";
-  if (level === 1 && !crop.tended.includes(g.day)) return "Seeded Hydroponics needs Maintain Crops every day";
-  if (level === 2 && crop.day === CROP_DAYS - 1 && !crop.tended.some((d) => d > crop.plantedDay)) return "Needs Maintain Crops on its second or third day";
-  return null;
+  const tending = cropTending(g);
+  if (!tending.urgent) return null;
+  return level === 1 ? "Seeded Hydroponics needs Maintain Crops every day" : "Needs Maintain Crops on its second or third day";
 }
 
 /** A successful Maintain Crops: seed the module if it's empty, otherwise tend today's crop. */

@@ -20,7 +20,7 @@ import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPen
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
-import { PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
+import { ATTRIBUTE_NAMES, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import { resolveOwnTask, type TaskStep } from "@/lib/sync/client";
@@ -44,7 +44,7 @@ function TermsPills({ a }: { a: SegmentAction }) {
     <span className="flex flex-wrap gap-1">
       <Pill tone={t.routine ? "good" : MODE_TONE[t.mode === "routine" ? "skilled" : t.mode]}>{t.routine ? "Routine" : t.mode === "crisis" ? "Crisis" : "Skilled"}</Pill>
       <Pill>{t.energy} Energy</Pill>
-      {t.skill && <Pill tone="info">{t.routine ? `${t.poolLabel.split(" + ")[1]} ≥ ${t.threshold}` : `Roll ${t.dice}d6 · ${t.poolLabel}`}</Pill>}
+      {(t.skill || t.labor) && <Pill tone="info">{t.routine ? `${t.labor ? t.poolLabel : t.poolLabel.split(" + ")[1]} ≥ ${t.threshold}` : `Roll ${t.dice}d6 · ${t.poolLabel}`}</Pill>}
       {t.perks.map((p) => <Pill key={p} tone="good">{p}</Pill>)}
       {t.blocker && <Pill tone="warn">{t.blocker}</Pill>}
     </span>
@@ -434,7 +434,7 @@ function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAc
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="text-sm font-medium">{x.name}</span>
                       <span className={cn("shrink-0 font-mono text-[11px]", !varies(x) && terms.energy > spare ? "text-rose-300" : "text-muted-foreground")}>
-                        {terms.skill ? `${SKILL_BY_KEY[terms.skill].name} ${terms.threshold} · ` : ""}{varies(x) ? "the Project's Energy" : `${terms.energy} Energy`}
+                        {terms.skill ? `${SKILL_BY_KEY[terms.skill].name} ${terms.threshold} · ` : terms.labor ? `${ATTRIBUTE_NAMES.STR} ${terms.threshold} · ` : ""}{varies(x) ? "the Project's Energy" : `${terms.energy} Energy`}
                       </span>
                     </span>
                     {full && <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Success:</span> {x.result}</span>}
@@ -718,7 +718,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
           )}
           {def.effect === "course" && c && masterPilotReady(game, c, a) && <p className="text-[11px] text-emerald-300">Master Pilot: this move burns no Power Cell (once per day).</p>}
           {isGM
-            ? terms.skill && c && <DiceRoller character={c} initialSkill={terms.skill} trigger={<Button size="sm" variant="outline"><DicesIcon /> Open the dice roller</Button>} />
+            ? (terms.skill || terms.labor) && c && <DiceRoller character={c} initialSkill={terms.skill ?? "flat:STR"} initialAttr={terms.attr ?? undefined} trigger={<Button size="sm" variant="outline"><DicesIcon /> Open the dice roller</Button>} />
             : c && <TaskRollPanel a={a} c={c} onStep={playerStep} />}
           {map && a.target && def.effect === "course" && <MovePreview map={map} to={a.target} />}
           {def.effect === "craft" && crafts.length > 0 && (

@@ -26,7 +26,7 @@ import {
 import { FACILITIES, FACILITY_BY_NAME, ladderFor, ROOM_FITTINGS, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject } from "@/lib/actions";
-import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, growCrops, hydroponicsLevel } from "@/lib/crops";
+import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, cropTending, growCrops, hydroponicsLevel } from "@/lib/crops";
 import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
@@ -276,6 +276,7 @@ function HydroponicsCard() {
   const crop = cropOf(game);
   if (level < 0 && !crop.growing && !crop.ready) return null;
   const stall = cropStall(game);
+  const tending = cropTending(game);
   const tendedToday = crop.tended.includes(game.day);
   const update = (label: string, fn: (c: Crop) => Crop | void, line?: string) =>
     act(label, (g) => {
@@ -289,19 +290,21 @@ function HydroponicsCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><SproutIcon className="size-4 text-emerald-300" /> Hydroponics</CardTitle>
         <CardDescription>
-          {level < 0 ? "No working Hydroponics aboard." : `${CROP_LEVEL_NAMES[level]}: ${level >= 1 ? `${CROP_YIELD[level]} Raw Food every ${CROP_DAYS} days.` : "no food production."}`} Maintain Crops seeds and tends; End of Day grows; Harvest Hydroponics collects.
+          {level < 0 ? "No working Hydroponics aboard." : `${CROP_LEVEL_NAMES[level]}: ${level >= 1 ? `${CROP_YIELD[level]} Raw Food every ${CROP_DAYS} days.` : "no food production."}`} {tending.rule} Maintain Crops seeds an empty module and tends a growing one; End of Day grows; Harvest Hydroponics collects.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-2xl">{crop.growing ? crop.day : "—"}<span className="text-muted-foreground">/{CROP_DAYS}</span></span>
           <span className="text-sm text-muted-foreground">{crop.growing ? "days grown" : "nothing planted"}</span>
-          {crop.growing && <Pill tone={tendedToday ? "good" : "muted"}>{tendedToday ? "Tended today" : "Not tended today"}</Pill>}
+          {crop.growing && <Pill tone={tending.urgent ? "warn" : tending.due ? "info" : "good"}>{tending.status}</Pill>}
           <Pill tone={crop.ready ? "good" : "muted"} className="ml-auto">{crop.ready} Raw Food ready</Pill>
         </div>
         <Meter value={crop.growing ? crop.day : 0} max={CROP_DAYS} tone="good" segmented />
         <p className={cn("text-xs", stall ? "text-amber-300" : "text-muted-foreground")}>
           {stall ? `Tonight: the crops won't grow. ${stall}.` : crop.growing ? (crop.day + 1 >= CROP_DAYS ? "Tonight: the crop finishes." : "Tonight: the crop grows a day.") : level >= 4 ? "A new crop starts on its own tonight." : ""}
+          {/* Operational crops stall on their last day, so say so while there's still time to assign the task. */}
+          {!stall && tending.due && <span className="text-amber-300"> It still needs Maintain Crops before it ripens, or it loses that growth.</span>}
         </p>
         {isGM && (
           <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">

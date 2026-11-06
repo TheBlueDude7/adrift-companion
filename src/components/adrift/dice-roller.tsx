@@ -26,7 +26,7 @@ const COMBAT_FAILURE = [
   "Lose all current Energy, suffer 2 HP damage, gain 1 Stress, and trigger a Mind Break.",
 ];
 
-export function DiceRoller({ character, initialSkill, trigger }: { character: Character; initialSkill?: SkillKey; trigger?: React.ReactElement }) {
+export function DiceRoller({ character, initialSkill, initialAttr, trigger }: { character: Character; initialSkill?: SkillKey | `flat:${Attribute}`; /** Overrides the starting skill's own attribute, the way Research rolls Wits. */ initialAttr?: Attribute; trigger?: React.ReactElement }) {
   const act = useGame((s) => s.act);
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState<string>(initialSkill ?? "firstAid");
@@ -36,9 +36,11 @@ export function DiceRoller({ character, initialSkill, trigger }: { character: Ch
   const [result, setResult] = useState<RollResult | null>(null);
 
   const flat = what.startsWith("flat:");
-  const attr: Attribute = flat ? (what.slice(5) as Attribute) : SKILLS.find((s) => s.key === what)!.attr;
+  // The override only holds for the skill it came with; picking another skill falls back to its own attribute.
+  const override = initialAttr && what === initialSkill ? initialAttr : null;
+  const attr: Attribute = flat ? (what.slice(5) as Attribute) : (override ?? SKILLS.find((s) => s.key === what)!.attr);
   const { attrVal, level: skill, pressure: pressureDice, hurt, dice: pool } = rollBreakdown(character, flat ? null : (what as SkillKey), attr, modifier + assist);
-  const label = flat ? `flat ${ATTRIBUTE_NAMES[attr]}` : SKILLS.find((s) => s.key === what)!.name;
+  const label = flat ? `flat ${ATTRIBUTE_NAMES[attr]}` : `${override ? `${ATTRIBUTE_NAMES[attr]} + ` : ""}${SKILLS.find((s) => s.key === what)!.name}`;
 
   const successes = result ? sixes(result.dice) : 0;
   const outcome = useMemo(() => {

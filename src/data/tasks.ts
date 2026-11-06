@@ -1,4 +1,4 @@
-import type { SkillKey } from "@/lib/rules";
+import type { Attribute, SkillKey } from "@/lib/rules";
 
 export type TaskMode = "routine" | "skilled" | "crisis";
 
@@ -16,6 +16,8 @@ export type ShipboardTask = {
   skills: SkillKey[];
   /** Labor: untrained physical work, where Strength stands in for the Skill Level. No skill applies. */
   labor?: boolean;
+  /** Rolls this attribute instead of the skill's own. Research reads Wits rather than Intelligence. */
+  attr?: Attribute;
   /** Routine Threshold, read as Strength on a Labor task. Tasks marked skilled or crisis always roll. */
   threshold: number;
   mode: TaskMode;
@@ -52,7 +54,10 @@ export const LABOR_PROJECT_MARGIN = 2;
 /** Items one Fabricate task makes, each paying the task's Energy. An Expert adds one more for free. */
 export const FABRICATE_ITEMS = 2;
 
-type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free" | "noStrong" | "labor">;
+type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free" | "noStrong" | "labor" | "attr">;
+
+/** Research reads the pattern before it reads the textbook, so it rolls Wits with the knowledge skill. */
+const RESEARCH: Pick<ShipboardTask, "attr"> = { attr: "WIT" };
 
 const t = (name: string, group: string, energy: number, skills: SkillKey[], threshold: number, result: string, mode: TaskMode = "routine", effect: TaskEffect = null, extra: Extra = {}): ShipboardTask => ({ name, group, energy, skills, threshold, mode, result, effect, ...extra });
 
@@ -91,11 +96,11 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Prep for Surgery", "Medical", 1, ["firstAid"], 7, "Ready the patient and the theatre: the next Surgery on them this day gets +2d6.", "routine", null, { facility: { modules: ["Medical Bay"], level: 3, label: "a Sterile Suite Medical Bay" } }),
   t("Craft Medicine", "Medical", 1, ["firstAid", "surgery"], 3, "Produce one medicine from a known recipe, drawing the materials from the hold. First Aid 3 or Surgery 5.", "routine", "medicine"),
   t("Decontaminate", "Medical", 1, ["firstAid", "biology"], 5, "Remove contamination from a person, item, or room."),
-  t("Analyze Known Biomass", "Science", 1, ["biology"], 5, "Extract known data from a studied specimen.", "routine", null, { strong: "Learn two facts instead of one.", expertAt: 3 }),
-  t("Analyze Unknown Biomass", "Science", 1, ["biology", "botany"], 0, "Discover properties of an unfamiliar specimen.", "skilled", null, { strong: "Also identify a viable Research Trait or important biological weakness." }),
-  t("Extract Research Trait", "Science", 2, ["biology"], 7, "Isolate a studied organism's Research Trait for crafting or augmentation.", "routine", null, { facility: { modules: ["Biological Lab"], label: "a Biological Lab" } }),
+  t("Analyze Known Biomass", "Science", 1, ["biology"], 5, "Extract known data from a studied specimen.", "routine", null, { ...RESEARCH, strong: "Learn two facts instead of one.", expertAt: 3 }),
+  t("Analyze Unknown Biomass", "Science", 1, ["biology", "botany"], 0, "Discover properties of an unfamiliar specimen.", "skilled", null, { ...RESEARCH, strong: "Also identify a viable Research Trait or important biological weakness." }),
+  t("Extract Research Trait", "Science", 2, ["biology"], 7, "Isolate a studied organism's Research Trait for crafting or augmentation.", "routine", null, { ...RESEARCH, facility: { modules: ["Biological Lab"], label: "a Biological Lab" } }),
   t("Scrap Biomass", "Science", 2, ["biology"], 3, "Recover biological crafting materials."),
-  t("Analyze Technical Data", "Science", 1, ["engineering", "biology"], 3, "Interpret known human data or studied alien data."),
+  t("Analyze Technical Data", "Science", 1, ["engineering", "biology"], 3, "Interpret known human data or studied alien data.", "routine", null, RESEARCH),
   t("Train Skill", "Crew", 2, [], 0, "Spend 1 training resource from the hold and gain 1 XP in the skill. Levels 1–3 use a common resource, 4–7 a refined one, and 8–10 a rare one.", "routine", "train"),
   t("Reduce Pressure", "Crew", 1, ["entertainer"], 1, "Reduce another character's Pressure by 1 in safety, never below their Stress floor.", "routine", "calm", { strong: "The target also gets +1d6 on their next skill roll." }),
   t("Morale Night", "Crew", 2, ["entertainer"], 6, "Music, stories, a stolen bottle: every other survivor aboard reduces Pressure by 1.", "routine", "morale", { facility: { modules: ["Crew Quarters", "Crewmate Quarters", "Crewmate Quarters Expanded"], label: "Crew Quarters" } }),

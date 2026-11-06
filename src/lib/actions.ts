@@ -1,4 +1,4 @@
-import { EXPERT_MARGIN, FABRICATE_ITEMS, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, LABOR_EXPERT_MARGIN, LABOR_PRACTICED_MARGIN, LABOR_PROJECT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
 import { cook, craftBlocker, fabricate, fabricateCost, galleyPenalty, moduleLevel, RECIPE_BY_NAME, recipeSkills, salvageParts, stationLevel, stationLevelName } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
@@ -10,7 +10,7 @@ import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip } from "./power";
 import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, takeOne } from "./stock";
-import { HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type SkillKey } from "./rules";
+import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { CraftRecipe } from "@/data/crafting";
 import type { ActionStatus, Character, GameState, Project, SegmentAction, SpaceTile, StarMap } from "./types";
@@ -137,10 +137,10 @@ export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
   if (!target) return { dice: 0, progress: 0, problems: ["Nothing to assist: that task is gone"], warnings: [], notes: [] };
   const t = taskTerms(g, target);
   const who = g.characters.find((x) => x.id === target.characterId)?.name ?? "Someone";
-  const level = c && t.skill ? skillLevel(c, t.skill) : 0;
+  const level = c ? (t.labor ? attributeValue(c, "STR") : t.skill ? skillLevel(c, t.skill) : 0) : 0;
   const project = projectWorkedOn(g, target);
   const dice = Math.min(ASSIST_MAX_DICE, level);
-  const progress = project && !project.done && t.skill && level >= t.threshold ? 1 : 0;
+  const progress = project && !project.done && (t.skill || t.labor) && level >= t.threshold ? 1 : 0;
   const problems: string[] = [];
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -148,7 +148,7 @@ export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
   if (dice > 0) notes.push(`+${dice}d6 on ${who}'s roll, once this Assist succeeds`);
   if (project) {
     if (progress > 0) notes.push(`+1 Progress on ${project.name}, using one of its contributor slots`);
-    else warnings.push(`No Progress on ${project.name}: that needs ${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : `its Routine ${t.threshold}`}`);
+    else warnings.push(`No Progress on ${project.name}: that needs ${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : t.labor ? `${ATTRIBUTE_NAMES.STR} ${t.threshold}` : `its Routine ${t.threshold}`}`);
   } else if (t.routine) warnings.push(`${who}'s task is already Routine, so the dice only matter if they roll for a Strong Result`);
   if (target.roll) warnings.push(`${who} has already rolled, so the dice come too late`);
   return { dice, progress, problems, warnings, notes };
@@ -242,6 +242,8 @@ export type TaskTerms = {
   skill: SkillKey | null;
   /** Labor: Strength stands in for the Skill Level, so `skill` stays null and the roll is flat Strength. */
   labor: boolean;
+  /** The attribute the pool rolls. Usually the skill's own, but Research rolls Wits instead. */
+  attr: Attribute | null;
   threshold: number;
   mode: TaskMode;
   /** Meets the Routine Threshold, so it succeeds without a roll when tools, facilities, and safety allow. */
@@ -261,13 +263,23 @@ export type TaskTerms = {
   perks: string[];
 };
 
+/** An attribute a Project's skill text names ahead of its skills, as in "Wits + Engineering". */
+const ATTR_PREFIX = /^\s*(Strength|Constitution|Intelligence|Wits)\s*\+\s*/i;
+
+/** The attribute a Project rolls, when its skill text overrides the skill's own. */
+export function projectAttr(p: Pick<Project, "skill">): Attribute | null {
+  const name = p.skill.match(ATTR_PREFIX)?.[1]?.toLowerCase();
+  return ATTRIBUTES.find((a) => ATTRIBUTE_NAMES[a].toLowerCase() === name) ?? null;
+}
+
 /**
  * Skills a Project accepts, read from text like "Engineering", "Mechanical Technician or Engineering",
- * or "Mech. Technician 3 / Engineering 4". A number after a skill is its own threshold.
+ * or "Mech. Technician 3 / Engineering 4". A number after a skill is its own threshold. A leading
+ * "Wits +" names the attribute the roll uses instead of the skill's own, and isn't a skill itself.
  */
 export function projectSkills(p: Pick<Project, "skill" | "threshold">): { skill: SkillKey; threshold: number }[] {
   const out: { skill: SkillKey; threshold: number }[] = [];
-  for (const part of p.skill.replace(/\(.*?\)/g, "").split(/\s*(?:\/|,|\bor\b)\s*/i)) {
+  for (const part of p.skill.replace(ATTR_PREFIX, "").replace(/\(.*?\)/g, "").split(/\s*(?:\/|,|\bor\b)\s*/i)) {
     const m = part.trim().match(/^(.+?)(?:\s+(\d+))?$/);
     if (!m) continue;
     const name = m[1].toLowerCase().replace(/^mech\.?\s+/, "mechanical ");
@@ -340,6 +352,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   let mode = def.mode;
   let mastery = def.effect !== "assist";
   let labor = !!def.labor;
+  let attrOverride = def.attr ?? null;
   blocker ??= facilityBlocker(g, def.facility);
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : undefined;
   if (def.effect === "project" && project) {
@@ -348,6 +361,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     if (pick) skills = [pick.skill];
     threshold = pick?.threshold ?? project.threshold;
     energy = project.energy;
+    attrOverride = projectAttr(project);
   }
   if (def.effect === "assist") {
     const target = assistTarget(g, a);
@@ -356,6 +370,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
       skills = t.skill ? [t.skill] : [];
       // Lending a hand with Labor is Labor too: the helper puts their own back into it.
       labor = t.labor;
+      attrOverride = t.attr;
       mode = t.mode === "crisis" ? "crisis" : "routine";
       threshold = 1;
     } else blocker ??= "Nothing to assist: that task is gone";
@@ -388,6 +403,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
       {
         energy,
         skill: null,
+        attr: "STR",
         threshold,
         mode,
         routine: mode === "routine" && str >= threshold && !shaken,
@@ -405,12 +421,13 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   const level = c && best ? skillLevel(c, best) : 0;
   const shaken = !!c && c.pressure >= OVERTAXED && !!best;
   const routine = mode === "routine" && (!best || level >= threshold) && !shaken;
-  const attr = best ? SKILL_BY_KEY[best].attr : null;
+  const attr = best ? (attrOverride ?? SKILL_BY_KEY[best].attr) : null;
   const attrValue = c && attr ? attributeValue(c, attr) : 0;
   return withMastery(
     {
       energy,
       skill: best,
+      attr,
       threshold,
       mode,
       routine,
@@ -490,7 +507,7 @@ function craftCheck(c: Character, crafts: string[], energy: number, def: Shipboa
       .reduce((b, s) => (s.margin > b.margin ? s : b));
     if (!worst || pick.margin < worst.margin) worst = pick;
   }
-  if (!worst) return withMastery({ energy, skill: null, threshold: 0, mode: "routine", routine: true, dice: 0, poolLabel: "No skill", blocker }, def, null, false);
+  if (!worst) return withMastery({ energy, skill: null, attr: null, threshold: 0, mode: "routine", routine: true, dice: 0, poolLabel: "No skill", blocker }, def, null, false);
   const level = skillLevel(c, worst.skill);
   const attr = SKILL_BY_KEY[worst.skill].attr;
   const attrValue = attributeValue(c, attr);
@@ -501,6 +518,7 @@ function craftCheck(c: Character, crafts: string[], energy: number, def: Shipboa
     {
       energy,
       skill: worst.skill,
+      attr,
       threshold: worst.threshold,
       mode: against ? "skilled" : "routine",
       routine: against === 0,
@@ -746,6 +764,14 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     g.ship.tuned = true;
     out.push("The reactor runs hot and clean: +1 Power Unit until the end of the day.");
   }
+  if (ok && def.effect === "patch") {
+    if (g.ship.hullHp > 0) out.push("⚠ The hull is still holding, so a brace adds nothing: temporary Hull HP can't take the ship above 1.");
+    else if (g.ship.tempHull > 0) out.push("⚠ A patch is already wedged in place.");
+    else {
+      g.ship.tempHull = 1;
+      out.push("Braced by hand: 1 temporary Hull HP, which the next Hit will take.");
+    }
+  }
   if (def.effect === "train" && c && a.trainSkill) {
     const cost = trainingCost(c, a.trainSkill);
     if (!cost) out.push(`⚠ ${SKILL_BY_KEY[a.trainSkill].name} is already maxed out.`);
@@ -819,7 +845,7 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice += pressure.dice;
     parts.push(`${pressure.name} ${pressure.dice}`);
   }
-  const hurt = c && terms.skill ? injuryPenalty(c, terms.skill, SKILL_BY_KEY[terms.skill].attr) : null;
+  const hurt = c && terms.attr ? injuryPenalty(c, terms.skill, terms.attr) : null;
   if (hurt?.dice) {
     dice -= hurt.dice;
     parts.push(...hurt.sources);
@@ -828,7 +854,7 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice += 1;
     parts.push("Encouraged +1");
   }
-  const helper = bestAssistant(g, a, terms.skill);
+  const helper = bestAssistant(g, a, terms.skill, terms.labor);
   if (helper) {
     dice += helper.dice;
     parts.push(`${helper.name} assists ${helper.dice}`);
@@ -840,13 +866,17 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
   return { dice: Math.max(0, dice), parts };
 }
 
-/** Only one assistant adds dice, and only once their own Assist has succeeded: the best Skill Level, up to +4d6. */
-function bestAssistant(g: GameState, a: SegmentAction, skill: SkillKey | null) {
+/**
+ * Only one assistant adds dice, and only once their own Assist has succeeded: the best Skill Level,
+ * up to +4d6. On Labor it's the helper's Strength instead, since Labor has no skill to lend.
+ */
+function bestAssistant(g: GameState, a: SegmentAction, skill: SkillKey | null, labor = false) {
   let best: { name: string; dice: number } | null = null;
   for (const x of g.actions) {
     if (x.assists !== a.id || !(x.status === "success" || x.status === "strong")) continue;
     const helper = g.characters.find((h) => h.id === x.characterId);
-    const level = helper && skill ? Math.min(ASSIST_MAX_DICE, skillLevel(helper, skill)) : 0;
+    const lent = helper ? (labor ? attributeValue(helper, "STR") : skill ? skillLevel(helper, skill) : 0) : 0;
+    const level = Math.min(ASSIST_MAX_DICE, lent);
     if (helper && level > (best?.dice ?? 0)) best = { name: helper.name, dice: level };
   }
   return best;

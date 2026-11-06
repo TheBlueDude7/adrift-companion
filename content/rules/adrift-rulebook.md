@@ -353,8 +353,20 @@ WIT-Based Skills
 - Perception – Awareness, detection, and reading dangerous environments
 - Stealth – Avoiding detection and moving unseen
 - Scavenging – Finding usable materials in wreckage and hostile environments
-- Cooking – Preparing food under limited conditions, stretching rations, and avoiding contamination.
+- Cooking – Preparing food and safe water under limited conditions, stretching rations, and avoiding contamination.
 - Entertainer – Stress reduction and persuasion related-rolls
+
+<!-- updated: research-wits -->
+
+#### Research Rolls Wits
+
+Research is the one place a skill does not roll its own attribute. Analysis, extraction, and the research Projects roll:
+
+Wits + the relevant knowledge skill
+
+Knowing what a thing is comes out of the textbook. Noticing what matters about it does not. A researcher still needs Biology or Engineering to do the work, but it is instinct that decides whether they see the pattern in front of them.
+
+This covers Analyze Known Biomass, Analyze Unknown Biomass, Analyze Technical Data, Extract Research Trait, and Cybernetic Research. Every other Task rolls the attribute its skill is listed under.
 
 ## Stunts
 
@@ -474,6 +486,25 @@ A character who meets a task's Routine Threshold qualifies for Routine Benefits:
 - Expert (6+ levels above): the task earns its Strong Result without rolling.
 - Project Efficiency (4+ levels above): +1 Progress per Routine segment, for 2 in total.
 
+<!-- updated: labor -->
+
+#### Labor
+
+Some work aboard needs no training, only a back. These Tasks list a Labor Threshold in place of a skill, and your Strength stands in for the Skill Level.
+
+- A character whose Strength meets the Labor Threshold performs the Task as Routine.
+- Below it, the Task is Skilled and rolls flat Strength: the attribute alone, with no Skill Level to add.
+- Injuries that cost you Strength rolls cost you Labor too.
+- An Assist on a Labor Task lends the helper's Strength instead of a Skill Level, to the usual maximum of +4d6.
+
+Strength rises far more slowly than a skill and stops far lower, so Labor keeps its own Routine Benefits:
+
+| Routine Benefit | Skill | Labor |
+| --- | --- | --- |
+| Practiced (1 less Energy) | 3 above | 1 above |
+| Expert (Strong Result without rolling) | 6 above | 2 above |
+| Project Efficiency (2 Progress) | 4 above | 2 above |
+
 ## Skilled Tasks
 
 A Skilled Task represents work whose outcome is genuinely uncertain but whose failure does not immediately create catastrophe.
@@ -578,7 +609,7 @@ One character may spend a task assisting another character. The assistant must h
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
-<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist -->
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
@@ -586,7 +617,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Prepare Food | 1 | Cooking 1 | Cook one galley recipe, at the recipe’s own Cooking threshold and the galley’s penalty. A botched check still makes what the recipe lists. |
 | Harvest Hydroponics | 1 | Botany 0 | Collect the module’s available Food Units. |
 | Maintain Crops | 2 | Botany 2 | Prevent ordinary crop loss and advance cultivation. |
-| Purify Water | 1 | Biology 2 | Use up one charge of a water filter: 4 Water Units from a Crude Water Filter, 6 from a Water Filter. |
+| Purify Water | 1 | Cooking 2 | Use up one charge of a water filter: 4 Water Units from a Crude Water Filter, 6 from a Water Filter. |
 | Filter Reclaimed Water | 1 | Cooking 1 | Draw the day’s reclaimed water out of Life Support: 2 Water Units, once a day. |
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
 | First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. |
@@ -594,8 +625,9 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. |
 | Craft Medicine | 1 | First Aid 3 or Surgery 5 | Produce medicine from a known recipe. |
 | Decontaminate | 1 | First Aid 5 or Biology 5 |   |
-| Analyze Known Biomass | 1 | Biology 5 | Extract known data from a studied specimen. |
-| Analyze Unknown Biomass | 1 | Always Skilled: Biology or Botany, depending on mass | Discover properties of an unfamiliar specimen. |
+| Analyze Known Biomass | 1 | Wits + Biology 5 | Extract known data from a studied specimen. |
+| Analyze Unknown Biomass | 1 | Always Skilled: Wits + Biology or Botany, depending on mass | Discover properties of an unfamiliar specimen. |
+| Extract Research Trait | 2 | Wits + Biology 7 | Isolate a studied organism’s Research Trait. Needs a Biological Lab. |
 | Scrap Biomass | 2 | Biology 3 | Recover biological crafting materials. |
 | Repair a Damaged Module | 2 | Mechanical Technician 5 | Repair a Damaged module. Restoring Hull HP is the Hull Repair project (Mechanical Technician 3 or Engineering 4). |
 | Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes for the listed Energy. At 6+ levels above every threshold, make a third item in the same segment, also covered. |
@@ -605,7 +637,10 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Plot Safe Course | 1 | Piloting 4 | Move through scanned, stable space. |
 | Scan Nearby Tile | 1 | Navigation 4 | Reveal Basic information about an adjacent tile. |
 | Plot Unsafe Course |   | Always Crisis: Piloting, −3d6 | Move through unscanned, unknown space. |
-| Analyze Technical Data | 1 | Engineering 3 or Biology 3 | Interpret known human data or studied alien data. |
+| Analyze Technical Data | 1 | Wits + Engineering 3 or Biology 3 | Interpret known human data or studied alien data. |
+| Haul and Stow | 1 | Labor 2 | Shift a Heavy load by hand: clear a room for a Project, free a module’s Cargo Capacity, carry Large Salvage to the bench, or walk a mech frame into its berth. |
+| Brace the Hull | 2 | Always Skilled: Labor | Shore up a breach by hand for 1 temporary Hull HP, which the next Hit gives way to. |
+| Rig Safety Lines | 1 | Acrobatics 2 | String lines and handholds through a Weightless, unpressurized, or Exposed Construction space. Work there stops counting as Crisis for the rest of the day. |
 | Train Skill | 2 | Related Skill 0 | Gain 1 XP when training requirements are met. |
 | Reduce Pressure | 1 | Entertainer 1 | Reduce another character’s Pressure by 1 in safety, never below their Stress floor. A Strong Result also gives them +1d6 on their next roll. |
 | Treat Long-Term Stress | 2 | Entertainer 3 | Advance a Stress Recovery Project. |
@@ -1943,6 +1978,10 @@ Damage to the construction area may:
 - Damage an adjacent room.
 - Force the Project to become Crisis work.
 
+<!-- updated: acrobatics-rigging -->
+
+Rig Safety Lines prevents that last consequence. A character who spends a Task stringing tethers and handholds through the open section keeps work there off Crisis for the rest of the day. The same Task makes a Weightless or unpressurized space workable, since ordinary movement in one otherwise demands Acrobatics or a handhold of everyone who enters.
+
 #### Downgrading or Repurposing
 
 A module may be deliberately downgraded or converted.
@@ -2120,6 +2159,10 @@ An improvised Hull repair:
 - Suffers −3d6.
 - Requires plausible materials and tools.
 - Restores temporary Hull HP.
+
+<!-- updated: labor -->
+
+A character working with their shoulder instead of a toolkit may Brace the Hull: a Labor Task, always Skilled, with no −3d6 because it never pretended to be a repair. It restores 1 temporary Hull HP and nothing more.
 
 Temporary Hull HP lasts until:
 
@@ -2586,9 +2629,11 @@ A character Standing Watch may detect approaching danger before it creates surpr
 
 ##### Carry or Extract
 
-Skill: Strength or Acrobatics when required
+Skill: Labor, or Acrobatics when the route matters more than the weight
 
 Purpose: Move a downed character, Heavy object, specimen, or piece of machinery.
+
+As a Labor Task this uses Strength against the Labor Threshold the GM sets for the load, normally 2 for an awkward one and 3 or more for something that should take two people.
 
 ##### Catch Your Breath
 
@@ -3524,6 +3569,7 @@ Complete the following procedure:
 - Assist an ally’s movement or escape
 - Retain footing or orientation in zero-G
 - Land silently or with minimal disturbance
+- Rigging reaches one adjoining space as well
 - Show off.
 
 ### First Aid
@@ -3584,15 +3630,16 @@ Complete the following procedure:
 
 ### Perception
 
-- Has it seen me?
-- Is it coming for me?
-- How do I get in / past / away?
-- Is it friendly?
-- How many are there?
-- What’s the greatest danger to me?
-- Where am I vulnerable?
-- Can I rattle off my knowledge about perception?
-- And other questions the GM could give information about….
+<!-- updated: stunt-lists -->
+
+- Notice a second thing worth noticing: another threat, exit, or piece of salvage in the same place
+- Act on what you saw before it acts on you: you cannot be Surprised by this threat, and neither can anyone you warn
+- Read the thing's intent, not just its position: whether it has seen you, whether it is coming, and whether it is alone
+- Fix the detail that makes it beatable: a weak point, a blind spot, or the route past it
+- Hold the information: the answer stays reliable for the rest of the Scene, even if the situation changes
+- Rattle off your knowledge about perception.
+
+The GM may answer any question of the kind above in place of a listed effect. Spending a 6 on a question is always a valid use of this list.
 
 ### Stealth
 
@@ -3605,14 +3652,25 @@ Complete the following procedure:
 - Gain a higher-quality material.
 - Find the location of more materials.
 
-Cooking
+### Cooking
+
+<!-- updated: stunt-lists -->
 
 - Make one extra unit of the meal type you’re attempting
+- Stretch it further: the meal or water feeds one extra survivor tonight
+- Spend no charge: the filter, cartridge, or ration pack you used isn't consumed
+- Make it good enough to matter: the meal removes 1 Pressure from everyone who eats it
+- Catch the contamination before it is served, and identify what it was
 
 ### Entertainer
 
+<!-- updated: stunt-lists -->
+
 - Remove an extra level of stress
 - +1d6 to the next attempted skill roll of target
+- Reach a second listener: another survivor present also reduces Pressure by 1
+- The lift lasts: the target cannot drop below their current Pressure for the rest of the day
+- Get something out of them: a truth, a confession, or a cooperation they had been withholding
 
 ### Backgrounds
 
