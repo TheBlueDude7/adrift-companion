@@ -10,6 +10,9 @@ export function mechModules(m: Mech) {
   return m.modules.flatMap((x) => (MODULE_BY_KEY[x.key] ? [{ inst: x, def: MODULE_BY_KEY[x.key] }] : []));
 }
 
+/** Armor Points the mech's working plating provides when it's intact. Damaged modules protect nothing. */
+export const maxMechArmor = (m: Mech) => mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0);
+
 export function mechStats(g: GameState, m: Mech) {
   const chassis = CHASSIS[m.chassis];
   const tier = MECH_TIERS[m.tier];
@@ -17,6 +20,7 @@ export function mechStats(g: GameState, m: Mech) {
   const expert = isMechExpert(pilot);
   const mods = mechModules(m);
   const live = mods.filter((x) => !x.inst.damaged);
+  const maxArmor = maxMechArmor(m);
   const resist = Object.fromEntries(MECH_DAMAGE_TYPES.map((t) => [t, 0])) as Record<MechDamageType, number>;
   for (const t of m.tierResist) resist[t] += 1;
   for (const x of live) if (x.def.resist) resist[x.def.resist] += 1;
@@ -27,7 +31,9 @@ export function mechStats(g: GameState, m: Mech) {
     usedSlots: mods.reduce((s, x) => s + x.def.slots, 0),
     hardpoints: chassis.hardpoints,
     usedHardpoints: mods.filter((x) => x.def.weapon).length,
-    armor: live.reduce((s, x) => s + (x.def.armor ?? 0), 0),
+    maxArmor,
+    // Clamped on the way out, so losing or damaging a plating module can't leave stale points behind.
+    armor: Math.min(m.armor, maxArmor),
     inventory: chassis.inventory + live.reduce((s, x) => s + (x.def.inventory ?? 0), 0),
     frame: tier.frame,
     cells: tier.cells,
@@ -59,8 +65,9 @@ export const pilotedMech = (g: GameState, characterId: string) => g.mechs.find((
 /**
  * Resolve an attack against a mech: Vulnerability, Resistance, Cover (Ballistic only), Armor, then Mech HP.
  * Any Resistance to the type counts once; extra sources don't stack.
- * Mech Armor comes from its modules, so it absorbs 1 per hit without wearing down.
- * What's left after the mech hits 0 passes to the pilot. An Offline mech protects no one.
+ * Mech Armor is ablative like a survivor's: it absorbs 1 and the plating loses a point, so the caller
+ * spends `armored` out of `m.armor`. What's left after the mech hits 0 passes to the pilot. An Offline
+ * mech protects no one.
  */
 export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: MechDamageType | "Other", cover: number, vulnerable = false) {
   const s = mechStats(g, m);
@@ -77,5 +84,5 @@ export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: M
 
 export function newMech(name: string, chassis: MechChassis, tier: 1 | 2 | 3, tierResist: MechDamageType[]): Mech {
   const hp = CHASSIS[chassis].hp + MECH_TIERS[tier].hpBonus;
-  return { id: uid(), name, chassis, tier, hp, tierResist, modules: [], pilotId: null, deployed: false, external: false, upgrading: false, conditions: [], notes: "" };
+  return { id: uid(), name, chassis, tier, hp, armor: 0, tierResist, modules: [], pilotId: null, deployed: false, external: false, upgrading: false, conditions: [], notes: "" };
 }

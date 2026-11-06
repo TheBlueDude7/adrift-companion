@@ -1,4 +1,4 @@
-import { needsPermission, permissionReasons, segmentTasks } from "../actions";
+import { needsPermission, permissionReasons, restPushConflict, segmentTasks } from "../actions";
 import { poolFor } from "../derive";
 import { coreMapId } from "../maps";
 import { completeModuleWork } from "../modules";
@@ -214,6 +214,8 @@ function actionDenyReason(game: GameState, ops: Op[], own: string | null): strin
         const now = after.characters.find((c) => c.id === b.characterId);
         if (a || !before || !now || now.energy >= before.energy || now.pressure < before.pressure) return "An extra task costs 1 Energy and 1 Pressure when you Push for it.";
       }
+      const clash = restPushConflict(after, b);
+      if (clash) return `${clash}.`;
     }
     if (b && b.approval !== "pending" && needsPermission(after, b)) return `That task needs the GM's permission (${permissionReasons(after, b).join("; ")}).`;
   }

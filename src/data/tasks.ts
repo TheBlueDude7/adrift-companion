@@ -3,7 +3,7 @@ import type { SkillKey } from "@/lib/rules";
 export type TaskMode = "routine" | "skilled" | "crisis";
 
 /** How the tracker resolves the task's normal result. Everything else is narrated by the GM. */
-export type TaskEffect = "rest" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | null;
+export type TaskEffect = "rest" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | "patch" | null;
 
 /** A module the task needs. Several names mean any of them will do. */
 export type TaskFacility = { modules: string[]; level?: number; label: string };
@@ -14,13 +14,17 @@ export type ShipboardTask = {
   energy: number;
   /** Any of these skills can meet the threshold. */
   skills: SkillKey[];
-  /** Routine Threshold. Tasks marked skilled or crisis always roll. */
+  /** Labor: untrained physical work, where Strength stands in for the Skill Level. No skill applies. */
+  labor?: boolean;
+  /** Routine Threshold, read as Strength on a Labor task. Tasks marked skilled or crisis always roll. */
   threshold: number;
   mode: TaskMode;
   result: string;
   effect: TaskEffect;
   /** Strong Result, earned on two 6s or automatically by an Expert. */
   strong?: string;
+  /** Never rolled, so there's no Strong Result to offer at all. */
+  noStrong?: boolean;
   facility?: TaskFacility;
   /** Levels above the threshold that earn the Strong Result without rolling. Defaults to EXPERT_MARGIN. */
   expertAt?: number;
@@ -38,10 +42,17 @@ export const PRACTICED_MARGIN = 3;
 export const EXPERT_MARGIN = 6;
 /** Mastery: levels above a Project's threshold that add 2 Progress per Routine segment. */
 export const PROJECT_MARGIN = 4;
+/**
+ * Labor's own Routine Benefit margins. Strength spans 1–6 where a skill spans 0–10, so the
+ * skill margins above would put Practiced and Expert out of reach of any realistic Strength.
+ */
+export const LABOR_PRACTICED_MARGIN = 1;
+export const LABOR_EXPERT_MARGIN = 2;
+export const LABOR_PROJECT_MARGIN = 2;
 /** Items one Fabricate task makes, each paying the task's Energy. An Expert adds one more for free. */
 export const FABRICATE_ITEMS = 2;
 
-type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free">;
+type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free" | "noStrong" | "labor">;
 
 const t = (name: string, group: string, energy: number, skills: SkillKey[], threshold: number, result: string, mode: TaskMode = "routine", effect: TaskEffect = null, extra: Extra = {}): ShipboardTask => ({ name, group, energy, skills, threshold, mode, result, effect, ...extra });
 
@@ -51,7 +62,7 @@ const NAV_SUITE: TaskFacility = { modules: ["Navigation & Sensor Suite"], level:
 
 /** The Standard Shipboard Tasks table, plus project work, assisting, and free-form tasks. */
 export const SHIPBOARD_TASKS: ShipboardTask[] = [
-  t("Rest", "Recovery", 0, [], 0, "Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor.", "routine", "rest"),
+  t("Rest", "Recovery", 0, [], 0, "Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor.", "routine", "rest", { noStrong: true }),
   t("Work on a project", "Ship", 0, [], 0, "Add Progress to a Project. Uses the Project's skill, threshold, and Energy. 4 levels above its threshold adds 2 Progress.", "routine", "project"),
   t("Upgrade Module", "Ship", 2, ["engineering"], 4, "Advance an eligible module upgrade Project. Engineering 4 up to the third level, then 6, 8, and 10.", "routine", "project", { strong: "Recover 20% of the materials, rounded down." }),
   t("Repair Ordinary Ship Damage", "Ship", 2, ["mechTech"], 5, "Repair a stable module (Mechanical Technician 5). Restoring Hull HP is the Hull Repair project instead: Mechanical Technician 3 or Engineering 4.", "routine", "project", { strong: "Regain the Energy spent." }),
@@ -59,6 +70,9 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Deconstruct Common Item", "Ship", 1, ["scavenging"], 2, "Take an item in the hold apart for half the materials it was made from, rounded down, off the bulkiest inputs first. Scavenging 2 for Tier I, 4 for Tier II, 6 for Tier III, 7+ for alien equipment.", "routine", "salvage", { strong: "Recover three quarters of the materials instead of half." }),
   t("Salvage Ship", "Ship", 2, ["scavenging"], 4, "Scavenge a ship using the scavenge rules.", "routine", null, { strong: "Find additional or higher-quality materials.", gmResolves: true }),
   t("Tune the Reactor", "Ship", 1, ["engineering"], 6, "+1 Power Unit until the end of the day. Needs a Large reactor (Engineering 6), or Voltaic and up (Engineering 8).", "routine", "tune", { facility: { modules: ["Fusion Reactor"], level: 3, label: "a Large reactor or better" } }),
+  t("Haul and Stow", "Ship", 1, [], 2, "Shift a Heavy load by hand: clear a room so a Project can start, free a module's Cargo Capacity, carry Large Salvage to the bench, or walk a mech frame into its berth.", "routine", null, { labor: true, strong: "Shift a second load in the same segment." }),
+  t("Brace the Hull", "Ship", 2, [], 0, "Shore up a breach with your shoulder and whatever will wedge: 1 temporary Hull HP, which the next Hit gives way to. It can't raise the ship above 1 Hull HP, so it only buys time at a holed hull.", "skilled", "patch", { labor: true, noStrong: true }),
+  t("Rig Safety Lines", "Ship", 1, ["acrobatics"], 2, "String lines, tethers, and handholds through a Weightless, unpressurized, or Exposed Construction space. Work there stops counting as Crisis for the rest of the day.", "routine", null, { strong: "The rigging reaches one adjoining space too." }),
   t("Plot Safe Course", "Navigation", 1, ["piloting"], 4, "Move through scanned, stable space. Piloting 4 for 1 tile, 6 for 2, 8 for 3–4. Burns one Power Cell; Piloting 8 skips the cell once per day.", "routine", "course", { strong: "No Power Cell consumed." }),
   t("Plot Unsafe Course", "Navigation", 1, ["piloting"], 0, "Move through unknown space. Into an unscanned tile it's a Crisis task at −3d6. Burns one Power Cell.", "skilled", "course", { strong: "Avoid the hazard, collision, or ambush." }),
   t("Scan Nearby Tile", "Navigation", 1, ["navigation"], 4, "Reveal basic information about a tile. Navigation 4 for adjacent tiles, 6 for 2 tiles away (Enhanced suite), 8 for 3 tiles (Biometric).", "routine", "scan", { strong: "Also reveal a concealed signal, hazard, or secondary point of interest.", facility: NAV_SUITE }),
@@ -68,7 +82,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Harvest Hydroponics", "Food & water", 1, ["botany"], 0, "Collect the module's available Food Units. +1 Raw Food for every 3 Botany levels.", "routine", "harvest", { strong: "+1 Raw Food.", facility: HYDROPONICS }),
   t("Maintain Crops", "Food & water", 2, ["botany"], 2, "Prevent ordinary crop loss and advance cultivation. Botany 5 at Expanded Hydroponics, 7 at Self-Sustaining.", "routine", "tend", { facility: HYDROPONICS }),
   t("Cultivate Specimen", "Food & water", 2, ["botany"], 6, "Grow an alien plant sample into 1 Chemical Mixture.", "routine", "yield", { strong: "+1 Chemical Mixture.", facility: HYDROPONICS, yields: { name: "Chemical Mixture", qty: 1 } }),
-  t("Purify Water", "Food & water", 1, ["biology"], 2, "Use up one charge of a water filter from the hold: 4 Water Units from a Crude Water Filter, 6 from a Water Filter.", "routine", "purify"),
+  t("Purify Water", "Food & water", 1, ["cooking"], 2, "Use up one charge of a water filter from the hold: 4 Water Units from a Crude Water Filter, 6 from a Water Filter.", "routine", "purify"),
   t("Filter Reclaimed Water", "Food & water", 1, ["cooking"], 1, "Draw the day's reclaimed water out of Life Support: 2 Water Units, once a day.", "routine", "reclaim", { strong: "+1 Water Unit.", facility: { modules: ["Life Support"], level: 1, label: "working Life Support" } }),
   t("Turn Food into Fuel", "Food & water", 1, ["botany"], 4, "Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. Botany 7 converts 3 into 2.", "routine", "convert", { facility: { modules: ["Bioconverter"], label: "a Bioconverter" } }),
   t("First Aid: Minor Injury", "Medical", 0, ["firstAid"], 3, "Use up a medkit to treat a Minor injury or just heal. A free action from the character sheet, any time.", "skilled", null, { strong: "Each 6 not spent treating heals 1 HP or clears a condition.", free: true }),
@@ -87,7 +101,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Morale Night", "Crew", 2, ["entertainer"], 6, "Music, stories, a stolen bottle: every other survivor aboard reduces Pressure by 1.", "routine", "morale", { facility: { modules: ["Crew Quarters", "Crewmate Quarters", "Crewmate Quarters Expanded"], label: "Crew Quarters" } }),
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
   t("Assist", "Crew", 1, [], 0, "Help another character with a task you have a level in. Roll against their task's skill; on a success only one assistant's dice count, the best Skill Level among them, up to +4d6. On a Project, you add 1 Progress if you meet its threshold and take one of its contributor slots.", "routine", "assist"),
-  t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The expedition plays out at the table."),
+  t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The expedition plays out at the table.", "routine", null, { noStrong: true }),
   t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true }),
 ];
 

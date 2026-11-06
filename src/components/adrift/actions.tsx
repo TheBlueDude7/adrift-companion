@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, type ShipboardTask } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { payPush } from "@/lib/mechanics";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
@@ -364,12 +364,19 @@ function TrainPicker({ c, value, onChange }: { c: Character; value: SkillKey | u
 /** Energy ceilings a player can filter the task list by. The task they already picked stays visible regardless. */
 const ENERGY_FILTERS = [0, 1, 2] as const;
 
+/** What a search matches on: the name, its group, the skills it uses, and what it does. */
+const taskHaystack = (x: ShipboardTask) =>
+  `${x.name} ${x.group} ${x.skills.map((s) => SKILL_BY_KEY[s].name).join(" ")} ${x.result} ${x.strong ?? ""}`.toLowerCase();
+
 /**
  * Every task the survivor can plan, with what it costs them, what a success does, and what a Strong
  * Result adds. The Energy filter answers the question a crewmate on their last point actually asks.
+ * Search and filter never hide the task already picked, so what the dialog will submit stays on screen.
  */
 function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAction; onPick: (task: string) => void }) {
   const [ceiling, setCeiling] = useState<number | null>(null);
+  const [full, setFull] = useState(true);
+  const [query, setQuery] = useState("");
   const picked = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     picked.current?.scrollIntoView({ block: "nearest" });
@@ -379,14 +386,18 @@ function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAc
   const termsFor = (x: ShipboardTask) => taskTerms(game, { ...draft, task: x.name, crafts: x.name === draft.task ? draft.crafts : undefined });
   // A Project charges whatever it charges, so project work has no cost of its own to filter by.
   const varies = (x: ShipboardTask) => x.effect === "project" && x.energy === 0 && !draft.projectId;
+  const q = query.trim().toLowerCase();
+  const matches = (x: ShipboardTask) =>
+    (!q || taskHaystack(x).includes(q)) && (ceiling === null || varies(x) || termsFor(x).energy <= ceiling);
   const groups = TASK_GROUPS.map((grp) => ({
     name: grp,
-    tasks: SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task) && (ceiling === null || x.name === draft.task || varies(x) || termsFor(x).energy <= ceiling)),
+    tasks: SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task) && (x.name === draft.task || matches(x))),
   })).filter((grp) => grp.tasks.length > 0);
+  const found = SHIPBOARD_TASKS.filter((x) => (!x.free || x.name === draft.task) && matches(x)).length;
   return (
     <div className="grid gap-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label>Task</Label>
+        <Label htmlFor="task-search">Task</Label>
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           Costs at most
           {ENERGY_FILTERS.map((n) => (
@@ -395,7 +406,14 @@ function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAc
           <Button size="xs" variant={ceiling === null ? "secondary" : "ghost"} onClick={() => setCeiling(null)} aria-pressed={ceiling === null}>Any</Button>
         </span>
       </div>
-      <ScrollArea className="h-64 rounded-lg border">
+      <div className="flex items-center gap-2">
+        <Input id="task-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, skill, or what it does" className="h-7 min-w-0 flex-1 text-xs" />
+        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Checkbox checked={full} onCheckedChange={(v) => setFull(!!v)} /> What it does
+        </label>
+      </div>
+      {q && found === 0 && <p className="text-[11px] text-amber-300">No task matches “{query.trim()}”. Only {draft.task} is shown.</p>}
+      <ScrollArea className={cn("rounded-lg border", full ? "h-64" : "h-48")}>
         <div className="grid gap-2 p-2">
           {groups.map((grp) => (
             <div key={grp.name} className="grid gap-1">
@@ -419,8 +437,8 @@ function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAc
                         {terms.skill ? `${SKILL_BY_KEY[terms.skill].name} ${terms.threshold} · ` : ""}{varies(x) ? "the Project's Energy" : `${terms.energy} Energy`}
                       </span>
                     </span>
-                    <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Success:</span> {x.result}</span>
-                    <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Strong Result:</span> {x.strong ?? "the GM's call."}</span>
+                    {full && <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Success:</span> {x.result}</span>}
+                    {full && !x.noStrong && <span className="text-[11px] text-muted-foreground"><span className="text-foreground/80">Strong Result:</span> {x.strong ?? "the GM's call."}</span>}
                     {blocker && <span className="text-[11px] text-amber-300">{blocker}</span>}
                   </button>
                 );
@@ -447,7 +465,10 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
   const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage";
+  const pushing = extra && !existing;
+  const clash = restPushConflict(view, pushing ? { ...draft, extra: true } : draft);
   const missing =
+    !!clash ||
     (def.effect === "project" && !draft.projectId) ||
     (def.effect === "course" && !draft.target) ||
     (def.effect === "assist" && !draft.assists) ||
@@ -466,7 +487,6 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (!needsRecipe) delete d.crafts;
     if (def.effect !== "calm" && def.effect !== "bleed") d.subjectId = null;
     if (def.effect !== "train") delete d.trainSkill;
-    const pushing = extra && !existing;
     if (pushing) d.extra = true;
     act(existing ? "Edit task" : pushing ? "Push for an extra task" : "Plan task", (g) => {
       const out: string[] = [];
@@ -577,7 +597,14 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
           </div>
         </div>
         <DialogFooter className="gap-2 sm:items-center">
-          {!isGM && reasons.length > 0 ? (
+          {clash ? (
+            <>
+              <span className="text-xs text-rose-300 sm:mr-auto">
+                {clash}. {pushing ? "Pick another task." : def.effect === "rest" ? "Withdraw the Pushed task first." : "Withdraw the Rest first."}
+              </span>
+              <Button disabled>{existing ? "Save changes" : "Submit task"}</Button>
+            </>
+          ) : !isGM && reasons.length > 0 ? (
             <>
               <span className="text-xs text-rose-300 sm:mr-auto">Needs the GM&apos;s permission: {reasons.join("; ")}.</span>
               <Button variant="outline" disabled={missing || (def.name === "Other" && !draft.detail.trim())} onClick={() => save(true)}><HandIcon /> Ask the GM for permission</Button>
@@ -749,7 +776,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
             <Button variant="ghost" onClick={() => resolve("cancelled")}>Call off</Button>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => resolve("failed")}><XIcon /> Failed</Button>
-              <Button variant="outline" onClick={() => resolve("strong")}>Strong</Button>
+              {!def.noStrong && <Button variant="outline" onClick={() => resolve("strong")}>Strong</Button>}
               <Button onClick={() => resolve("success")}><CheckIcon /> Success</Button>
             </div>
           </DialogFooter>

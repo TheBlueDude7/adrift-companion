@@ -205,12 +205,23 @@ export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.
 export const segmentTasks = (g: GameState, characterId: string, day = g.day, segment = g.segment) =>
   g.actions.filter((a) => a.characterId === characterId && a.day === day && a.segment === segment && a.status !== "cancelled");
 
+const REST_PUSH_CONFLICT = "Resting and Pushing for an extra task can't share a segment";
+
 /** Each survivor takes one task per segment. Pushing (1 Energy, 1 Pressure) buys one extra. */
 export function extraTaskBlocker(g: GameState, c: Character): string | null {
   const tasks = segmentTasks(g, c.id);
   if (tasks.length === 0) return "No task planned yet";
   if (tasks.length > 1 || tasks.some((a) => a.extra)) return "Already took the extra task this segment";
+  if (tasks.some((a) => taskFor(a).effect === "rest")) return REST_PUSH_CONFLICT;
   return null;
+}
+
+/** You either take the segment off or you grind an extra task out of it. Never both, in either order. */
+export function restPushConflict(g: GameState, a: SegmentAction): string | null {
+  const others = segmentTasks(g, a.characterId, a.day, a.segment).filter((x) => x.id !== a.id);
+  const pushed = a.extra || others.some((x) => x.extra);
+  const resting = taskFor(a).effect === "rest" || others.some((x) => taskFor(x).effect === "rest");
+  return pushed && resting ? REST_PUSH_CONFLICT : null;
 }
 
 /** Planned tasks from segments that have already passed. */
@@ -229,6 +240,8 @@ export const whenLabel = (a: Pick<SegmentAction, "day" | "segment">) => `Day ${a
 export type TaskTerms = {
   energy: number;
   skill: SkillKey | null;
+  /** Labor: Strength stands in for the Skill Level, so `skill` stays null and the roll is flat Strength. */
+  labor: boolean;
   threshold: number;
   mode: TaskMode;
   /** Meets the Routine Threshold, so it succeeds without a roll when tools, facilities, and safety allow. */
@@ -236,7 +249,7 @@ export type TaskTerms = {
   /** Attribute + Skill dice for a roll. */
   dice: number;
   poolLabel: string;
-  /** Skill level minus the threshold, or null when no skill applies. */
+  /** Skill level minus the threshold, or Strength minus it on Labor. Null when neither applies. */
   margin: number | null;
   /** Earns the Strong Result without rolling. */
   expert: boolean;
@@ -300,19 +313,22 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
   }
 }
 
-function withMastery(base: Omit<TaskTerms, "margin" | "expert" | "progress" | "perks">, def: ShipboardTask, margin: number | null, project: boolean): TaskTerms {
+function withMastery(base: Omit<TaskTerms, "margin" | "expert" | "progress" | "perks" | "labor">, def: ShipboardTask, margin: number | null, project: boolean, labor = !!def.labor): TaskTerms {
+  const practicedAt = labor ? LABOR_PRACTICED_MARGIN : PRACTICED_MARGIN;
+  const expertAt = def.expertAt ?? (labor ? LABOR_EXPERT_MARGIN : EXPERT_MARGIN);
+  const projectAt = labor ? LABOR_PROJECT_MARGIN : PROJECT_MARGIN;
   const perks: string[] = [];
   let { energy } = base;
   const routine = base.routine && !base.blocker;
-  if (routine && margin !== null && margin >= PRACTICED_MARGIN && energy > 0) {
+  if (routine && margin !== null && margin >= practicedAt && energy > 0) {
     energy -= 1;
     perks.push(`Practiced: −1 Energy`);
   }
-  const expert = routine && margin !== null && !!def.strong && margin >= (def.expertAt ?? EXPERT_MARGIN);
+  const expert = routine && margin !== null && !!def.strong && margin >= expertAt;
   if (expert) perks.push("Expert: automatic Strong Result");
-  const progress = project && routine && margin !== null && margin >= PROJECT_MARGIN ? 2 : 1;
+  const progress = project && routine && margin !== null && margin >= projectAt ? 2 : 1;
   if (progress > 1) perks.push("2 Progress");
-  return { ...base, energy, routine, margin, expert, progress, perks };
+  return { ...base, labor, energy, routine, margin, expert, progress, perks };
 }
 
 export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
@@ -323,6 +339,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   let energy = def.energy;
   let mode = def.mode;
   let mastery = def.effect !== "assist";
+  let labor = !!def.labor;
   blocker ??= facilityBlocker(g, def.facility);
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : undefined;
   if (def.effect === "project" && project) {
@@ -337,6 +354,8 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     if (target) {
       const t = taskTerms(g, target);
       skills = t.skill ? [t.skill] : [];
+      // Lending a hand with Labor is Labor too: the helper puts their own back into it.
+      labor = t.labor;
       mode = t.mode === "crisis" ? "crisis" : "routine";
       threshold = 1;
     } else blocker ??= "Nothing to assist: that task is gone";
@@ -361,6 +380,27 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   if (def.effect === "craft" && c && a.crafts?.length) return craftTerms(c, a.crafts, energy);
   if (def.effect === "cook" && c && a.crafts?.length) return cookTerms(g, c, a.crafts, energy);
   if (def.name === "Plot Unsafe Course" && unscannedTarget(g, a)) mode = "crisis";
+  // Labor has no skill: Strength is both the dice pool and the level measured against the threshold.
+  if (labor) {
+    const str = c ? attributeValue(c, "STR") : 0;
+    const shaken = !!c && c.pressure >= OVERTAXED;
+    return withMastery(
+      {
+        energy,
+        skill: null,
+        threshold,
+        mode,
+        routine: mode === "routine" && str >= threshold && !shaken,
+        dice: str,
+        poolLabel: `${ATTRIBUTE_NAMES.STR} ${str}`,
+        blocker,
+      },
+      def,
+      mastery && c ? str - threshold : null,
+      def.effect === "project",
+      true,
+    );
+  }
   const best = c && skills.length ? skills.reduce((b, k) => (skillLevel(c, k) > skillLevel(c, b) ? k : b)) : null;
   const level = c && best ? skillLevel(c, best) : 0;
   const shaken = !!c && c.pressure >= OVERTAXED && !!best;

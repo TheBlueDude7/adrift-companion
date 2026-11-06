@@ -215,6 +215,7 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
   const [roll, setRoll] = useState<RollDraft>(EMPTY_ROLL);
   const [injury, setInjury] = useState(false);
   const r = resolveMechDamage(game, mech, amount, type, cover, vulnerable);
+  const stats = mechStats(game, mech);
   const pilot = game.characters.find((c) => c.id === mech.pilotId && mech.deployed);
   const injuryRoll = parseRoll(roll);
   const breaks = mech.hp > 0 && r.toMech >= mech.hp;
@@ -225,7 +226,7 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Damage {mech.name}</DialogTitle>
-          <DialogDescription>Vulnerability, then Resistance, then Cover (Ballistic only), then Armor (1 per hit). What the mech can&apos;t absorb at 0 HP passes to the pilot.</DialogDescription>
+          <DialogDescription>Vulnerability, then Resistance, then Cover (Ballistic only), then Armor, which absorbs 1 and loses a point of plating. What the mech can&apos;t absorb at 0 HP passes to the pilot.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="flex items-center justify-between"><Label>Incoming damage</Label><Stepper value={amount} onChange={setAmount} min={1} max={30} label="damage" /></div>
@@ -241,9 +242,10 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
           <div className="rounded-lg bg-muted/40 p-3 text-sm">
             {r.vulnerable > 0 && <p>Vulnerability adds {r.vulnerable}.</p>}
             {r.resisted > 0 && <p>Resistance halves it, stopping {r.resisted}.</p>}
-            {r.resisted === 0 && r.vulnerable === 0 && vulnerable && type !== "Other" && mechStats(game, mech).resist[type] > 0 && <p>Resistance and Vulnerability cancel out.</p>}
+            {r.resisted === 0 && r.vulnerable === 0 && vulnerable && type !== "Other" && stats.resist[type] > 0 && <p>Resistance and Vulnerability cancel out.</p>}
             {r.covered > 0 && <p>Cover stops {r.covered}.</p>}
-            {r.armored > 0 && <p>Armor stops 1.</p>}
+            {r.armored > 0 && <p>Armor stops 1 (plating {stats.armor} → {stats.armor - 1}).</p>}
+            {r.armored === 0 && stats.maxArmor > 0 && stats.armor === 0 && <p className="text-amber-200">The plating is spent: no Armor left to absorb a hit.</p>}
             <p>The mech takes <b>{r.toMech}</b>{mech.hp > 0 ? ` (HP ${mech.hp} → ${mech.hp - r.toMech})` : " (already Offline)"}.</p>
             {r.excess > 0 && <p className="text-rose-200">{r.excess} passes through to {pilot ? pilot.name : "the pilot"}.</p>}
             {breaks && <p className="mt-1 text-xs text-amber-200">The mech goes Offline. Consider a complication: {MECH_COMPLICATIONS.slice(0, 3).join(" ")}</p>}
@@ -266,7 +268,8 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
                 const res = resolveMechDamage(g, m, amount, type, cover, vulnerable);
                 const wasUp = m.hp > 0;
                 m.hp -= res.toMech;
-                const absorbed = [res.vulnerable && `+${res.vulnerable} Vulnerability`, res.resisted && `${res.resisted} resisted`, res.covered && `${res.covered} Cover`, res.armored && "1 Armor"].filter(Boolean).join(", ");
+                if (res.armored) m.armor = Math.max(0, mechStats(g, m).armor - res.armored);
+                const absorbed = [res.vulnerable && `+${res.vulnerable} Vulnerability`, res.resisted && `${res.resisted} resisted`, res.covered && `${res.covered} Cover`, res.armored && `1 Armor, plating down to ${m.armor}`].filter(Boolean).join(", ");
                 out.push(`${m.name} takes ${res.toMech} ${type === "Other" ? "" : `${type} `}damage${absorbed ? ` (${absorbed})` : ""}. Mech HP ${m.hp}/${mechStats(g, m).maxHp}.`);
                 if (wasUp && m.hp <= 0) out.push(`⚠ ${m.name} goes Offline: no Frame Attributes, powered modules, or mounted weapons. The pilot stays inside until they exit (a Slow Action in combat).`);
                 const p = g.characters.find((c) => c.id === m.pilotId && m.deployed);
@@ -354,6 +357,8 @@ function AddModuleDialog({ mech }: { mech: Mech }) {
       if (from === "storage") takeOne(g, moduleItemName(def));
       if (from === "craft") spend(g, MODULE_RECIPES[def.tier], 1);
       m.modules.push({ id: uid(), key: def.key, damaged: false });
+      // New plating comes fitted, so its points are live rather than starting spent.
+      if (def.armor) m.armor = mechStats(g, m).armor + def.armor;
       const how = from === "storage" ? " from the hold" : from === "craft" ? `, crafted from ${recipeText(MODULE_RECIPES[def.tier], 1)}` : "";
       return `${def.name} is installed on ${m.name}${how}.${expedition ? " (Expedition install: one Expedition Turn and 2 Energy.)" : ""}`;
     });
@@ -511,11 +516,28 @@ function MechCard({ mech }: { mech: Mech }) {
           </div>
         </div>
 
+        {s.maxArmor > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Armor plating</span>
+              <span className="font-mono">{s.armor}<span className="text-muted-foreground">/{s.maxArmor}</span></span>
+            </div>
+            <Meter value={s.armor} max={s.maxArmor} tone="armor" segmented />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Stepper value={s.armor} min={0} max={s.maxArmor} size="xs" label="armor plating" onChange={(v) => edit(`${mech.name} Armor`, (m) => { m.armor = v; return `${m.name}'s Armor plating is at ${v}/${s.maxArmor}.`; })} />
+              {s.armor < s.maxArmor && (
+                <Button size="xs" variant="outline" onClick={() => edit("Replate mech", (m) => { m.armor = s.maxArmor; return `${m.name}'s plating is replaced: Armor back to ${s.maxArmor}.`; })}><WrenchIcon /> Replate to {s.maxArmor}</Button>
+              )}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">Ablative: each hit it absorbs costs 1 point. At 0 the plating is spent and protects nothing until it&apos;s replaced.</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
           {[
             [s.frame, "Frame STR"],
             [s.frame, "Frame CON"],
-            [s.armor, "Armor"],
+            [`${s.armor}/${s.maxArmor}`, "Armor"],
             [`${s.usedSlots}/${s.slots}`, "Slots"],
             [`${s.usedHardpoints}/${s.hardpoints}`, "Hardpoints"],
             [`+${s.inventory}`, "Inventory"],
@@ -587,7 +609,7 @@ function MechCard({ mech }: { mech: Mech }) {
                 </div>
                 <div className="flex shrink-0 gap-0.5">
                   <Button size="icon-xs" variant="ghost" aria-label={inst.damaged ? `Repair ${def.name}` : `Damage ${def.name}`} title={inst.damaged ? "Mark repaired" : "Mark damaged"} onClick={() => edit("Module damage", (m) => { const x = m.modules.find((y) => y.id === inst.id)!; x.damaged = !x.damaged; return `${def.name} on ${m.name} is ${x.damaged ? "damaged and provides no benefit" : "repaired"}.`; })}><WrenchIcon /></Button>
-                  <Button size="icon-xs" variant="ghost" aria-label={`Remove ${def.name}`} title="Remove to the hold" onClick={() => edit("Remove module", (m, g) => { m.modules = m.modules.filter((y) => y.id !== inst.id); if (!inst.damaged) stockItem(g, moduleItemName(def), 1, { category: "Equipment", heavy: true, tier: def.tier === 1 ? "Tier I" : def.tier === 2 ? "Tier II" : "Tier III", notes: def.effect }); m.hp = Math.min(m.hp, mechStats(g, m).maxHp); return `${def.name} is removed from ${m.name}${inst.damaged ? " and scrapped" : " and stored in the hold"}.`; })}><Trash2Icon /></Button>
+                  <Button size="icon-xs" variant="ghost" aria-label={`Remove ${def.name}`} title="Remove to the hold" onClick={() => edit("Remove module", (m, g) => { m.modules = m.modules.filter((y) => y.id !== inst.id); if (!inst.damaged) stockItem(g, moduleItemName(def), 1, { category: "Equipment", heavy: true, tier: def.tier === 1 ? "Tier I" : def.tier === 2 ? "Tier II" : "Tier III", notes: def.effect }); m.hp = Math.min(m.hp, mechStats(g, m).maxHp); m.armor = mechStats(g, m).armor; return `${def.name} is removed from ${m.name}${inst.damaged ? " and scrapped" : " and stored in the hold"}.`; })}><Trash2Icon /></Button>
                 </div>
               </div>
             ))

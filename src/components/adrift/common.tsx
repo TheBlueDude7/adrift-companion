@@ -66,6 +66,7 @@ const TONES = {
   energy: "bg-amber-300",
   willpower: "bg-violet-400",
   hull: "bg-sky-400",
+  armor: "bg-slate-300",
   good: "bg-emerald-400",
   stress: "bg-orange-400",
   progress: "bg-teal-300",

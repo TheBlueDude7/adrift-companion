@@ -134,6 +134,8 @@ export type Mech = {
   chassis: MechChassis;
   tier: 1 | 2 | 3;
   hp: number;
+  /** Armor Points left on the plating. Ablative: every hit it absorbs costs a point, like a survivor's Armor. */
+  armor: number;
   /** Built-in Tier Resistance picks, one damage type each. Older saves may repeat a type; it counts once. */
   tierResist: MechDamageType[];
   modules: InstalledModule[];

@@ -1,5 +1,6 @@
 import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
+import { maxMechArmor } from "./mechs";
 import { DEFAULT_ITEM_TEMPLATES } from "./rules";
 import type { GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, TilePos, TokenKind } from "./types";
 
@@ -141,6 +142,8 @@ export function normalizeGame(g: GameState): GameState {
   if (!Array.isArray(g.maps)) g.maps = defaultMaps();
   g.maps = g.maps.map((m) => (m.kind === "star" && typeof (m as Partial<StarMap>).size !== "number" ? migrateStarMap(m as unknown as OldStarMap) : m));
   if (!Array.isArray(g.mechs)) g.mechs = [];
+  // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
+  for (const m of g.mechs) if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
   if (!Array.isArray(g.actions)) g.actions = [];
   delete (g.ship as { powerDays?: number }).powerDays;
   if (!g.research || !Array.isArray(g.research.cybernetics)) g.research = { cybernetics: [] };
