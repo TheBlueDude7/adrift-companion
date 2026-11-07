@@ -43,6 +43,19 @@ export function rosterTranscript(report: RosterReport): string {
 /** Plain markdown, for Discord or anywhere else a human reads the turn. */
 export function transcript(report: SimReport, { committed = true }: { committed?: boolean } = {}): string {
   const parts: string[] = [];
+
+  // The huddle stays out of the campaign log, so the transcript is the only place the GM reads it.
+  for (const round of [1, 2]) {
+    const said = report.briefing.filter((r) => r.round === round);
+    if (!said.length) continue;
+    parts.push(
+      [
+        round === 1 ? "**The crew talks it over**" : "**Second pass**",
+        ...said.map((r) => `**${r.character}** (${r.player}): “${r.say}”\n-# Leaning: ${r.intent}`),
+      ].join("\n\n"),
+    );
+  }
+
   for (const t of report.turns) {
     const lines = [
       `**${t.character}** — ${t.player.provider}, ${t.player.style}`,

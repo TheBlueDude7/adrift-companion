@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { GameState } from "../types";
+import { createSimClient } from "./client";
 import { addUsage, configuredProviders, isProvider, PROVIDERS, PROVIDER_KEYS, reason, type Provider, type Usage } from "./models";
+import { legalOptions } from "./options";
+import { confer } from "./player";
 import { runSegment, type SegmentOptions, type SimTurn } from "./run";
 import { type Style } from "./styles";
 
@@ -11,7 +14,10 @@ export type Seat = { characterId?: unknown; provider?: unknown; style?: unknown 
 /** A seat once it's been checked: this survivor, played by this model, leaning this way. */
 export type Player = { characterId: string; name: string; provider: Provider; style: string };
 
-export type SimReport = { turns: SimTurn[]; failed: string[]; usage: Usage };
+/** One thing a survivor said in the huddle, before anyone committed to anything. */
+export type Remark = { round: number; character: string; player: string; say: string; intent: string; usage: Usage };
+
+export type SimReport = { briefing: Remark[]; turns: SimTurn[]; failed: string[]; usage: Usage };
 
 /** Leanings handed out when the GM doesn't name one, so a default crew argues with itself. */
 const DEFAULT_STYLES: Style[] = ["cautious", "bold", "specialist", "caretaker"];
@@ -61,13 +67,53 @@ export async function withCampaignLock<T>(code: string, fn: () => Promise<T>): P
   }
 }
 
-/** The whole table's segment. One survivor at a time, so a later one can Assist what an earlier one planned. */
+/** The huddle as the crew reads it back: what was said, and who was leaning which way. */
+const spoken = (remarks: Remark[]) => remarks.map((r) => `${r.character}: “${r.say}”\n  (leaning: ${r.intent})`).join("\n\n");
+
+/**
+ * Two passes of table talk before anyone commits. The state can't change while it happens, so one
+ * read serves every remark, and it's taken under the first seat's identity to avoid enrolling a
+ * phantom player in the campaign's roster. A survivor who can't speak simply doesn't; the huddle
+ * failing is not a reason for nobody to take a turn.
+ */
+async function huddle(base: string, code: string, table: Player[], situation: string): Promise<{ remarks: Remark[]; usage: Usage }> {
+  const first = table[0];
+  const reader = createSimClient(base, code, first.characterId, `${PROVIDERS[first.provider].label} · ${first.name}`);
+  const game = await reader.snapshot();
+  const remarks: Remark[] = [];
+  let usage: Usage = { input: 0, cached: 0, output: 0 };
+  for (const round of [1, 2]) {
+    for (const seat of table) {
+      const c = game.characters.find((x) => x.id === seat.characterId);
+      if (!c) continue;
+      const menu = legalOptions(game, c);
+      if (!menu.options.length) continue;
+      try {
+        const said = await confer(game, c, menu, situation, { provider: seat.provider, style: seat.style }, spoken(remarks), round);
+        remarks.push({ round, character: c.name, player: PROVIDERS[seat.provider].label, say: said.say, intent: said.intent, usage: said.usage });
+        usage = addUsage(usage, said.usage);
+      } catch (e) {
+        console.error("[adrift] a survivor couldn't join the huddle", seat.name, e);
+      }
+    }
+  }
+  return { remarks, usage };
+}
+
+/** The whole table's segment: they talk it over, then act one at a time so a later one can Assist. */
 export async function runCrew(base: string, code: string, table: Player[], situation: string, opts: SegmentOptions = {}): Promise<SimReport> {
   return withCampaignLock(code, async () => {
-    const report: SimReport = { turns: [], failed: [], usage: { input: 0, cached: 0, output: 0 } };
+    const report: SimReport = { briefing: [], turns: [], failed: [], usage: { input: 0, cached: 0, output: 0 } };
+    if (!table.length) return report;
+
+    const talk = await huddle(base, code, table, situation);
+    report.briefing = talk.remarks;
+    report.usage = addUsage(report.usage, talk.usage);
+    const briefing = spoken(talk.remarks);
+
     for (const seat of table) {
       try {
-        const turn = await runSegment(base, code, seat.characterId, seat.name, situation, { provider: seat.provider, style: seat.style }, opts);
+        const turn = await runSegment(base, code, seat.characterId, seat.name, situation, { provider: seat.provider, style: seat.style }, { ...opts, briefing });
         report.turns.push(turn);
         report.usage = addUsage(report.usage, turn.usage);
       } catch (e) {

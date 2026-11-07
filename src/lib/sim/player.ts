@@ -8,6 +8,7 @@ import { creationMenu, crewContext, type SimBuildPick } from "./create";
 import { structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
 import { menuText, type SimMenu } from "./options";
 import { styleText } from "./styles";
+import { charts, hold, upgrades } from "./world";
 
 /** Which model plays this survivor, and how they lean. */
 export type Agent = { provider: Provider; style: string };
@@ -103,6 +104,34 @@ const CREATE_TOOL: Tool = {
   },
 };
 
+/**
+ * The huddle framing is appended after the persona rather than replacing it. A cache matches on a
+ * prefix, so adding a block at the end keeps the instructions and world brief as a hit, while the
+ * one hard rule that doesn't apply here — pick a numbered option — gets overridden in place.
+ */
+const HUDDLE = `RIGHT NOW YOU ARE NOT ACTING. YOU ARE TALKING.
+
+This is the crew's huddle at the top of the segment. Nothing is committed and you are not choosing your task in this message, so rule 2 above does not apply yet. You will choose afterwards, knowing what everyone said here.
+
+Say what you think the crew should get done today, what you mean to take on yourself, and what you want someone else to cover. Talk to them by name. Argue priorities: what's urgent, what's wasteful, what can wait a day, what the hold can't pay for yet. Disagree where your character would disagree. If someone has already claimed a job, don't duplicate it unless doubling up is the point — and say that it is.
+
+"say" is what the crew hears, in character. "intent" is one plain line naming which option you're leaning toward and why; the others see that too, the way players talk across a table.`;
+
+const SECOND_PASS = `This is the second pass. You have all spoken once. Answer what was said, settle who is taking what, and say plainly if you've changed your mind. Don't simply repeat your first remark.`;
+
+const CONFER_TOOL: Tool = {
+  name: "say",
+  description: "Say what this survivor thinks the crew should do this segment.",
+  schema: {
+    type: "object",
+    properties: {
+      say: { type: "string", description: "What the crew hears, in character, under 400 characters." },
+      intent: { type: "string", description: "One plain line: which option number you're leaning toward, and why." },
+    },
+    required: ["say", "intent"],
+  },
+};
+
 const PUSH_TOOL: Tool = {
   name: "push",
   description: "Decide whether the survivor Pushes themselves for a reroll.",
@@ -186,17 +215,58 @@ async function persona(agent: Agent): Promise<SystemBlock[]> {
   ];
 }
 
-export async function decide(g: GameState, c: Character, menu: SimMenu, situation: string, agent: Agent, answers = ""): Promise<SimChoice & { model: string; usage: Usage }> {
+/**
+ * Everything the huddle and the decision both read, in one place so the two can't drift apart. The
+ * hold, the ladders, and the chart are here because a crew that can't see them can only plan a day
+ * at a time: no saving toward a module, no arguing for the derelict two columns over.
+ */
+function world(g: GameState, c: Character, situation: string): string[] {
+  return [
+    `YOU ARE\n\n${sheet(c)}`,
+    `The GM describes the situation:\n\n${situation}`,
+    `Where you are:\n\n${aboard(g, c)}`,
+    `What you have to hand:\n\n${hold(g, c.id)}`,
+    `What the compartments could become:\n\n${upgrades(g)}`,
+    `The chart:\n\n${charts(g)}`,
+    `What has happened recently aboard:\n${recent(g) || "- (nothing logged yet)"}`,
+  ];
+}
+
+/**
+ * One remark in the huddle. Nothing is submitted here: the point is that whoever acts first does it
+ * having heard the others, which they couldn't when the only channel was the log of finished turns.
+ */
+export async function confer(
+  g: GameState,
+  c: Character,
+  menu: SimMenu,
+  situation: string,
+  agent: Agent,
+  said: string,
+  round: number,
+): Promise<{ say: string; intent: string; model: string; usage: Usage }> {
+  const { value, model, usage } = await structured<{ say: string; intent: string }>(
+    agent.provider,
+    [...(await persona(agent)), { text: round > 1 ? `${HUDDLE}\n\n${SECOND_PASS}` : HUDDLE }],
+    CONFER_TOOL,
+    [
+      ...world(g, c, situation),
+      said ? `WHAT HAS BEEN SAID SO FAR\n\n${said}` : "Nobody has spoken yet. You are opening the huddle.",
+      `It is Day ${g.day}. The options you'll be choosing from once the talking is done:\n\n${menuText(menu)}`,
+    ].join("\n\n"),
+  );
+  return { ...value, model, usage };
+}
+
+export async function decide(g: GameState, c: Character, menu: SimMenu, situation: string, agent: Agent, answers = "", briefing = ""): Promise<SimChoice & { model: string; usage: Usage }> {
   const { value, model, usage } = await structured<SimChoice>(
     agent.provider,
     await persona(agent),
     TOOL,
     [
-      `YOU ARE\n\n${sheet(c)}`,
-      `The GM describes the situation:\n\n${situation}`,
+      ...world(g, c, situation),
       answers ? `The GM has answered the crew's questions:\n\n${answers}` : "",
-      `Where you are:\n\n${aboard(g, c)}`,
-      `What has happened recently aboard:\n${recent(g) || "- (nothing logged yet)"}`,
+      briefing ? `WHAT THE CREW SAID IN THE HUDDLE\n\n${briefing}` : "",
       `It is Day ${g.day}. What ${c.name} can do this segment:\n\n${menuText(menu)}`,
     ]
       .filter(Boolean)

@@ -46,6 +46,8 @@ export type SegmentOptions = {
   answers?: string;
   /** False to hear the plan and its questions without submitting anything. */
   commit?: boolean;
+  /** What the crew said in the huddle, so whoever acts first isn't choosing blind. */
+  briefing?: string;
 };
 
 /**
@@ -65,7 +67,7 @@ export async function runSegment(base: string, code: string, characterId: string
 
   const menu = legalOptions(game, c);
   if (!menu.options.length) throw new Error(`${c.name} has nothing they can legally do this segment.`);
-  const choice = await decide(game, c, menu, situation, agent, opts.answers);
+  const choice = await decide(game, c, menu, situation, agent, opts.answers, opts.briefing);
   const option = menu.options.find((o) => o.n === choice.choice)!;
 
   const turn: SimTurn = {
