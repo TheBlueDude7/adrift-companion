@@ -22,7 +22,7 @@ export const PROVIDERS: Record<Provider, Spec> = {
   anthropic: { label: "Claude", keyEnv: "ANTHROPIC_API_KEY", modelEnv: "ANTHROPIC_MODEL", base: "https://api.anthropic.com/v1", hint: "sonnet", fallback: "claude-sonnet-4-5" },
   openai: { label: "ChatGPT", keyEnv: "OPENAI_API_KEY", modelEnv: "OPENAI_MODEL", base: "https://api.openai.com/v1", hint: "gpt", fallback: "gpt-4.1" },
   xai: { label: "Grok", keyEnv: "XAI_API_KEY", modelEnv: "XAI_MODEL", base: "https://api.x.ai/v1", hint: "grok", fallback: "grok-3" },
-  google: { label: "Gemini", keyEnv: "GEMINI_API_KEY", modelEnv: "GEMINI_MODEL", base: "https://generativelanguage.googleapis.com/v1beta/openai", hint: "gemini", fallback: "gemini-2.5-flash" },
+  google: { label: "Gemini", keyEnv: "GEMINI_API_KEY", modelEnv: "GEMINI_MODEL", base: "https://generativelanguage.googleapis.com/v1beta/openai", hint: "gemini", fallback: "gemini-3.8-flash" },
 };
 
 export const PROVIDER_KEYS = Object.keys(PROVIDERS) as Provider[];
@@ -48,6 +48,12 @@ export function reason(e: unknown): string {
 const ZERO: Usage = { input: 0, cached: 0, output: 0 };
 export const addUsage = (a: Usage, b: Usage): Usage => ({ input: a.input + b.input, cached: a.cached + b.cached, output: a.output + b.output });
 
+/** The version number in a model id, so `gemini-3.8-flash` outranks `gemini-2.5-flash`. */
+function version(id: string): number {
+  const m = id.match(/(\d+)(?:\.(\d+))?/);
+  return m ? Number(m[1]) + (m[2] ? Number(`0.${m[2]}`) : 0) : 0;
+}
+
 /** Models that can't hold a conversation, whatever their name suggests. */
 const NOT_CHAT = ["audio", "realtime", "image", "tts", "whisper", "embedding", "transcribe", "moderation", "instruct", "search", "dall-e", "sora", "codex", "veo", "imagen", "embed"];
 
@@ -64,8 +70,13 @@ function discover(spec: Spec, key: string): Promise<string> {
     .then((body) => {
       const usable = (body.data ?? []).filter((m) => m.id.includes(spec.hint) && !NOT_CHAT.some((bad) => m.id.includes(bad)));
       if (!usable.length) return spec.fallback;
-      // Catalogues are not reliably ordered, so prefer the newest by creation date when there is one.
-      return usable.reduce((best, m) => ((m.created ?? 0) > (best.created ?? 0) ? m : best)).id;
+      // Catalogues are not reliably ordered, so prefer the newest by creation date, and where a
+      // catalogue omits dates entirely — Google's does — fall back to the version in the name.
+      return usable.reduce((best, m) => {
+        const byDate = (m.created ?? 0) - (best.created ?? 0);
+        if (byDate !== 0) return byDate > 0 ? m : best;
+        return version(m.id) > version(best.id) ? m : best;
+      }).id;
     });
 }
 
