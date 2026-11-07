@@ -116,7 +116,10 @@ function ask(i: Interaction, userId: string) {
       await replyToInteraction(i.token, `> ${question.replace(/\n/g, "\n> ")}\n\n${reply.answer}${flag}`);
     } catch (e) {
       console.error("[adrift] rules question failed", e);
-      await replyToInteraction(i.token, "Sorry, I couldn't answer that right now. Try again in a moment.").catch(() => undefined);
+      await Promise.all([
+        replyToInteraction(i.token, "Sorry, I couldn't answer that right now. Try again in a moment.").catch(() => undefined),
+        reportFailure(question, userId, e),
+      ]);
     }
   });
   return json({ type: 5 });
@@ -180,6 +183,19 @@ function roster(i: Interaction, isGM: boolean, base: string) {
     }
   });
   return json({ type: 5 });
+}
+
+/**
+ * Players get the plain apology; the GM channel gets the error itself. The usual causes are a missing
+ * key, a rate limit, or an empty balance, all of which are the GM's to fix and would otherwise only
+ * be visible in the host's logs.
+ */
+async function reportFailure(question: string, askedBy: string, e: unknown) {
+  const { gmChannel } = env();
+  if (!gmChannel) return;
+  const detail = (e instanceof Error ? e.message : String(e)).slice(0, 1500);
+  const content = `⚠️ **A rules question failed.**\n**Question** from <@${askedBy}>: ${question.slice(0, 300)}\n\`\`\`\n${detail}\n\`\`\``;
+  await postMessage(gmChannel, { content, allowed_mentions: NO_MENTIONS }).catch((err) => console.error("[adrift] reporting a failed question failed", err));
 }
 
 /** Send a new conflict to the GM channel. Returns the note added to the player's answer. */
