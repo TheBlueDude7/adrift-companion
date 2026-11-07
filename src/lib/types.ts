@@ -152,6 +152,10 @@ export type Mech = {
 export type Research = {
   /** Tier II and III cybernetics the crew has unlocked. Tier I is always available. */
   cybernetics: string[];
+  /** The GM has put a viable alien specimen in the crew's hands, so they may attempt the project. */
+  xenofloraAllowed?: boolean;
+  /** The Xenoflora Cultivation project is finished, so the beds will take an alien strain. */
+  xenoflora?: boolean;
 };
 
 export type Contingency = {
@@ -181,6 +185,9 @@ export type Item = {
   contingency?: boolean;
 };
 
+/** What the beds are planted with. Every kind grows alike and harvests something different. */
+export type CropKind = "food" | "chemical" | "fiber" | "xeno";
+
 export type Crop = {
   growing: boolean;
   /** Days of growth so far, out of three. */
@@ -188,8 +195,17 @@ export type Crop = {
   plantedDay: number;
   /** Days someone took Maintain Crops for this crop. */
   tended: number[];
-  /** Raw Food waiting to be harvested. */
-  ready: number;
+  /** What's planted right now. */
+  kind: CropKind;
+  /** What the beds are sown with next, when the crew wants to switch. Self-sustaining beds never
+   * stand empty, so the choice has to be made while something is still growing. */
+  next?: CropKind;
+  /** The condition a Xenoflora strain is tuned against, fixed when it goes into the beds. */
+  strain?: string;
+  /** The strain the next Xenoflora sowing will be tuned against. */
+  nextStrain?: string;
+  /** Produce waiting to be harvested, kept apart by kind so a changed planting can't mix the pile. */
+  ready: Partial<Record<CropKind, number>>;
 };
 
 export type Room = {

@@ -366,7 +366,7 @@ Wits + the relevant knowledge skill
 
 Knowing what a thing is comes out of the textbook. Noticing what matters about it does not. A researcher still needs Biology or Engineering to do the work, but it is instinct that decides whether they see the pattern in front of them.
 
-This covers Analyze Known Biomass, Analyze Unknown Biomass, Analyze Technical Data, Extract Research Trait, and Cybernetic Research. Every other Task rolls the attribute its skill is listed under.
+This covers Analyze Known Biomass, Analyze Unknown Biomass, Analyze Technical Data, Extract Research Trait, Cybernetic Research, and Xenoflora Cultivation. Every other Task rolls the attribute its skill is listed under.
 
 ## Stunts
 
@@ -486,7 +486,7 @@ A character who meets a task's Routine Threshold qualifies for Routine Benefits:
 - Expert (6+ levels above): the task earns its Strong Result without rolling.
 - Project Efficiency (4+ levels above): +1 Progress per Routine segment, for 2 in total.
 
-<!-- updated: labor -->
+<!-- updated: labor, labor-projects -->
 
 #### Labor
 
@@ -504,6 +504,18 @@ Strength rises far more slowly than a skill and stops far lower, so Labor keeps 
 | Practiced (1 less Energy) | 3 above | 1 above |
 | Expert (Strong Result without rolling) | 6 above | 2 above |
 | Project Efficiency (2 Progress) | 4 above | 2 above |
+
+##### Lending a Back
+
+Labor is also how an untrained character becomes useful on a Ship Project. On any Project that builds, moves, or repairs something physical, a character may Assist a contributor on **Strength 3** in place of the Project's own skill. They are carrying plate, holding things steady, and taking the weight.
+
+A successful Labor Assist adds 1 Progress and takes one of the Project's contributor slots, exactly like any other Assist. The one restriction is the point of it:
+
+> A Labor Assist only adds Progress if the contributor it helps is working the Project as Routine — that is, if they meet the Project's own Routine Threshold.
+
+Muscle multiplies trained work. It never replaces it. A crew of strong backs with nobody who can build still cannot build, and helping someone who is themselves struggling through a Skilled roll achieves nothing but a sore shoulder.
+
+This does not apply to Projects where there is nothing to lift: Stress Recovery, Affliction Treatment, Cybernetic Research, and Xenoflora Cultivation.
 
 ## Skilled Tasks
 
@@ -593,15 +605,16 @@ Modifiers normally stack to a maximum of -6d6 or +6d6. A task that has become im
 
 #### Assistance
 
-One character may spend a task assisting another character. The assistant must have at least 1 level in the relevant skill or a clearly useful method of helping.
+One character may spend a task assisting another character. The assistant must have at least 1 level in the relevant skill, the Strength to lend a back on physical Project work, or a clearly useful method of helping.
 
-<!-- updated: assist -->
+<!-- updated: assist, labor-projects -->
 
 - Assisting costs 1 Energy.
 - The assistant resolves their Assist against the helped task's skill, Routine Threshold 1, and only a successful Assist does anything.
 - On a Skilled or Crisis task, a successful Assist adds the assistant's Skill Level as bonus dice, to a maximum of +4d6.
 - Only one assistant adds dice to a task: the highest Skill Level among those who succeeded.
 - On a Project, a successful Assist adds 1 Progress if the assistant meets the Project's Routine Threshold, and takes one of its contributor slots.
+- On a Project that builds, moves, or repairs something physical, an assistant may qualify on Strength 3 instead, provided the contributor they help is working it as Routine. See Lending a Back.
 - Assistance never turns a Crisis task into a Routine task.
 - Resolve Assists before the task they help, so the helped character knows their pool.
 
@@ -609,14 +622,14 @@ One character may spend a task assisting another character. The assistant must h
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
-<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits -->
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits, crop-varieties, xenoflora, labor-projects -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
 | Rest | 0 | None | Qualify for Energy recovery and reduce Pressure by 1, never below the Stress floor. |
 | Prepare Food | 1 | Cooking 1 | Cook one galley recipe, at the recipe’s own Cooking threshold and the galley’s penalty. A botched check still makes what the recipe lists. |
-| Harvest Hydroponics | 1 | Botany 0 | Collect the module’s available Food Units. |
-| Maintain Crops | 2 | Botany 2 | Prevent ordinary crop loss and advance cultivation. |
+| Harvest Hydroponics | 1 | Botany 0 | Collect whatever the beds have ready, whichever variety it was. |
+| Maintain Crops | 2 | Botany 2 | Prevent ordinary crop loss and advance cultivation. Empty beds are sown with the variety the crew has chosen. |
 | Purify Water | 1 | Cooking 2 | Use up one charge of a water filter: 4 Water Units from a Crude Water Filter, 6 from a Water Filter. |
 | Filter Reclaimed Water | 1 | Cooking 1 | Draw the day’s reclaimed water out of Life Support: 2 Water Units, once a day. |
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
@@ -638,13 +651,65 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Scan Nearby Tile | 1 | Navigation 4 | Reveal Basic information about an adjacent tile. |
 | Plot Unsafe Course |   | Always Crisis: Piloting, −3d6 | Move through unscanned, unknown space. |
 | Analyze Technical Data | 1 | Wits + Engineering 3 or Biology 3 | Interpret known human data or studied alien data. |
-| Haul and Stow | 1 | Labor 2 | Shift a Heavy load by hand: clear a room for a Project, free a module’s Cargo Capacity, carry Large Salvage to the bench, or walk a mech frame into its berth. |
 | Brace the Hull | 2 | Always Skilled: Labor | Shore up a breach by hand for 1 temporary Hull HP, which the next Hit gives way to. |
 | Rig Safety Lines | 1 | Acrobatics 2 | String lines and handholds through a Weightless, unpressurized, or Exposed Construction space. Work there stops counting as Crisis for the rest of the day. |
 | Train Skill | 2 | Related Skill 0 | Gain 1 XP when training requirements are met. |
 | Reduce Pressure | 1 | Entertainer 1 | Reduce another character’s Pressure by 1 in safety, never below their Stress floor. A Strong Result also gives them +1d6 on their next roll. |
 | Treat Long-Term Stress | 2 | Entertainer 3 | Advance a Stress Recovery Project. |
-| Assist | 1 | The helped task’s skill, Routine Threshold 1 | Add your Skill Level as bonus dice to another character’s task, up to +4d6. See Assistance. |
+| Assist | 1 | The helped task’s skill, Routine Threshold 1 | Add your Skill Level as bonus dice to another character’s task, up to +4d6. On a physical Ship Project, Strength 3 qualifies instead. See Assistance. |
+
+#### Crop Varieties
+
+<!-- updated: crop-varieties -->
+
+Hydroponics beds grow one thing at a time, and the crew chooses what. Every variety takes the same three days, the same tending, and the same Botany threshold to sow. Only the harvest differs, and the rarer the produce the less of it a crop gives.
+
+| Variety | Seeded | Operational | Expanded | Self-Sustaining | Harvest |
+| --- | --- | --- | --- | --- | --- |
+| Food | 4 | 6 | 8 | 10 | Raw Food, the galley’s bulk calories. |
+| Chemical | 2 | 3 | 4 | 5 | Chemical Mixture, the stock for Special Brews, Painkillers, and Psychiatric Medication. |
+| Fiber | 1 | 2 | 3 | 4 | Scrapped Biomass, a Tier II biological material. |
+
+Giving the beds over to anything but Food means the crew stops growing their own food, which is the whole of the choice.
+
+Expanded and Self-Sustaining beds replant themselves and never stand empty, so a switch has to be chosen while a crop is still growing. It takes effect at the next sowing rather than tearing out what is already in the ground.
+
+Produce waits in the module until Harvest Hydroponics collects it. Varieties keep apart rather than mixing, so a harvest left standing is still itself when the next crop ripens beside it.
+
+#### Xenoflora
+
+<!-- updated: xenoflora -->
+
+Alien life can be made to grow in a ship's beds, and what it grows is not food. A Xenoflora strain is tuned against a single hazard, and a ripe crop yields sealed doses that make a survivor resistant to it. The crew is running Adaptive Cultivar at the scale of a whole module.
+
+None of this is the crew's to reach for. **The GM decides whether the crew has a viable alien specimen at all**, and until they say so the Xenoflora Cultivation project cannot be started. Nothing is owed: a specimen is a reward for a salvage run, a derelict, or a xenobiological find, and a GM who never puts one in play has a campaign where xenoflora simply does not exist.
+
+Once the GM has granted a specimen, the crew still has to finish the project. It is run once; after that the beds will take a strain whenever the crew wants one.
+
+| PROJECT: XENOFLORA CULTIVATION |
+| --- |
+| Progress Required: 6 |
+| Skill: Wits + Botany; Routine Threshold 7 |
+| Contributor Limit: 2; Energy per Contribution: 2 |
+| Facility: Expanded Hydroponics or better, and a Biological Lab |
+| Cost: Committed at the start — 1 extracted Research Trait, 2 Scrapped Biomass, 3 Chemical Mixture |
+| Output: Hydroponics will accept a Xenoflora sowing |
+
+A strain is tuned when it is sown, and that choice is fixed for the crop. Deciding what the crew will need three days from now is the whole of the gamble. A strain can be tuned against either a condition or a damage type:
+
+- **Conditions:** Burning, Contaminated, Freezing, Overheated, Poisoned, Suffocating.
+- **Damage:** Fire, Electric, Chemical. Ballistic and Physical are not on the list — no plant makes a survivor shrug off a bullet.
+
+A dose of a condition strain makes its user Resistant to that condition for the expedition. A dose of a damage strain gives Resistance to that damage type, halving each hit of it for the expedition. Halving damage all expedition is worth a good deal more than shrugging off one condition, so a damage strain yields half as many doses, rounded down.
+
+| Hydroponics | Condition doses | Damage doses |
+| --- | --- | --- |
+| Expanded | 3 | 1 |
+| Self-Sustaining | 5 | 2 |
+
+Xenoflora will not take root below Expanded Hydroponics. A ripe crop is not harvested — the doses are drawn and sealed as it ripens and go straight into the hold, where they keep until used. The beds then stand empty, because the ship's own routine will not put an alien strain into the ground unasked. Someone has to take Maintain Crops and sow it deliberately.
+
+A strain resists automation rather than benefiting from it. **It needs Maintain Crops every single day, at every module level, including Self-Sustaining.** Miss a day and it does not stall like an ordinary crop: it slips containment. The crop is lost, the beds revert to Food, and the GM has something loose aboard the ship to run as they see fit.
 
 ### The Competence Rule
 
@@ -1846,9 +1911,11 @@ Larger Projects may permit more.
 
 Two characters contributing independently are not Assisting one another. Each resolves their own Project Task.
 
-<!-- updated: assist -->
+<!-- updated: assist, labor-projects -->
 
 A character may instead Assist another contributor using the normal rules. They make no contribution of their own, but a successful Assist adds 1 Progress if the assistant meets the Project's Routine Threshold, and that takes one of the Project's contributor slots.
+
+On a Project that builds, moves, or repairs something physical, an assistant with no useful skill may lend their back instead: Strength 3, adding 1 Progress only if the contributor they help is working the Project as Routine. See Lending a Back.
 
 #### Occupied Workspaces
 
@@ -2591,9 +2658,11 @@ Unknown alien subjects are normally Skilled or Crisis.
 
 ##### Breach
 
-Skill: Mechanical Technician, Engineering, Close Combat, or Heavy Weaponry
+Skill: Mechanical Technician, Engineering, Close Combat, Heavy Weaponry, or Labor
 
 Purpose: Open a sealed door, cut through wreckage, or force an obstructed route.
+
+As a Labor Task this uses Strength against the Labor Threshold the GM sets for the obstruction, normally 2 for something stuck and 3 or more for something that was meant to stay shut.
 
 Breaching is usually loud.
 

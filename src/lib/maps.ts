@@ -2,7 +2,7 @@ import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
 import { maxMechArmor } from "./mechs";
 import { DEFAULT_ITEM_TEMPLATES } from "./rules";
-import type { GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, TilePos, TokenKind } from "./types";
+import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, TilePos, TokenKind } from "./types";
 
 export const TERRAIN: { key: Terrain; name: string; fill: string; hint: string }[] = [
   { key: "floor", name: "Floor", fill: "#334155", hint: "Walkable deck" },
@@ -147,6 +147,13 @@ export function normalizeGame(g: GameState): GameState {
   if (!Array.isArray(g.actions)) g.actions = [];
   delete (g.ship as { powerDays?: number }).powerDays;
   if (!g.research || !Array.isArray(g.research.cybernetics)) g.research = { cybernetics: [] };
+  // Hydroponics grew food and nothing else, so `ready` was a plain count of Raw Food.
+  const crop = g.ship.crop as (Omit<Crop, "ready"> & { ready: number | Crop["ready"] }) | undefined;
+  if (crop) {
+    if (!crop.kind) crop.kind = "food";
+    if (typeof crop.ready === "number") crop.ready = crop.ready > 0 ? { food: crop.ready } : {};
+    else if (!crop.ready) crop.ready = {};
+  }
   for (const r of g.ship.rooms) {
     if (r.module && MODULE_RENAMES[r.module]) r.module = MODULE_RENAMES[r.module];
   }

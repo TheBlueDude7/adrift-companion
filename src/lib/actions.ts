@@ -1,4 +1,4 @@
-import { EXPERT_MARGIN, FABRICATE_ITEMS, LABOR_EXPERT_MARGIN, LABOR_PRACTICED_MARGIN, LABOR_PROJECT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, LABOR_ASSIST_THRESHOLD, LABOR_EXPERT_MARGIN, LABOR_PRACTICED_MARGIN, LABOR_PROJECT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
 import { cook, craftBlocker, fabricate, fabricateCost, galleyPenalty, moduleLevel, RECIPE_BY_NAME, recipeSkills, salvageParts, stationLevel, stationLevelName } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
@@ -127,9 +127,21 @@ export type AssistEffect = {
 };
 
 /**
+ * Projects where there is nothing to carry, lift, or hold steady, so a strong back is no use. Anything
+ * else builds, moves, or repairs something physical and can take a Labor Assist.
+ */
+const DESK_WORK = ["Stress Recovery", "Affliction Treatment", "Cybernetic Research", "Xenoflora Cultivation"];
+
+const physicalProject = (p: Project) => !DESK_WORK.some((n) => p.name.startsWith(n));
+
+/**
  * What one Assist is worth. The assistant needs a level in the task's skill, or a useful method the GM
  * allows; their Skill Level becomes bonus dice (up to +4d6) once the Assist itself succeeds; and on a
  * Project they add 1 Progress if they meet its Routine Threshold.
+ *
+ * Labor is the other way in. On a Project that builds, moves, or repairs something physical, Strength
+ * can stand in for the skill — but only alongside someone doing the work as Routine. Muscle multiplies
+ * trained work and never replaces it, so a strong crew can't build a ship with nobody who can build.
  */
 export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
   const c = g.characters.find((x) => x.id === a.characterId);
@@ -140,15 +152,24 @@ export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
   const level = c ? (t.labor ? attributeValue(c, "STR") : t.skill ? skillLevel(c, t.skill) : 0) : 0;
   const project = projectWorkedOn(g, target);
   const dice = Math.min(ASSIST_MAX_DICE, level);
-  const progress = project && !project.done && (t.skill || t.labor) && level >= t.threshold ? 1 : 0;
+  const strength = c ? attributeValue(c, "STR") : 0;
+  const skilled = (t.skill || t.labor) && level >= t.threshold;
+  const heavy = !!project && physicalProject(project);
+  const lending = heavy && !t.labor && t.routine && strength >= LABOR_ASSIST_THRESHOLD;
+  const progress = project && !project.done && (skilled || lending) ? 1 : 0;
   const problems: string[] = [];
   const warnings: string[] = [];
   const notes: string[] = [];
-  if (level === 0) problems.push(`No level in ${t.skill ? SKILL_BY_KEY[t.skill].name : "a skill the task uses"}, so it takes a useful method the GM allows`);
+  if (level === 0 && !lending) problems.push(`No level in ${t.skill ? SKILL_BY_KEY[t.skill].name : "a skill the task uses"}, so it takes a useful method the GM allows`);
   if (dice > 0) notes.push(`+${dice}d6 on ${who}'s roll, once this Assist succeeds`);
   if (project) {
-    if (progress > 0) notes.push(`+1 Progress on ${project.name}, using one of its contributor slots`);
-    else warnings.push(`No Progress on ${project.name}: that needs ${t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : t.labor ? `${ATTRIBUTE_NAMES.STR} ${t.threshold}` : `its Routine ${t.threshold}`}`);
+    if (progress > 0) notes.push(`+1 Progress on ${project.name}, using one of its contributor slots${lending && !skilled ? `, lending a back at ${ATTRIBUTE_NAMES.STR} ${LABOR_ASSIST_THRESHOLD}` : ""}`);
+    else if (heavy && !t.labor && !t.routine && strength >= LABOR_ASSIST_THRESHOLD) {
+      warnings.push(`No Progress on ${project.name}: a back only helps someone working it as Routine, and ${who} isn't`);
+    } else {
+      const bar = t.skill ? `${SKILL_BY_KEY[t.skill].name} ${t.threshold}` : t.labor ? `${ATTRIBUTE_NAMES.STR} ${t.threshold}` : `its Routine ${t.threshold}`;
+      warnings.push(`No Progress on ${project.name}: that needs ${bar}${heavy && !t.labor ? `, or ${ATTRIBUTE_NAMES.STR} ${LABOR_ASSIST_THRESHOLD} alongside someone working it as Routine` : ""}`);
+    }
   } else if (t.routine) warnings.push(`${who}'s task is already Routine, so the dice only matter if they roll for a Strong Result`);
   if (target.roll) warnings.push(`${who} has already rolled, so the dice come too late`);
   return { dice, progress, problems, warnings, notes };
@@ -595,6 +616,10 @@ export function advanceProject(g: GameState, projectId: string, amount = 1): str
       g.ship.rooms.push(roomFromPreset(null, "New Room"));
       out.push("A new empty room is sealed and pressurized.");
     }
+    if (x.name === "Xenoflora Cultivation" && !g.research.xenoflora) {
+      g.research.xenoflora = true;
+      out.push("☣ The strain takes to the nutrient bath. Hydroponics will now accept a Xenoflora sowing, tuned against one condition.");
+    }
   }
   return out;
 }
@@ -673,13 +698,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   if (c && ok && def.effect === "rest") rest(g, c, out);
   if (ok && def.effect === "project" && a.projectId) out.push(...advanceProject(g, a.projectId, terms.progress));
   if (ok && def.effect === "tend") tendCrops(g, out);
-  if (ok && def.effect === "harvest" && harvestCrops(g, out) > 0) {
-    const bonus = Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0);
-    if (bonus > 0) {
-      stockItem(g, "Raw Food", bonus, { category: "Supply" });
-      out.push(`+${bonus} Raw Food from careful harvesting, added to ship storage.`);
-    }
-  }
+  if (ok && def.effect === "harvest") harvestCrops(g, out, Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0));
   if (ok && def.effect === "yield" && def.yields) {
     const qty = def.yields.qty + (strong ? 1 : 0);
     stockItem(g, def.yields.name, qty, { category: "Material", tier: "Tier I" });

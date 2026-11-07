@@ -26,7 +26,7 @@ import {
 import { FACILITIES, FACILITY_BY_NAME, ladderFor, ROOM_FITTINGS, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject } from "@/lib/actions";
-import { CROP_DAYS, CROP_LEVEL_NAMES, CROP_YIELD, cropOf, cropStall, cropTending, growCrops, hydroponicsLevel } from "@/lib/crops";
+import { CROP_DAYS, CROP_KINDS, CROP_KIND_BY_KEY, CROP_LEVEL_NAMES, XENO_STRAINS, type CropKindDef, cropKindOf, cropKindsFor, cropOf, cropStall, cropTending, cropYield, doseYield, growCrops, hydroponicsLevel, nextCropKind, readyTotal, strainLabel, strainOf } from "@/lib/crops";
 import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
@@ -274,10 +274,19 @@ function HydroponicsCard() {
   const { isGM } = usePerms();
   const level = hydroponicsLevel(game);
   const crop = cropOf(game);
-  if (level < 0 && !crop.growing && !crop.ready) return null;
+  const waiting = readyTotal(crop);
+  if (level < 0 && !crop.growing && !waiting) return null;
   const stall = cropStall(game);
   const tending = cropTending(game);
   const tendedToday = crop.tended.includes(game.day);
+  const kind = cropKindOf(game);
+  const sowing = nextCropKind(game);
+  const piles = CROP_KINDS.filter((k) => (crop.ready[k.key] ?? 0) > 0);
+  // Xenoflora doses are sealed straight into the hold, so there's never a pile of them for the GM to edit.
+  const manual = kind.key === "xeno" ? CROP_KIND_BY_KEY.food : kind;
+  const strain = strainOf(crop.nextStrain);
+  /** A damage strain yields half as many doses, so the counts shown have to follow the tuning. */
+  const yieldOf = (k: CropKindDef) => (k.key === "xeno" ? doseYield(strain.name, level) : cropYield(k, level));
   const update = (label: string, fn: (c: Crop) => Crop | void, line?: string) =>
     act(label, (g) => {
       const next = fn({ ...cropOf(g), tended: [...cropOf(g).tended] });
@@ -290,39 +299,128 @@ function HydroponicsCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><SproutIcon className="size-4 text-emerald-300" /> Hydroponics</CardTitle>
         <CardDescription>
-          {level < 0 ? "No working Hydroponics aboard." : `${CROP_LEVEL_NAMES[level]}: ${level >= 1 ? `${CROP_YIELD[level]} Raw Food every ${CROP_DAYS} days.` : "no food production."}`} {tending.rule} Maintain Crops seeds an empty module and tends a growing one; End of Day grows; Harvest Hydroponics collects.
+          {level < 0 ? "No working Hydroponics aboard." : `${CROP_LEVEL_NAMES[level]}: ${level >= 1 ? `one crop every ${CROP_DAYS} days.` : "no production."}`} {tending.rule} Maintain Crops sows an empty module and tends a growing one; End of Day grows; Harvest Hydroponics collects.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-2xl">{crop.growing ? crop.day : "—"}<span className="text-muted-foreground">/{CROP_DAYS}</span></span>
-          <span className="text-sm text-muted-foreground">{crop.growing ? "days grown" : "nothing planted"}</span>
+          <span className="text-sm text-muted-foreground">{crop.growing ? `days grown · ${crop.kind === "xeno" ? `${crop.strain} strain` : kind.name}` : "nothing planted"}</span>
           {crop.growing && <Pill tone={tending.urgent ? "warn" : tending.due ? "info" : "good"}>{tending.status}</Pill>}
-          <Pill tone={crop.ready ? "good" : "muted"} className="ml-auto">{crop.ready} Raw Food ready</Pill>
+          <span className="ml-auto flex flex-wrap items-center gap-1.5">
+            {piles.length === 0 ? <Pill tone="muted">Nothing ready</Pill> : piles.map((k) => <Pill key={k.key} tone="good">{crop.ready[k.key]} {k.item} ready</Pill>)}
+          </span>
         </div>
         <Meter value={crop.growing ? crop.day : 0} max={CROP_DAYS} tone="good" segmented />
         <p className={cn("text-xs", stall ? "text-amber-300" : "text-muted-foreground")}>
-          {stall ? `Tonight: the crops won't grow. ${stall}.` : crop.growing ? (crop.day + 1 >= CROP_DAYS ? "Tonight: the crop finishes." : "Tonight: the crop grows a day.") : level >= 4 ? "A new crop starts on its own tonight." : ""}
+          {stall
+            ? crop.kind === "xeno" && crop.growing
+              ? `Tonight: the ${crop.strain} strain slips containment and the crop is lost. ${stall}.`
+              : `Tonight: the crops won't grow. ${stall}.`
+            : crop.growing
+              ? crop.day + 1 >= CROP_DAYS
+                ? "Tonight: the crop finishes."
+                : "Tonight: the crop grows a day."
+              : level >= 4
+                ? sowing.key === "xeno"
+                  ? "The beds stay empty tonight: the ship won't sow an alien strain unasked."
+                  : "A new crop starts on its own tonight."
+                : ""}
           {/* Operational crops stall on their last day, so say so while there's still time to assign the task. */}
           {!stall && tending.due && <span className="text-amber-300"> It still needs Maintain Crops before it ripens, or it loses that growth.</span>}
         </p>
+        {level >= 1 && (
+          <div className="grid gap-1.5 border-t pt-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">{crop.growing ? "Sow next:" : "Sow:"}</span>
+              {cropKindsFor(game).map((k) => (
+                <Button
+                  key={k.key}
+                  size="xs"
+                  variant={k.key === sowing.key ? "default" : "outline"}
+                  disabled={k.key === "xeno" && level < 3}
+                  onClick={() => update(`Sow ${k.name}`, (c) => ({ ...c, next: k.key }), `The beds are given over to ${k.name}: ${yieldOf(k)} ${k.key === "xeno" ? "doses" : k.item} a crop.`)}
+                >
+                  {k.name} · {yieldOf(k)}
+                </Button>
+              ))}
+            </div>
+            {/* A strain is tuned against one thing, and the choice is locked in once it's in the ground. */}
+            {sowing.key === "xeno" &&
+              (["condition", "damage"] as const).map((group) => (
+                <div key={group} className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">{group === "condition" ? "Resist a condition:" : "Resist damage:"}</span>
+                  {XENO_STRAINS.filter((s) => s.kind === group).map((s) => (
+                    <Button
+                      key={s.name}
+                      size="xs"
+                      variant={s.name === strain.name ? "default" : "outline"}
+                      onClick={() => update(`Tune the strain to ${s.name}`, (c) => ({ ...c, nextStrain: s.name }), `The strain is tuned for ${strainLabel(s.name)}: ${doseYield(s.name, level)} doses a crop.`)}
+                    >
+                      {s.name}
+                    </Button>
+                  ))}
+                </div>
+              ))}
+            <p className="text-[11px] text-muted-foreground">
+              {crop.growing && sowing.key !== kind.key && `This ${kind.name} crop finishes first. `}
+              {sowing.key === "xeno"
+                ? `Xenoflora: ${yieldOf(sowing)} doses of ${strainLabel(strain.name)} every ${CROP_DAYS} days${level < 3 ? ", and it needs Expanded Hydroponics to take root" : ""}. ${strain.kind === "damage" ? "Halving a damage type is worth more than shrugging off a condition, so a damage strain yields half as many. " : ""}${sowing.note}`
+                : `${sowing.name}: ${cropYield(sowing, level)} ${sowing.item} every ${CROP_DAYS} days. ${sowing.note}`}
+            </p>
+          </div>
+        )}
         {isGM && (
           <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
             <span className="text-[11px] text-muted-foreground">GM:</span>
             {!crop.growing ? (
-              <Button size="xs" variant="outline" onClick={() => update("Seed crops", (c) => ({ ...c, growing: true, day: 0, plantedDay: game.day, tended: [game.day] }), "🌱 The GM seeds a new crop in Hydroponics.")}>Seed</Button>
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={sowing.key === "xeno" && level < 3}
+                onClick={() => {
+                  const sown = sowing.key === "xeno" ? strain.name : undefined;
+                  update(
+                    "Sow crops",
+                    (c) => ({ ...c, growing: true, day: 0, plantedDay: game.day, tended: [game.day], kind: sowing.key, next: undefined, strain: sown }),
+                    sown ? `☣ The GM puts a ${sown} strain in the Hydroponics beds.` : `🌱 The GM sows a ${sowing.name} crop in Hydroponics.`,
+                  );
+                }}
+              >
+                Sow
+              </Button>
             ) : (
               <>
                 <Button size="xs" variant="outline" onClick={() => update(tendedToday ? "Untend crops" : "Tend crops", (c) => ({ ...c, tended: tendedToday ? c.tended.filter((d) => d !== game.day) : [...c.tended, game.day] }))}>{tendedToday ? "Unmark tended" : "Mark tended"}</Button>
                 <Button size="xs" variant="outline" onClick={() => act("Grow crops", (g) => { const out: string[] = []; const t = cropOf(g); if (!t.tended.includes(g.day)) g.ship.crop = { ...t, tended: [...t.tended, g.day] }; growCrops(g, out); return out; })}>Grow a day</Button>
-                <Button size="xs" variant="ghost" onClick={() => update("Clear crops", (c) => ({ ...c, growing: false, day: 0, tended: [] }), "The crops in Hydroponics are cleared.")}>Clear crop</Button>
+                <Button size="xs" variant="ghost" onClick={() => update("Clear crops", (c) => ({ ...c, growing: false, day: 0, tended: [], strain: undefined }), "The crops in Hydroponics are cleared.")}>Clear crop</Button>
               </>
             )}
             <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-              Ready
-              <Stepper value={crop.ready} min={0} max={99} size="xs" label="ready food" onChange={(v) => update("Ready food", (c) => ({ ...c, ready: v }))} />
+              {manual.item} ready
+              <Stepper value={crop.ready[manual.key] ?? 0} min={0} max={99} size="xs" label={`${manual.item} ready`} onChange={(v) => update("Ready produce", (c) => ({ ...c, ready: { ...c.ready, [manual.key]: v } }))} />
             </span>
           </div>
+        )}
+        {/* Alien life is the GM's to hand out. Until they do, the crew can't even attempt the project. */}
+        {isGM && !game.research.xenoflora && (
+          <label className="flex items-start gap-2 border-t pt-3 text-xs text-muted-foreground">
+            <Checkbox
+              checked={!!game.research.xenofloraAllowed}
+              onCheckedChange={(v) =>
+                act("Xenoflora specimen", (g) => {
+                  g.research.xenofloraAllowed = !!v;
+                  return v
+                    ? "☣ The crew has a viable alien specimen. Xenoflora Cultivation can be started as a Project."
+                    : "The alien specimen is no longer viable. Xenoflora Cultivation can't be started.";
+                })
+              }
+            />
+            <span>
+              The crew has a viable alien specimen.
+              <span className="block text-[11px]">Lets them start the Xenoflora Cultivation project, which is what actually unlocks growing strains.</span>
+            </span>
+          </label>
         )}
       </CardContent>
     </Card>
@@ -554,7 +652,9 @@ function AddProjectDialog() {
   const [moduleName, setModuleName] = useState<string | null>(null);
   const [startLevel, setStartLevel] = useState(0);
   const { isGM } = usePerms();
-  const t = PROJECT_TEMPLATES[tpl];
+  // Xenoflora Cultivation is off the list until the GM says the crew has something worth cultivating.
+  const templates = PROJECT_TEMPLATES.filter((p) => p.name !== "Xenoflora Cultivation" || (game.research.xenofloraAllowed && !game.research.xenoflora));
+  const t = templates[tpl] ?? templates[0];
   const needsPatient = t.name === "Stress Recovery";
   const patient = game.characters.find((c) => c.id === patientId);
   const inRecovery = new Set(game.ship.projects.filter((p) => !p.done && p.patientId).map((p) => p.patientId));
@@ -635,7 +735,7 @@ function AddProjectDialog() {
         <div className="grid gap-3">
           <Select value={String(tpl)} onValueChange={(v) => pickTemplate(Number(v))}>
             <SelectTrigger className="w-full"><SelectValue>{t.name}</SelectValue></SelectTrigger>
-            <SelectContent>{PROJECT_TEMPLATES.map((p, i) => <SelectItem key={p.name} value={String(i)}>{p.name}</SelectItem>)}</SelectContent>
+            <SelectContent>{templates.map((p, i) => <SelectItem key={p.name} value={String(i)}>{p.name}</SelectItem>)}</SelectContent>
           </Select>
           <div className="rounded-lg bg-muted/40 p-3 text-xs">
             <p><span className="text-muted-foreground">Skill:</span> {t.skill || "—"} · Routine {threshold}</p>

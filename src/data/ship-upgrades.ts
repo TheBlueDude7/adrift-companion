@@ -100,13 +100,13 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
     ],
   },
   Hydroponics: {
-    blurb: "Dim grow lights hum over rows of stubborn, engineered life. The ship grows food here, or it starves.",
+    blurb: "Dim grow lights hum over rows of stubborn, engineered life. The ship grows its food here, or its medicine, or it goes without.",
     levels: [
-      { name: "Dead", cost: r([2, "Scrap Metal"], [5, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 2, effect: "No food production is possible." },
-      { name: "Seeded", cost: r([3, "Scrap Metal"], [3, "Scrap Components"], [2, "Basic Adhesive"]), toolkit: 2, effect: "After a Maintain Crops action, 4 Raw Food after 3 days. Maintain Crops must be taken every day or the crops don't grow." },
-      { name: "Operational", cost: r([4, "Scrap Metal"], [5, "Components"], [1, "Basic Adhesive"]), toolkit: 3, effect: "After a grow action, 6 Raw Food after 3 days. Maintain Crops only needs to be taken on the second or third day." },
-      { name: "Expanded", cost: r([3, "Reinforced Steel"], [6, "Components"], [2, "Basic Adhesive"]), toolkit: 3, effect: "After a grow action, 8 Raw Food after 3 days. Maintain Crops only needs to be taken on initial seeding." },
-      { name: "Self-Sustaining", cost: r([3, "Neutronium"], [6, "Quantum Components"]), toolkit: 0, effect: "10 Raw Food every 3 days." },
+      { name: "Dead", cost: r([2, "Scrap Metal"], [5, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 2, effect: "Nothing grows here." },
+      { name: "Seeded", cost: r([3, "Scrap Metal"], [3, "Scrap Components"], [2, "Basic Adhesive"]), toolkit: 2, effect: "After a Maintain Crops action, a crop after 3 days: 4 Food, 2 Chemical, or 1 Fiber. Maintain Crops must be taken every day or the crops don't grow." },
+      { name: "Operational", cost: r([4, "Scrap Metal"], [5, "Components"], [1, "Basic Adhesive"]), toolkit: 3, effect: "After a grow action, a crop after 3 days: 6 Food, 3 Chemical, or 2 Fiber. Maintain Crops only needs to be taken on the second or third day." },
+      { name: "Expanded", cost: r([3, "Reinforced Steel"], [6, "Components"], [2, "Basic Adhesive"]), toolkit: 3, effect: "After a grow action, a crop after 3 days: 8 Food, 4 Chemical, or 3 Fiber. Maintain Crops only needs to be taken on initial seeding. Xenoflora can take root here, for 3 doses a crop." },
+      { name: "Self-Sustaining", cost: r([3, "Neutronium"], [6, "Quantum Components"]), toolkit: 0, effect: "A crop every 3 days, untended: 10 Food, 5 Chemical, or 4 Fiber. Xenoflora yields 5 doses a crop, but still needs tending every day." },
     ],
   },
 };

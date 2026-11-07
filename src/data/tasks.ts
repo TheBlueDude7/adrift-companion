@@ -51,6 +51,11 @@ export const PROJECT_MARGIN = 4;
 export const LABOR_PRACTICED_MARGIN = 1;
 export const LABOR_EXPERT_MARGIN = 2;
 export const LABOR_PROJECT_MARGIN = 2;
+/**
+ * The Strength that lets a character lend their back to a Project someone trained is already working.
+ * Set above the ordinary Labor thresholds: a seat on skilled work is worth more than shifting a crate.
+ */
+export const LABOR_ASSIST_THRESHOLD = 3;
 /** Items one Fabricate task makes, each paying the task's Energy. An Expert adds one more for free. */
 export const FABRICATE_ITEMS = 2;
 
@@ -75,7 +80,6 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Deconstruct Common Item", "Ship", 1, ["scavenging"], 2, "Take an item in the hold apart for half the materials it was made from, rounded down, off the bulkiest inputs first. Scavenging 2 for Tier I, 4 for Tier II, 6 for Tier III, 7+ for alien equipment.", "routine", "salvage", { strong: "Recover three quarters of the materials instead of half." }),
   t("Salvage Ship", "Ship", 2, ["scavenging"], 4, "Scavenge a ship using the scavenge rules.", "routine", null, { strong: "Find additional or higher-quality materials.", gmResolves: true }),
   t("Tune the Reactor", "Ship", 1, ["engineering"], 6, "+1 Power Unit until the end of the day. Needs a Large reactor (Engineering 6), or Voltaic and up (Engineering 8).", "routine", "tune", { facility: { modules: ["Fusion Reactor"], level: 3, label: "a Large reactor or better" } }),
-  t("Haul and Stow", "Ship", 1, [], 2, "Shift a Heavy load by hand: clear a room so a Project can start, free a module's Cargo Capacity, carry Large Salvage to the bench, or walk a mech frame into its berth.", "routine", null, { labor: true, strong: "Shift a second load in the same segment." }),
   t("Brace the Hull", "Ship", 2, [], 0, "Shore up a breach with your shoulder and whatever will wedge: 1 temporary Hull HP, which the next Hit gives way to. It can't raise the ship above 1 Hull HP, so it only buys time at a holed hull.", "skilled", "patch", { labor: true, noStrong: true }),
   t("Rig Safety Lines", "Ship", 1, ["acrobatics"], 2, "String lines, tethers, and handholds through a Weightless, unpressurized, or Exposed Construction space. Work there stops counting as Crisis for the rest of the day.", "routine", null, { strong: "The rigging reaches one adjoining space too." }),
   t("Plot Safe Course", "Navigation", 1, ["piloting"], 4, "Move through scanned, stable space. Piloting 4 for 1 tile, 6 for 2, 8 for 3–4. Burns one Power Cell; Piloting 8 skips the cell once per day.", "routine", "course", { strong: "No Power Cell consumed." }),
@@ -84,8 +88,8 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Deep Scan", "Navigation", 2, ["navigation"], 7, "Sweep a tile for concealed signals, hidden ships, and anomalies. Alien anomalies need an Enigmatic suite and Navigation 9.", "routine", "scan", { strong: "Also identify the signal's source and whether it's hostile.", facility: { modules: ["Navigation & Sensor Suite"], level: 2, label: "an Operational Navigation & Sensor Suite" } }),
   t("Prepare Food", "Food & water", 1, ["cooking"], 1, "Cook one galley recipe: meals, Special Brews, or Chemical Mixtures. Uses Cooking at the recipe's threshold, and a rough galley costs dice. A botched check still makes whatever the recipe lists.", "routine", "cook", { strong: "Make one extra meal.", facility: KITCHEN }),
   t("Stretch Rations", "Food & water", 1, ["cooking"], 5, "Tonight, every 3 Food Units feed 4 survivors.", "routine", "rations", { facility: KITCHEN }),
-  t("Harvest Hydroponics", "Food & water", 1, ["botany"], 0, "Collect the module's available Food Units. +1 Raw Food for every 3 Botany levels.", "routine", "harvest", { strong: "+1 Raw Food.", facility: HYDROPONICS }),
-  t("Maintain Crops", "Food & water", 2, ["botany"], 2, "Prevent ordinary crop loss and advance cultivation. Botany 5 at Expanded Hydroponics, 7 at Self-Sustaining.", "routine", "tend", { facility: HYDROPONICS }),
+  t("Harvest Hydroponics", "Food & water", 1, ["botany"], 0, "Collect whatever the beds have ready, whichever crop it was. +1 of it for every 3 Botany levels.", "routine", "harvest", { strong: "+1 more.", facility: HYDROPONICS }),
+  t("Maintain Crops", "Food & water", 2, ["botany"], 2, "Prevent ordinary crop loss and advance cultivation. Empty beds are sown with the crop the crew has chosen. A Xenoflora strain needs this every day at any level or it slips containment. Botany 5 at Expanded Hydroponics, 7 at Self-Sustaining.", "routine", "tend", { facility: HYDROPONICS }),
   t("Cultivate Specimen", "Food & water", 2, ["botany"], 6, "Grow an alien plant sample into 1 Chemical Mixture.", "routine", "yield", { strong: "+1 Chemical Mixture.", facility: HYDROPONICS, yields: { name: "Chemical Mixture", qty: 1 } }),
   t("Purify Water", "Food & water", 1, ["cooking"], 2, "Use up one charge of a water filter from the hold: 4 Water Units from a Crude Water Filter, 6 from a Water Filter.", "routine", "purify"),
   t("Filter Reclaimed Water", "Food & water", 1, ["cooking"], 1, "Draw the day's reclaimed water out of Life Support: 2 Water Units, once a day.", "routine", "reclaim", { strong: "+1 Water Unit.", facility: { modules: ["Life Support"], level: 1, label: "working Life Support" } }),
