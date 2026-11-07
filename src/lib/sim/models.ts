@@ -43,7 +43,7 @@ export const addUsage = (a: Usage, b: Usage): Usage => ({ input: a.input + b.inp
 /** Models that can't hold a conversation, whatever their name suggests. */
 const NOT_CHAT = ["audio", "realtime", "image", "tts", "whisper", "embedding", "transcribe", "moderation", "instruct", "search", "dall-e", "sora", "codex", "veo", "imagen", "embed"];
 
-const g = globalThis as unknown as { __adriftSimModels?: Map<Provider, Promise<string>> };
+const g = globalThis as unknown as { __adriftSimModels?: Map<Provider, Promise<string>>; __adriftSimNoForcedTool?: boolean };
 const chosen = (g.__adriftSimModels ??= new Map());
 
 /**
@@ -80,18 +80,29 @@ export function pickModel(provider: Provider): Promise<string> {
 
 /** Anthropic caches only what you mark, so `cache` on a block is what earns the discount. */
 async function anthropic<T>(key: string, model: string, system: SystemBlock[], tool: Tool, prompt: string): Promise<{ value: T; usage: Usage }> {
-  const res = await fetch(`${PROVIDERS.anthropic.base}/messages`, {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1000,
-      system: system.map((s) => ({ type: "text", text: s.text, ...(s.cache ? { cache_control: { type: "ephemeral" } } : {}) })),
-      tools: [{ name: tool.name, description: tool.description, input_schema: tool.schema }],
-      tool_choice: { type: "tool", name: tool.name },
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  const send = (force: boolean) =>
+    fetch(`${PROVIDERS.anthropic.base}/messages`, {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1000,
+        system: system.map((s) => ({ type: "text", text: s.text, ...(s.cache ? { cache_control: { type: "ephemeral" } } : {}) })),
+        tools: [{ name: tool.name, description: tool.description, input_schema: tool.schema }],
+        ...(force ? { tool_choice: { type: "tool", name: tool.name } } : {}),
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+  // Some models reject a forced tool choice. The tool is the only one offered and the prompt asks for
+  // it, so letting the model choose still gets a call; remember the refusal rather than pay for it twice.
+  let res = await send(!g.__adriftSimNoForcedTool);
+  if (res.status === 400 && !g.__adriftSimNoForcedTool) {
+    const refusal = await res.text();
+    if (!refusal.includes("tool_choice")) throw new Error(`400 ${refusal}`);
+    g.__adriftSimNoForcedTool = true;
+    res = await send(false);
+  }
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   const body = (await res.json()) as {
     content: { type: string; name?: string; input?: T }[];
