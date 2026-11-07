@@ -6,7 +6,7 @@ import { SKILLS } from "../rules";
 import type { Character } from "../types";
 import { createSimClient } from "./client";
 import { buildCharacter, buildLine, resolveBuild } from "./create";
-import { addUsage, configuredProviders, isProvider, PROVIDERS, PROVIDER_KEYS, type Provider, type Usage } from "./models";
+import { addUsage, configuredProviders, isProvider, PROVIDERS, PROVIDER_KEYS, reason, type Provider, type Usage } from "./models";
 import { decideCreate } from "./player";
 import { type Style } from "./styles";
 import { noProvidersMessage, withCampaignLock } from "./table";
@@ -130,7 +130,7 @@ export async function runRoster(base: string, code: string, table: Recruiter[], 
         report.usage = addUsage(report.usage, pick.usage);
       } catch (e) {
         console.error("[adrift] making a survivor failed", label, e);
-        report.failed.push(`${label}: ${e instanceof Error ? e.message : "something went wrong"}`);
+        report.failed.push(`${label}: ${reason(e)}`);
       }
     }
 

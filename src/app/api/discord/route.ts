@@ -3,6 +3,7 @@ import { askRules, type Reply } from "@/lib/discord/ask";
 import { env, NO_MENTIONS, postMessage, replyToInteraction, verifyDiscord } from "@/lib/discord/rest";
 import { addRuling, allRulings, approvedRulings, decideRuling, type Ruling } from "@/lib/discord/rulings";
 import { SEGMENTS } from "@/lib/rules";
+import { selfBase } from "@/lib/sim/client";
 import { runRoster, seatRecruiters } from "@/lib/sim/roster";
 import { runCrew, seatCrew, simRunning } from "@/lib/sim/table";
 import { rosterTranscript, transcript } from "@/lib/sim/transcript";
@@ -129,7 +130,7 @@ function ask(i: Interaction, userId: string) {
  * Run a segment for the simulated crew. The GM's Discord id is the authority here, so no campaign
  * key is needed: the survivors still act over the player endpoints, which referee them regardless.
  */
-function sim(i: Interaction, isGM: boolean, base: string) {
+function sim(i: Interaction, isGM: boolean, origin: string) {
   if (!isGM) return message("Only the GM can run simulated survivors.", EPHEMERAL);
   const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
   if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
@@ -145,6 +146,7 @@ function sim(i: Interaction, isGM: boolean, base: string) {
       if (!room) return void (await replyToInteraction(i.token, `No campaign with the code ${code}.`, { ephemeral: true }));
       const seated = seatCrew(room.game);
       if ("error" in seated) return void (await replyToInteraction(i.token, seated.error, { ephemeral: true }));
+      const base = await selfBase(origin);
       const report = await runCrew(base, room.code, seated.table, situation, { answers, commit });
       await replyToInteraction(i.token, `**${SEGMENTS[room.game.segment]}, Day ${room.game.day}** — ${situation}\n\n${transcript(report, { committed: commit })}`);
     } catch (e) {
@@ -159,7 +161,7 @@ function sim(i: Interaction, isGM: boolean, base: string) {
  * Build a crew of simulated survivors, one model each, in the order they're seated. Every survivor
  * after the first sees the sheets already made, so the crew is assembled rather than four strangers.
  */
-function roster(i: Interaction, isGM: boolean, base: string) {
+function roster(i: Interaction, isGM: boolean, origin: string) {
   if (!isGM) return message("Only the GM can run simulated survivors.", EPHEMERAL);
   const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
   if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
@@ -174,6 +176,7 @@ function roster(i: Interaction, isGM: boolean, base: string) {
       if (!room) return void (await replyToInteraction(i.token, `No campaign with the code ${code}.`, { ephemeral: true }));
       const seated = seatRecruiters(undefined, count);
       if ("error" in seated) return void (await replyToInteraction(i.token, seated.error, { ephemeral: true }));
+      const base = await selfBase(origin);
       const report = await runRoster(base, room.code, seated.table, directive);
       const header = `**Building a crew for ${room.game.ship.name}**${directive ? ` — ${directive}` : ""}`;
       await replyToInteraction(i.token, `${header}\n\n${rosterTranscript(report)}`);

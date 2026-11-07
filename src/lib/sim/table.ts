@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { GameState } from "../types";
-import { addUsage, configuredProviders, isProvider, PROVIDERS, PROVIDER_KEYS, type Provider, type Usage } from "./models";
+import { addUsage, configuredProviders, isProvider, PROVIDERS, PROVIDER_KEYS, reason, type Provider, type Usage } from "./models";
 import { runSegment, type SegmentOptions, type SimTurn } from "./run";
 import { type Style } from "./styles";
 
@@ -72,7 +72,7 @@ export async function runCrew(base: string, code: string, table: Player[], situa
         report.usage = addUsage(report.usage, turn.usage);
       } catch (e) {
         console.error("[adrift] simulated survivor failed", seat.name, e);
-        report.failed.push(`${seat.name} (${PROVIDERS[seat.provider].label}): ${e instanceof Error ? e.message : "something went wrong"}`);
+        report.failed.push(`${seat.name} (${PROVIDERS[seat.provider].label}): ${reason(e)}`);
       }
     }
     return report;

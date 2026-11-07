@@ -22,8 +22,37 @@ export type SimClient = {
 export type ResolveStep = "roll" | "push" | "accept" | "routine" | "cancel";
 
 /** Keys live only in memory: a restart gives a simulated player a new key, and `join` hands back its old slot by name. */
-const g = globalThis as unknown as { __adriftSimKeys?: Map<string, string> };
+const g = globalThis as unknown as { __adriftSimKeys?: Map<string, string>; __adriftSelfBase?: string };
 const keys = (g.__adriftSimKeys ??= new Map());
+
+/** Ways we might reach ourselves, best first. A host usually puts its public domain behind a proxy the container can't dial. */
+function candidates(origin: string): string[] {
+  const explicit = process.env.ADRIFT_SELF_URL?.replace(/\/+$/, "");
+  if (explicit) return [explicit];
+  const port = process.env.PORT;
+  return port ? [`http://127.0.0.1:${port}`, `http://[::1]:${port}`, origin] : [origin];
+}
+
+/**
+ * Which address the simulated players should call the app on. The request's own origin is right only
+ * when nothing is proxying, as in local dev; hosted, the public domain resolves to an edge proxy that
+ * won't route back inside. So try the local port first and keep whichever address answers.
+ */
+export async function selfBase(origin: string): Promise<string> {
+  if (g.__adriftSelfBase) return g.__adriftSelfBase;
+  const tried: string[] = [];
+  for (const base of candidates(origin)) {
+    try {
+      // `/api/sim` answers 200 whatever is configured, so a failure here is the connection, not the campaign.
+      const res = await fetch(`${base}/api/sim`, { signal: AbortSignal.timeout(5_000) });
+      if (res.ok) return (g.__adriftSelfBase = base);
+      tried.push(`${base} answered ${res.status}`);
+    } catch (e) {
+      tried.push(`${base} ${e instanceof Error ? e.message : "failed"}`);
+    }
+  }
+  throw new Error(`The app can't reach its own API, so no simulated player can act. Tried: ${tried.join("; ")}. Set ADRIFT_SELF_URL if it should use a particular address.`);
+}
 export const simKey = (code: string, characterId: string) => {
   const at = `${code}:${characterId}`;
   let key = keys.get(at);

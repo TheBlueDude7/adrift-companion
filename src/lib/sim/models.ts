@@ -37,6 +37,14 @@ export type Tool = { name: string; description: string; schema: Record<string, u
 /** What the call cost, so caching can be measured instead of assumed. `cached` is input served from a cache. */
 export type Usage = { input: number; cached: number; output: number };
 
+/** Node says only "fetch failed" when a connection never lands; the reason sits in the cause. */
+export function reason(e: unknown): string {
+  if (!(e instanceof Error)) return "something went wrong";
+  const cause = e.cause;
+  const detail = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
+  return detail && !e.message.includes(detail) ? `${e.message}: ${detail}` : e.message;
+}
+
 const ZERO: Usage = { input: 0, cached: 0, output: 0 };
 export const addUsage = (a: Usage, b: Usage): Usage => ({ input: a.input + b.input, cached: a.cached + b.cached, output: a.output + b.output });
 

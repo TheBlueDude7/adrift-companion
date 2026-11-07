@@ -1,4 +1,5 @@
 import { runRoster, seatRecruiters, type RosterSeat } from "@/lib/sim/roster";
+import { selfBase } from "@/lib/sim/client";
 import { SHAPES, SPREADS } from "@/lib/sim/create";
 import { BACKGROUNDS } from "@/lib/rules";
 import { getRoom, isGm } from "@/lib/sync/rooms";
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
   if ("error" in seated) return Response.json({ error: seated.error }, { status: seated.status });
 
   try {
-    const report = await runRoster(new URL(request.url).origin, room.code, seated.table, (directive as string | undefined) ?? "");
+    const base = await selfBase(new URL(request.url).origin);
+    const report = await runRoster(base, room.code, seated.table, (directive as string | undefined) ?? "");
     return Response.json(report);
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "The roster failed." }, { status: 409 });

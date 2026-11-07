@@ -1,3 +1,4 @@
+import { selfBase } from "@/lib/sim/client";
 import { configuredProviders, PROVIDERS, PROVIDER_KEYS } from "@/lib/sim/models";
 import { runCrew, seatCrew, type Seat } from "@/lib/sim/table";
 import { STYLE_KEYS } from "@/lib/sim/styles";
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
   if ("error" in seated) return Response.json({ error: seated.error }, { status: seated.status });
 
   try {
-    const report = await runCrew(new URL(request.url).origin, room.code, seated.table, situation, { answers: answers as string | undefined, commit: commit as boolean | undefined });
+    const base = await selfBase(new URL(request.url).origin);
+    const report = await runCrew(base, room.code, seated.table, situation, { answers: answers as string | undefined, commit: commit as boolean | undefined });
     return Response.json(report);
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "The segment failed." }, { status: 409 });
