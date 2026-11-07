@@ -622,7 +622,7 @@ One character may spend a task assisting another character. The assistant must h
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
-<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits, crop-varieties, xenoflora, labor-projects -->
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits, crop-varieties, xenoflora, labor-projects, machine-conditions, grid-cell -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
@@ -1570,7 +1570,7 @@ Individual modules may differ.
 
 #### Running the Grid
 
-<!-- updated: daily-power -->
+<!-- updated: daily-power, grid-cell -->
 
 Keeping the ship powered spends one day of a Power Cell's charge, taken at End of Day. A cell holds as many days of ship power as it moves the ship in tiles:
 
@@ -1580,7 +1580,11 @@ Keeping the ship powered spends one day of a Power Cell's charge, taken at End o
 | Power Cell | 2 |
 | Advanced Power Cell | 4 |
 
-When the loaded cell runs out, the next cell in the hold takes over, weakest first, so stronger cells stay available for travel and mechs. With no charge and no cell aboard, the ship runs dark.
+When the loaded cell runs out, the next one takes over. The crew decides which kind the grid runs on, and may change their minds at any time. Left to itself the grid takes the weakest cell in the hold, so stronger ones stay available for travel and mechs.
+
+Either choice costs something. Burning Flickering cells keeps the good ones free for the engines, but it means feeding the grid again every single night and it is the first thing to fail when the hold runs thin. Putting an Advanced Power Cell in is four quiet days and one less thing to remember, paid for with the cell that would have carried the ship four tiles.
+
+If the crew asks for a kind the hold has run out of, the grid loads the weakest cell it has rather than letting the ship go dark. With no charge and no cell aboard at all, the ship runs dark.
 
 #### Power Capacity
 
@@ -3909,18 +3913,24 @@ Choose one.
 
 #### Redline Familiarity
 
-<!-- updated: redline -->
+<!-- updated: redline, machine-conditions -->
 
-Once per day, you may overdrive a ship module, facility, or mech system.
+Once per day, you may overdrive a ship module, facility, or mech system. Every overdrive costs the system something afterward, and the option you choose decides what:
 
-Choose one:
+| Overdrive | Afterward |
+| --- | --- |
+| Treat a facility as one Grade higher for one Task. | The facility is **Overheated**: −2d6 on Tasks using it until it cools at End of Day. |
+| Fabricate one more item than your normal limit this segment. That item is past what the task’s Energy covers, so pay the task’s Energy again for it. | The Workshop or Fabrication Bay is **Damaged**. |
+| Give a mech +2 Frame Strength and +2 Frame Constitution for one Scene. | The mech is **Overheated** when the Scene ends. |
+| Allow an Offline system maintained by Keep It Running to operate at full output. | The system is **Power-Starved**, and Keep It Running no longer holds it up. |
 
-- Treat a facility as one Grade higher for one Task.
-- Fabricate one more item than your normal limit this segment. That item is past what the task's Energy covers, so pay the task's Energy again for it.
-- Give a mech +2 Frame Strength and +2 Frame Constitution for one Scene.
-- Allow an Offline system maintained by Keep It Running to operate at full output.
+The three aftermaths are a ladder, and which one you earn is the real cost of the choice:
 
-Afterward, the affected system becomes Damaged, Power-Starved, or Overheated, as appropriate.
+- **Overheated** clears itself. Wait for End of Day, or have the mech spend a Slow Action cooling.
+- **Power-Starved** costs an action. Someone restarts it with a Skilled Engineering or Mechanical Technician Task, spending nothing from the hold.
+- **Damaged** costs a repair. It is the ordinary module condition: −2d6, Routine work becomes Skilled, and it takes 1 Progress and materials to put right.
+
+Pushing a Workshop into making one more item is the only overdrive that genuinely breaks something, which is why it is the only one that leaves Damaged behind.
 
 #### Field Improviser
 
@@ -4637,13 +4647,25 @@ Illuminated normally lasts until the light source is removed or the Scene ends.
 
 #### Overheated
 
+<!-- updated: machine-conditions -->
+
 The target’s body, armor, cybernetics, or machinery has exceeded safe temperatures.
 
 While Overheated:
 
 - The target suffers −2d6 to strenuous physical Tasks.
 - It cannot safely use abilities that would produce additional heat.
-- Machines and mechs may suffer random additional penalties when acting. Overheated ends after the target spends a Slow Action cooling itself in an appropriate environment.
+- It cannot be overdriven, pushed past its rating, or Redlined again until it cools.
+
+A character, mech, or other target that acts for itself ends Overheated by spending a Slow Action cooling down in an appropriate environment.
+
+A ship module, facility, or installation takes no actions of its own, so it cannot cool itself. Instead:
+
+- Tasks performed with it or in it suffer −2d6.
+- It still functions, still draws power, and still counts as its own Grade.
+- It cools on its own at End of Day.
+
+Overheated is the mildest of the three machine states. Nothing is broken; it is simply too hot to lean on, and the only cost is waiting.
 
 ### Electric Conditions
 
@@ -4704,6 +4726,25 @@ Jammed may affect:
 Direct physical controls continue to function unless the source states otherwise.
 
 Jammed ends after leaving the affected area or disabling the source.
+
+#### Power-Starved
+
+<!-- updated: machine-conditions -->
+
+The target has been cut off from the power it needs: a tripped coupling, a drained reserve, a system that shut itself down rather than tear itself apart. Nothing is broken. It simply isn’t running.
+
+Power-Starved applies to mechs, ship modules, vehicles, consoles, and any other machine. A purely biological target cannot be Power-Starved.
+
+While Power-Starved:
+
+- The target provides no function, benefit, or output of any kind. Treat a module as though it were not aboard.
+- It draws no power. A Power-Starved ship module does not count against the grid.
+- Powered modules, active abilities, and anything that runs off it are unavailable.
+- A Power-Starved mech additionally loses its Fast Action, and a character may need a Skilled Task to climb out of one.
+
+Power-Starved ends when someone restarts it: a Slow Action aboard ship or in a Scene, or one Task on the schedule, rolling Engineering or Mechanical Technician as a Skilled Task. **No materials, Progress, or toolkit charges are spent.** It is also removed outright if proper power is restored to it by any other means.
+
+Power-Starved sits between Overheated and Damaged. It costs somebody’s action to clear, but nothing out of the hold.
 
 ### Chemical Conditions
 

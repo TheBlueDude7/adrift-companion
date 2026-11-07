@@ -257,6 +257,8 @@ export type Ship = {
   tuned?: boolean;
   /** Days of charge left in the Power Cell running the grid. End of Day burns one. */
   powerDays?: number;
+  /** The kind of Power Cell the crew wants the grid to load. Unset means the weakest in the hold. */
+  gridCell?: string;
   /** Stretch Rations: tonight every 3 Food Units feed 4 survivors. */
   rationsStretched?: boolean;
   /** Life Support's reclaimed water has already been drawn today. */

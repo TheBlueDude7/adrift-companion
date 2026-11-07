@@ -111,7 +111,7 @@ export const BACKGROUNDS: Background[] = [
       summary: "When a reachable module or mech goes Offline or is disabled, keep one function running until the end of the segment or Scene.",
     },
     specialties: [
-      { name: "Redline Familiarity", frequency: "day", summary: "Overdrive a facility (+1 Grade for a Task), fabricate one more item than normal (paying the task's Energy again), boost a mech, or run a Keep It Running system at full output. The system is Damaged afterward." },
+      { name: "Redline Familiarity", frequency: "day", summary: "Overdrive a facility (+1 Grade for a Task, then Overheated), fabricate one more item than normal (paying the task's Energy again, then the Workshop is Damaged), boost a mech (+2 Frame STR and CON for a Scene, then Overheated), or run a Keep It Running system at full output (then Power-Starved)." },
       { name: "Field Improviser", frequency: "passive", summary: "Expedition repairs ignore the −3d6 penalty for lacking a Workshop or mech berth." },
       { name: "Modular Thinking", frequency: "expedition", summary: "Temporarily repurpose one mech module as another of the same Tier or lower." },
     ],

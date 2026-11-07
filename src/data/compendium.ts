@@ -966,8 +966,13 @@ export const CONDITIONS: ConditionEntry[] = [
   },
   {
     "name": "Overheated",
-    "effect": "The target’s body, armor, cybernetics, or machinery has exceeded safe temperatures. While Overheated: The target suffers −2d6 to strenuous physical Tasks. It cannot safely use abilities that would produce additional heat. Machines and mechs may suffer random additional penalties when acting. Overheated ends after the target spends a Slow Action cooling itself in an appropriate environment.",
-    "removal": ""
+    "effect": "The target’s body, armor, cybernetics, or machinery has exceeded safe temperatures. While Overheated: −2d6 to strenuous physical Tasks, no abilities that would produce additional heat, and it cannot be overdriven or Redlined again until it cools. A ship module or facility takes no actions of its own, so instead: Tasks performed with it or in it suffer −2d6, it still functions and still counts as its own Grade, and it cools at End of Day.",
+    "removal": "A target that acts for itself spends a Slow Action cooling down in an appropriate environment. A ship module or facility cools on its own at End of Day."
+  },
+  {
+    "name": "Power-Starved",
+    "effect": "The target has been cut off from the power it needs. Nothing is broken; it simply isn’t running. It applies to mechs, ship modules, vehicles, consoles, and any other machine, but never to a purely biological target. While Power-Starved: the target provides no function, benefit, or output of any kind, and a module counts as though it were not aboard. It draws no power, so a Power-Starved module doesn’t count against the grid. Powered modules, active abilities, and anything running off it are unavailable. A Power-Starved mech also loses its Fast Action, and climbing out of one may take a Skilled Task.",
+    "removal": "Someone restarts it: a Slow Action in a Scene, or one Task on the schedule, as a Skilled Engineering or Mechanical Technician roll. No materials, Progress, or toolkit charges are spent. Restoring proper power by any other means also removes it."
   },
   {
     "name": "Overloaded",

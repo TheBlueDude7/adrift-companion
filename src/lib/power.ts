@@ -30,8 +30,23 @@ export function pickCell(g: GameState, ok: (c: PowerCell) => boolean): PowerCell
 /** Days of grid power left in the cell the ship is running on. */
 export const powerDaysLeft = (g: GameState) => g.ship.powerDays ?? 0;
 
-/** The cell the grid loads next: the weakest in the hold, so stronger ones stay available for travel. */
-export const nextGridCell = (g: GameState) => pickCell(g, () => true);
+/**
+ * The cell the grid loads next. The crew may name a kind to run the ship on; otherwise it takes the
+ * weakest in the hold, so stronger ones stay available for travel. A named kind the hold has run out
+ * of falls back to the weakest rather than leaving the ship dark.
+ */
+export function nextGridCell(g: GameState): PowerCell | null {
+  const want = g.ship.gridCell;
+  const chosen = want ? cellsInHold(g).find((c) => c.name === want && c.qty > 0) : undefined;
+  return chosen ?? pickCell(g, () => true);
+}
+
+/** The crew asked for a kind of cell the hold hasn't got, so the grid will load something else. */
+export function gridCellMissing(g: GameState) {
+  const want = g.ship.gridCell;
+  if (!want) return false;
+  return !cellsInHold(g).some((c) => c.name === want && c.qty > 0);
+}
 
 /**
  * Keeping the ship running costs a day of a Power Cell's charge at every End of Day. When the
