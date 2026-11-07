@@ -10,6 +10,7 @@ if (!appId || !token) {
 }
 
 const STRING = 3;
+const INTEGER = 4;
 const BOOLEAN = 5;
 const commands = [
   {
@@ -30,6 +31,15 @@ const commands = [
       { type: STRING, name: "situation", description: "What the crew is facing right now", required: true, max_length: 1500 },
       { type: BOOLEAN, name: "ask", description: "Hear their plans and questions without submitting anything" },
       { type: STRING, name: "answers", description: "Your answers to the questions they asked last time", max_length: 1500 },
+      { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
+    ],
+  },
+  {
+    name: "roster",
+    description: "GM only: let the simulated crew make their own characters, in order",
+    options: [
+      { type: STRING, name: "brief", description: "What this crew is for, if you want to steer them", max_length: 1500 },
+      { type: INTEGER, name: "count", description: "How many survivors to make (default: one per configured model)", min_value: 1, max_value: 8 },
       { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
     ],
   },

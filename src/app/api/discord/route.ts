@@ -3,8 +3,9 @@ import { askRules, type Reply } from "@/lib/discord/ask";
 import { env, NO_MENTIONS, postMessage, replyToInteraction, verifyDiscord } from "@/lib/discord/rest";
 import { addRuling, allRulings, approvedRulings, decideRuling, type Ruling } from "@/lib/discord/rulings";
 import { SEGMENTS } from "@/lib/rules";
+import { runRoster, seatRecruiters } from "@/lib/sim/roster";
 import { runCrew, seatCrew, simRunning } from "@/lib/sim/table";
-import { transcript } from "@/lib/sim/transcript";
+import { rosterTranscript, transcript } from "@/lib/sim/transcript";
 import { getRoom } from "@/lib/sync/rooms";
 
 type Option = { name: string; value: string };
@@ -63,6 +64,8 @@ export async function POST(request: Request) {
       }
       case "sim":
         return sim(i, isGM, new URL(request.url).origin);
+      case "roster":
+        return roster(i, isGM, new URL(request.url).origin);
     }
     return message("I don't know that command.", EPHEMERAL);
   }
@@ -144,6 +147,36 @@ function sim(i: Interaction, isGM: boolean, base: string) {
     } catch (e) {
       console.error("[adrift] simulated segment failed", e);
       await replyToInteraction(i.token, `The segment failed: ${e instanceof Error ? e.message : "something went wrong"}`, { ephemeral: true }).catch(() => undefined);
+    }
+  });
+  return json({ type: 5 });
+}
+
+/**
+ * Build a crew of simulated survivors, one model each, in the order they're seated. Every survivor
+ * after the first sees the sheets already made, so the crew is assembled rather than four strangers.
+ */
+function roster(i: Interaction, isGM: boolean, base: string) {
+  if (!isGM) return message("Only the GM can run simulated survivors.", EPHEMERAL);
+  const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
+  if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
+  const directive = option(i, "brief");
+  const asked = Number(i.data?.options?.find((o) => o.name === "count")?.value ?? 0);
+  const count = Number.isFinite(asked) && asked > 0 ? Math.round(asked) : undefined;
+  if (simRunning(code)) return message("A simulated run is already going for that campaign. Give it a moment.", EPHEMERAL);
+
+  after(async () => {
+    try {
+      const room = await getRoom(code);
+      if (!room) return void (await replyToInteraction(i.token, `No campaign with the code ${code}.`, { ephemeral: true }));
+      const seated = seatRecruiters(undefined, count);
+      if ("error" in seated) return void (await replyToInteraction(i.token, seated.error, { ephemeral: true }));
+      const report = await runRoster(base, room.code, seated.table, directive);
+      const header = `**Building a crew for ${room.game.ship.name}**${directive ? ` — ${directive}` : ""}`;
+      await replyToInteraction(i.token, `${header}\n\n${rosterTranscript(report)}`);
+    } catch (e) {
+      console.error("[adrift] building a crew failed", e);
+      await replyToInteraction(i.token, `The roster failed: ${e instanceof Error ? e.message : "something went wrong"}`, { ephemeral: true }).catch(() => undefined);
     }
   });
   return json({ type: 5 });

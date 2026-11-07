@@ -47,12 +47,24 @@ const g = globalThis as unknown as { __adriftSimRunning?: Set<string> };
 const running = (g.__adriftSimRunning ??= new Set());
 export const simRunning = (code: string) => running.has(code);
 
+/**
+ * One simulated run per campaign at a time. Everything the sim does reads the state, decides, and
+ * writes back, so two runs at once would each plan against a campaign the other is already changing.
+ */
+export async function withCampaignLock<T>(code: string, fn: () => Promise<T>): Promise<T> {
+  if (running.has(code)) throw new Error("A simulated run is already going for this campaign. Wait for it to finish.");
+  running.add(code);
+  try {
+    return await fn();
+  } finally {
+    running.delete(code);
+  }
+}
+
 /** The whole table's segment. One survivor at a time, so a later one can Assist what an earlier one planned. */
 export async function runCrew(base: string, code: string, table: Player[], situation: string, opts: SegmentOptions = {}): Promise<SimReport> {
-  if (running.has(code)) throw new Error("A segment is already running for this campaign. Wait for it to finish.");
-  running.add(code);
-  const report: SimReport = { turns: [], failed: [], usage: { input: 0, cached: 0, output: 0 } };
-  try {
+  return withCampaignLock(code, async () => {
+    const report: SimReport = { turns: [], failed: [], usage: { input: 0, cached: 0, output: 0 } };
     for (const seat of table) {
       try {
         const turn = await runSegment(base, code, seat.characterId, seat.name, situation, { provider: seat.provider, style: seat.style }, opts);
@@ -63,8 +75,6 @@ export async function runCrew(base: string, code: string, table: Player[], situa
         report.failed.push(`${seat.name} (${PROVIDERS[seat.provider].label}): ${e instanceof Error ? e.message : "something went wrong"}`);
       }
     }
-  } finally {
-    running.delete(code);
-  }
-  return report;
+    return report;
+  });
 }
