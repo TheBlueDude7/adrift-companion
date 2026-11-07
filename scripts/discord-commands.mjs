@@ -12,6 +12,11 @@ if (!appId || !token) {
 const STRING = 3;
 const INTEGER = 4;
 const BOOLEAN = 5;
+// Hides a command from everyone without Administrator, so players don't see the GM's tools in the
+// picker at all. It's cosmetic on its own: the route still checks DISCORD_GM_USER_ID, so another
+// admin who isn't the GM is refused anyway. Grant it to specific people under
+// Server Settings -> Integrations -> the bot -> Command Permissions.
+const GM_ONLY = "0";
 const commands = [
   {
     name: "rules",
@@ -22,11 +27,13 @@ const commands = [
   {
     name: "ruling",
     description: "GM only: add a ruling that overrides the rulebook",
+    default_member_permissions: GM_ONLY,
     options: [{ type: STRING, name: "text", description: "The ruling", required: true, max_length: 1500 }],
   },
   {
     name: "sim",
     description: "GM only: play a segment with the simulated crew",
+    default_member_permissions: GM_ONLY,
     options: [
       { type: STRING, name: "situation", description: "What the crew is facing right now", required: true, max_length: 1500 },
       { type: BOOLEAN, name: "ask", description: "Hear their plans and questions without submitting anything" },
@@ -37,6 +44,7 @@ const commands = [
   {
     name: "roster",
     description: "GM only: let the simulated crew make their own characters, in order",
+    default_member_permissions: GM_ONLY,
     options: [
       { type: STRING, name: "brief", description: "What this crew is for, if you want to steer them", max_length: 1500 },
       { type: INTEGER, name: "count", description: "How many survivors to make (default: one per configured model)", min_value: 1, max_value: 8 },
