@@ -40,6 +40,51 @@ export function hold(g: GameState, characterId: string): string {
 }
 
 /**
+ * The site as this survivor knows it, which is all they get: the state handed to a simulated player
+ * comes through the same redaction as a real one's, so an unexplored zone arrives named "Somewhere
+ * else" and a creature in a room nobody has entered isn't in their copy at all. What's written here
+ * is therefore honest by construction — there is nothing to leak, because nothing was sent.
+ *
+ * The zone they're standing in comes first and in detail, because every plan starts from the room
+ * they're in. The ways out carry their state, since a welded door is the difference between a route
+ * and a Breach.
+ */
+export function site(g: GameState, characterId: string): string {
+  const e = g.expedition;
+  if (!e) return "You are aboard the ship.";
+  const name = (id: string) => e.zones.find((z) => z.id === id)?.name ?? "somewhere unexplored";
+  const here = e.zones.find((z) => z.id === e.at[characterId]);
+  const withYou = e.crew.filter((id) => id !== characterId && e.at[id] === here?.id).map((id) => g.characters.find((c) => c.id === id)?.name).filter(Boolean);
+  const elsewhere = e.crew
+    .filter((id) => id !== characterId && e.at[id] !== here?.id)
+    .map((id) => `${g.characters.find((c) => c.id === id)?.name ?? "someone"} is in the ${name(e.at[id])}`);
+  const ways = here
+    ? e.borders
+        .filter((b) => b.a === here.id || b.b === here.id)
+        .map((b) => {
+          const other = b.a === here.id ? b.b : b.a;
+          const known = e.zones.find((z) => z.id === other)?.seen;
+          return `- ${known ? `the ${name(other)}` : "a way you haven't been through"}: ${b.state}${b.note ? ` — ${b.note}` : ""}`;
+        })
+    : [];
+  const seen = e.zones.filter((z) => z.seen && z.id !== here?.id);
+  const threats = g.threats.filter((t) => t.zone && t.zone === here?.id).map((t) => `${t.name} (${t.band})`);
+  return [
+    `You are inside ${e.site}, on Expedition Turn ${e.turn + 1} of 8 in this day segment.`,
+    here
+      ? `You are standing in the ${here.name}: ${here.look || "nothing you can make much of."}${here.cover === "none" ? " No cover here." : ` Cover here: ${here.cover}.`}${here.secured ? " It's been Secured." : ""}${here.searched ? " It's already been searched." : ""}`
+      : "You aren't on the site's map yet.",
+    threats.length ? `In this room with you: ${threats.join(", ")}.` : "",
+    withYou.length ? `With you: ${withYou.join(", ")}.` : "You are alone in this room.",
+    elsewhere.length ? `The rest of the crew:\n${elsewhere.map((x) => `- ${x}`).join("\n")}` : "",
+    ways.length ? `Ways out of this room:\n${ways.join("\n")}` : "",
+    seen.length ? `Rooms you've already been in: ${seen.map((z) => `${z.name}${z.searched ? " (searched)" : ""}${z.secured ? " (secured)" : ""}`).join(", ")}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
  * The chart as the crew has filled it in: where the ship sits, what's been found and whether it's
  * been picked over already, and how much of the dark nobody has looked at yet.
  */

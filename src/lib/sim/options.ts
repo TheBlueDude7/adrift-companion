@@ -27,6 +27,9 @@ export type SimMenu = {
   skipped: string[];
 };
 
+/** Whether this survivor is off the ship, which changes the whole table of what they could do. */
+export const away = (g: GameState, c: Character) => !!g.expedition?.crew.includes(c.id);
+
 /** Needs a map target or a skill to train, which this prototype has no way to choose. */
 const UNSUPPORTED: Partial<Record<NonNullable<TaskEffect>, string>> = {
   course: "needs a course plotted on the star chart",
@@ -52,7 +55,8 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
         .map((a) => make({ assists: a.id }));
     case "calm":
     case "bleed":
-      return g.characters.filter((x) => x.id !== c.id && !x.dead).map((x) => make({ subjectId: x.id }));
+      // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
+      return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));
     case "craft":
     case "cook":
     case "medicine":
@@ -77,10 +81,20 @@ function subject(g: GameState, a: SegmentAction): string {
   return "";
 }
 
+/**
+ * What's even on the table. Off the ship it's the Common Expedition Tasks and the handful of things
+ * that work anywhere; aboard it's everything but those. Listing the rest only to refuse it would
+ * bury the one report worth reading — the tasks that were nearly available.
+ */
+const onTheTable = (g: GameState, c: Character) =>
+  away(g, c)
+    ? SHIPBOARD_TASKS.filter((t) => (t.group === "Expedition" ? t.name !== "Embark Expedition" : t.anywhere))
+    : SHIPBOARD_TASKS.filter((t) => t.group !== "Expedition" || t.name === "Embark Expedition");
+
 export function legalOptions(g: GameState, c: Character): SimMenu {
   const options: SimOption[] = [];
   const skipped: string[] = [];
-  for (const def of SHIPBOARD_TASKS) {
+  for (const def of onTheTable(g, c)) {
     if (def.free) continue;
     const unsupported = def.effect ? UNSUPPORTED[def.effect] : undefined;
     if (unsupported) {

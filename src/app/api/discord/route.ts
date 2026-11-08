@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { askRules, type Reply } from "@/lib/discord/ask";
 import { env, NO_MENTIONS, postMessage, replyToInteraction, verifyDiscord } from "@/lib/discord/rest";
 import { addRuling, allRulings, approvedRulings, decideRuling, type Ruling } from "@/lib/discord/rulings";
+import { TURNS_PER_SEGMENT } from "@/lib/expedition";
 import { SEGMENTS } from "@/lib/rules";
 import { selfBase } from "@/lib/sim/client";
 import { runRoster, seatRecruiters } from "@/lib/sim/roster";
@@ -65,6 +66,8 @@ export async function POST(request: Request) {
       }
       case "sim":
         return sim(i, isGM, new URL(request.url).origin);
+      case "expedition":
+        return sim(i, isGM, new URL(request.url).origin, true);
       case "roster":
         return roster(i, isGM, new URL(request.url).origin);
     }
@@ -127,15 +130,20 @@ function ask(i: Interaction, userId: string) {
 }
 
 /**
- * Run a segment for the simulated crew. The GM's Discord id is the authority here, so no campaign
- * key is needed: the survivors still act over the player endpoints, which referee them regardless.
+ * Run a segment for the simulated crew, or one Expedition Turn of one. The GM's Discord id is the
+ * authority here, so no campaign key is needed: the survivors still act over the player endpoints,
+ * which referee them regardless.
+ *
+ * `/expedition` is the same machinery pointed at the away team. Nothing about the run differs — the
+ * menu and the briefing both read the state and work out for themselves that the crew is off the
+ * ship — so the command only insists there is an expedition, and seats the survivors on it.
  */
-function sim(i: Interaction, isGM: boolean, origin: string) {
+function sim(i: Interaction, isGM: boolean, origin: string, offship = false) {
   if (!isGM) return message("Only the GM can run simulated survivors.", EPHEMERAL);
   const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
   if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
   const situation = option(i, "situation");
-  if (!situation) return message("Describe the situation the crew is facing.", EPHEMERAL);
+  if (!situation) return message(offship ? "Describe the room they're standing in." : "Describe the situation the crew is facing.", EPHEMERAL);
   const commit = !i.data?.options?.some((o) => o.name === "ask" && String(o.value) === "true");
   const answers = option(i, "answers");
   if (simRunning(code)) return message("A segment is already running for that campaign. Give it a moment.", EPHEMERAL);
@@ -144,11 +152,17 @@ function sim(i: Interaction, isGM: boolean, origin: string) {
     try {
       const room = await getRoom(code);
       if (!room) return void (await replyToInteraction(i.token, `No campaign with the code ${code}.`, { ephemeral: true }));
-      const seated = seatCrew(room.game);
+      const away = room.game.expedition;
+      if (offship && !away) return void (await replyToInteraction(i.token, "Nobody is off the ship. Start an expedition from the campaign menu first.", { ephemeral: true }));
+      const crew = offship ? away!.crew.map((id) => ({ characterId: id })) : undefined;
+      const seated = seatCrew(room.game, crew);
       if ("error" in seated) return void (await replyToInteraction(i.token, seated.error, { ephemeral: true }));
       const base = await selfBase(origin);
       const report = await runCrew(base, room.code, seated.table, situation, { answers, commit });
-      await replyToInteraction(i.token, `**${SEGMENTS[room.game.segment]}, Day ${room.game.day}** — ${situation}\n\n${transcript(report, { committed: commit })}`);
+      const header = offship
+        ? `**${away!.site} — Expedition Turn ${away!.turn + 1} of ${TURNS_PER_SEGMENT}**, ${SEGMENTS[room.game.segment]} of Day ${room.game.day} — ${situation}`
+        : `**${SEGMENTS[room.game.segment]}, Day ${room.game.day}** — ${situation}`;
+      await replyToInteraction(i.token, `${header}\n\n${transcript(report, { committed: commit })}`);
     } catch (e) {
       console.error("[adrift] simulated segment failed", e);
       await replyToInteraction(i.token, `The segment failed: ${e instanceof Error ? e.message : "something went wrong"}`, { ephemeral: true }).catch(() => undefined);

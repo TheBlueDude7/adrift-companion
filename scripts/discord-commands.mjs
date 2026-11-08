@@ -42,6 +42,17 @@ const commands = [
     ],
   },
   {
+    name: "expedition",
+    description: "GM only: play one Expedition Turn with the away team",
+    default_member_permissions: GM_ONLY,
+    options: [
+      { type: STRING, name: "situation", description: "What they can see from where they're standing", required: true, max_length: 1500 },
+      { type: BOOLEAN, name: "ask", description: "Hear their plans and questions without submitting anything" },
+      { type: STRING, name: "answers", description: "Your answers to the questions they asked last time", max_length: 1500 },
+      { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
+    ],
+  },
+  {
     name: "roster",
     description: "GM only: let the simulated crew make their own characters, in order",
     default_member_permissions: GM_ONLY,

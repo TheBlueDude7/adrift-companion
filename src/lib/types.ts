@@ -529,6 +529,11 @@ export type SegmentAction = {
   characterId: string;
   day: number;
   segment: number;
+  /**
+   * The Expedition Turn this was taken in, for a task taken off the ship. Absent aboard, where the
+   * segment is the whole allowance — eight Turns fit in one segment and each allows a task.
+   */
+  turn?: number;
   /** Name from SHIPBOARD_TASKS, or "Other". */
   task: string;
   /** What the character is doing, in the player's words. */

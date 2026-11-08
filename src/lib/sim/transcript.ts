@@ -62,6 +62,8 @@ export function transcript(report: SimReport, { committed = true }: { committed?
       `> ${t.speech.replace(/\n/g, "\n> ")}`,
       `**Task:** ${t.task}`,
       `**Approach:** ${t.approach}`,
+      // Movement is the GM's to apply, so it's called out rather than buried in the approach.
+      t.move ? `**Wants to move to:** ${t.move}` : "",
       t.questions.length ? `**Asks the GM:**\n${t.questions.map((q) => `- ${q}`).join("\n")}` : "",
       t.outcome.length ? `**Result:**\n${t.outcome.map((x) => `- ${x}`).join("\n")}` : "",
       t.unclear ? `⚠️ **Unclear to them:** ${t.unclear}` : "",
@@ -75,8 +77,9 @@ export function transcript(report: SimReport, { committed = true }: { committed?
   parts.push(
     [
       committed ? "" : "-# Nothing was submitted. Answer their questions and run it again with `answers:` to commit.",
+      report.turns.some((t) => t.move) ? "-# Moves are yours to make on the Site tab. Nobody has been moved." : "",
       tokens(report.usage),
-      gaps.length ? `-# ${gaps.length} tasks weren't offered this segment (facilities, materials, or a map target).` : "",
+      gaps.length ? `-# ${gaps.length} tasks weren't offered (facilities, materials, or a map target).` : "",
     ]
       .filter(Boolean)
       .join("\n"),

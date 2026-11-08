@@ -221,11 +221,15 @@ export function permissionReasons(g: GameState, a: SegmentAction): string[] {
 /** A player may take on a task they can't afford, or can't craft on their own, only with the GM's permission. */
 export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !== "granted" && permissionReasons(g, a).length > 0;
 
-export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment);
+/**
+ * Tasks being taken right now. Off the ship that means this Expedition Turn, not the whole segment:
+ * eight Turns share one segment, and a survivor can't Assist a task three Turns old.
+ */
+export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment && a.turn === g.expedition?.turn);
 
-/** A survivor's tasks in one segment, not counting ones called off. */
-export const segmentTasks = (g: GameState, characterId: string, day = g.day, segment = g.segment) =>
-  g.actions.filter((a) => a.characterId === characterId && a.day === day && a.segment === segment && a.status !== "cancelled");
+/** A survivor's tasks in one segment — or in one Expedition Turn of it, which is the same rule. */
+export const segmentTasks = (g: GameState, characterId: string, day = g.day, segment = g.segment, turn = g.expedition?.turn) =>
+  g.actions.filter((a) => a.characterId === characterId && a.day === day && a.segment === segment && a.turn === turn && a.status !== "cancelled");
 
 const REST_PUSH_CONFLICT = "Resting and Pushing for an extra task can't share a segment";
 
@@ -240,7 +244,7 @@ export function extraTaskBlocker(g: GameState, c: Character): string | null {
 
 /** You either take the segment off or you grind an extra task out of it. Never both, in either order. */
 export function restPushConflict(g: GameState, a: SegmentAction): string | null {
-  const others = segmentTasks(g, a.characterId, a.day, a.segment).filter((x) => x.id !== a.id);
+  const others = segmentTasks(g, a.characterId, a.day, a.segment, a.turn).filter((x) => x.id !== a.id);
   const pushed = a.extra || others.some((x) => x.extra);
   const resting = taskFor(a).effect === "rest" || others.some((x) => taskFor(x).effect === "rest");
   return pushed && resting ? REST_PUSH_CONFLICT : null;
@@ -329,9 +333,16 @@ const byDistance = (dist: number) => (dist <= 1 ? 4 : dist === 2 ? 6 : 8);
 function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { threshold: number; blocker: string | null } {
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
   const dist = map?.shipAt && a.target ? tileDistance(map.shipAt, a.target) : 1;
-  // An Expedition Task needs an expedition under way: aboard the ship there's no zone to scout,
-  // search, or seal, and no Expedition Turn to spend getting your breath back.
-  if (def.group === "Expedition" && def.name !== "Embark Expedition" && !g.expedition) return { threshold: def.threshold, blocker: "The crew isn't on an expedition" };
+  // An Expedition Task needs this survivor to be on the expedition. Aboard the ship there's no zone
+  // to scout, search or seal, and someone who stayed behind can't do it from the galley either.
+  if (def.group === "Expedition" && def.name !== "Embark Expedition" && !g.expedition?.crew.includes(a.characterId)) {
+    return { threshold: def.threshold, blocker: g.expedition ? "They stayed aboard, so there's no site for them to work in" : "The crew isn't on an expedition" };
+  }
+  // And the other way about: a survivor inside a derelict can't tune the reactor they left behind.
+  // A handful of tasks are marked as working anywhere, because a medkit works wherever it's opened.
+  if (def.group !== "Expedition" && !def.anywhere && g.expedition?.crew.includes(a.characterId)) {
+    return { threshold: def.threshold, blocker: `${def.name} needs the ship, and they're away on the expedition` };
+  }
   switch (def.name) {
     case "Plot Safe Course":
       return { threshold: byDistance(dist), blocker: null };
@@ -1078,5 +1089,9 @@ export function giveFirstAid(g: GameState, healerId: string, patientId: string, 
 }
 
 export function newAction(g: GameState, c: Character, task: string): SegmentAction {
-  return { id: uid(), characterId: c.id, day: g.day, segment: g.segment, task, detail: "", projectId: null, target: null, assists: null, status: "planned" };
+  const action: SegmentAction = { id: uid(), characterId: c.id, day: g.day, segment: g.segment, task, detail: "", projectId: null, target: null, assists: null, status: "planned" };
+  // Eight Expedition Turns fit in a segment and each allows one task, so a task taken off the ship
+  // is stamped with the Turn it belongs to. Aboard, there's no Turn and the key stays absent.
+  if (g.expedition?.crew.includes(c.id)) action.turn = g.expedition.turn;
+  return action;
 }

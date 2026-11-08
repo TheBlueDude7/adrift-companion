@@ -515,7 +515,11 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
         <DialogHeader>
           <DialogTitle>{existing ? "Change task" : extra ? "Push for an extra task" : "Plan a task"}: {c.name}</DialogTitle>
           <DialogDescription>
-            {whenLabel(draft)}. {extra && !existing ? `Submitting costs ${c.name.split(" ")[0]} ${c.energy > 0 ? "1 Energy" : "an Affliction (they're Exhausted)"} and 1 Pressure right away, even if the task is withdrawn later.` : "Each survivor takes one task per segment; Pushing buys one extra."}
+            {whenLabel(draft)}. {extra && !existing
+              ? `Submitting costs ${c.name.split(" ")[0]} ${c.energy > 0 ? "1 Energy" : "an Affliction (they're Exhausted)"} and 1 Pressure right away, even if the task is withdrawn later.`
+              : draft.turn === undefined
+                ? "Each survivor takes one task per segment; Pushing buys one extra."
+                : "Off the ship the allowance is one task per Expedition Turn, and eight Turns use up the segment; Pushing buys one extra."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">

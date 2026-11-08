@@ -36,6 +36,11 @@ export type ShipboardTask = {
   gmResolves?: boolean;
   /** A free action taken from the character sheet whenever it's needed, not planned into a segment. */
   free?: boolean;
+  /**
+   * Works anywhere, so a survivor away on an expedition can still take it. Everything else in this
+   * table needs the ship: its reactor, its beds, its workshop, or just the hold within arm's reach.
+   */
+  anywhere?: boolean;
 };
 
 /** Mastery: levels above a Routine Threshold that cut the task's Energy by 1. */
@@ -59,7 +64,7 @@ export const LABOR_ASSIST_THRESHOLD = 3;
 /** Items one Fabricate task makes, each paying the task's Energy. An Expert adds one more for free. */
 export const FABRICATE_ITEMS = 2;
 
-type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free" | "noStrong" | "labor" | "attr">;
+type Extra = Pick<ShipboardTask, "strong" | "facility" | "expertAt" | "yields" | "gmResolves" | "free" | "noStrong" | "labor" | "attr" | "anywhere">;
 
 /** Research reads the pattern before it reads the textbook, so it rolls Wits with the knowledge skill. */
 const RESEARCH: Pick<ShipboardTask, "attr"> = { attr: "WIT" };
@@ -95,21 +100,21 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Filter Reclaimed Water", "Food & water", 1, ["cooking"], 1, "Draw the day's reclaimed water out of Life Support: 2 Water Units, once a day.", "routine", "reclaim", { strong: "+1 Water Unit.", facility: { modules: ["Life Support"], level: 1, label: "working Life Support" } }),
   t("Turn Food into Fuel", "Food & water", 1, ["botany"], 4, "Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. Botany 7 converts 3 into 2.", "routine", "convert", { facility: { modules: ["Bioconverter"], label: "a Bioconverter" } }),
   t("First Aid: Minor Injury", "Medical", 0, ["firstAid"], 3, "Use up a medkit to treat a Minor injury or just heal. A free action from the character sheet, any time.", "skilled", null, { strong: "Each 6 not spent treating heals 1 HP or clears a condition.", free: true }),
-  t("Stop Bleeding", "Medical", 1, ["firstAid"], 0, "Use up a medkit to end one survivor's Bleeding.", "crisis", "bleed"),
+  t("Stop Bleeding", "Medical", 1, ["firstAid"], 0, "Use up a medkit to end one survivor's Bleeding.", "crisis", "bleed", { anywhere: true }),
   t("Surgery", "Medical", 3, ["surgery"], 0, "Treat a Major or Deadly injury. The patient drops to half their Max HP (if above it) when Surgery begins.", "crisis", null, { strong: "Reduce long-term penalties, or the patient regains 1 HP." }),
   t("Prep for Surgery", "Medical", 1, ["firstAid"], 7, "Ready the patient and the theatre: the next Surgery on them this day gets +2d6.", "routine", null, { facility: { modules: ["Medical Bay"], level: 3, label: "a Sterile Suite Medical Bay" } }),
   t("Craft Medicine", "Medical", 1, ["firstAid", "surgery"], 3, "Produce one medicine from a known recipe, drawing the materials from the hold. First Aid 3 or Surgery 5.", "routine", "medicine"),
-  t("Decontaminate", "Medical", 1, ["firstAid", "biology"], 5, "Remove contamination from a person, item, or room."),
+  t("Decontaminate", "Medical", 1, ["firstAid", "biology"], 5, "Remove contamination from a person, item, or room.", "routine", null, { anywhere: true }),
   t("Analyze Known Biomass", "Science", 1, ["biology"], 5, "Extract known data from a studied specimen.", "routine", null, { ...RESEARCH, strong: "Learn two facts instead of one.", expertAt: 3 }),
   t("Analyze Unknown Biomass", "Science", 1, ["biology", "botany"], 0, "Discover properties of an unfamiliar specimen.", "skilled", null, { ...RESEARCH, strong: "Also identify a viable Research Trait or important biological weakness." }),
   t("Extract Research Trait", "Science", 2, ["biology"], 7, "Isolate a studied organism's Research Trait for crafting or augmentation.", "routine", null, { ...RESEARCH, facility: { modules: ["Biological Lab"], label: "a Biological Lab" } }),
   t("Scrap Biomass", "Science", 2, ["biology"], 3, "Recover biological crafting materials."),
   t("Analyze Technical Data", "Science", 1, ["engineering", "biology"], 3, "Interpret known human data or studied alien data.", "routine", null, RESEARCH),
   t("Train Skill", "Crew", 2, [], 0, "Spend 1 training resource from the hold and gain 1 XP in the skill. Levels 1–3 use a common material, 4–7 a refined one, and 8–10 a rare one. Training never consumes finished equipment, and a resource with charges gives up one charge instead of the whole unit.", "routine", "train"),
-  t("Reduce Pressure", "Crew", 1, ["entertainer"], 1, "Reduce another character's Pressure by 1 in safety, never below their Stress floor.", "routine", "calm", { strong: "The target also gets +1d6 on their next skill roll." }),
+  t("Reduce Pressure", "Crew", 1, ["entertainer"], 1, "Reduce another character's Pressure by 1 in safety, never below their Stress floor.", "routine", "calm", { strong: "The target also gets +1d6 on their next skill roll.", anywhere: true }),
   t("Morale Night", "Crew", 2, ["entertainer"], 6, "Music, stories, a stolen bottle: every other survivor aboard reduces Pressure by 1.", "routine", "morale", { facility: { modules: ["Crew Quarters", "Crewmate Quarters", "Crewmate Quarters Expanded"], label: "Crew Quarters" } }),
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
-  t("Assist", "Crew", 1, [], 0, "Help another character with a task you have a level in. Roll against their task's skill; on a success only one assistant's dice count, the best Skill Level among them, up to +4d6. On a Project, you add 1 Progress if you meet its threshold and take one of its contributor slots.", "routine", "assist"),
+  t("Assist", "Crew", 1, [], 0, "Help another character with a task you have a level in. Roll against their task's skill; on a success only one assistant's dice count, the best Skill Level among them, up to +4d6. On a Project, you add 1 Progress if you meet its threshold and take one of its contributor slots.", "routine", "assist", { anywhere: true }),
   t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The GM starts it from the campaign menu, which tracks the site and its Expedition Turns; the rest plays out at the table.", "routine", null, { noStrong: true }),
   // The Common Expedition Tasks. The rulebook names a skill and a category for each but no Energy
   // cost and, apart from Stand Watch and the two Labor thresholds, no number — what a given door or
@@ -125,7 +130,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Stand Watch", "Expedition", 1, ["perception"], 2, "Protect others while they work. Perception 2 catches obvious approaching threats in a secure, well-lit zone before they create surprise. It becomes a Skilled roll against anything hidden, silent, camouflaged, behind cover, or moving through darkness.", "routine", null, { gmResolves: true }),
   t("Carry or Extract", "Expedition", 1, [], 2, "Move a downed survivor, Heavy object, specimen, or piece of machinery: Strength against the load's Labor Threshold, normally 2 for an awkward one and 3 or more for something that should take two people. The GM may call for Acrobatics instead when the route matters more than the weight.", "routine", null, { labor: true }),
   t("Catch Your Breath", "Expedition", 0, [], 0, "Spend one Expedition Turn in a secured zone with no immediate threat to reduce Pressure by 1, never below the Stress floor. This is not Rest: it restores no Energy, doesn't count as sleep, and allows no injury recovery.", "routine", "breath", { noStrong: true }),
-  t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true }),
+  t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true, anywhere: true }),
 ];
 
 export const TASK_BY_NAME = Object.fromEntries(SHIPBOARD_TASKS.map((x) => [x.name, x])) as Record<string, ShipboardTask>;

@@ -20,6 +20,8 @@ export type SimTurn = {
   approach: string;
   /** What they want the GM to tell them. Answer these and feed them back in to commit the turn. */
   questions: string[];
+  /** The room they'd like to be taken to next, on an expedition. Yours to allow: the app won't move them. */
+  move?: string;
   /** Why they chose it, out of character. */
   reason: string;
   task: string;
@@ -77,6 +79,7 @@ export async function runSegment(base: string, code: string, characterId: string
     speech: choice.speech,
     approach: choice.approach,
     questions: choice.questions ?? [],
+    move: choice.move,
     reason: choice.reason,
     task: optionLabel(option),
     unclear: choice.unclear,

@@ -6,9 +6,9 @@ import type { Character, GameState } from "../types";
 import { playerBrief } from "./brief";
 import { creationMenu, crewContext, type SimBuildPick } from "./create";
 import { asLines, asText, structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
-import { menuText, type SimMenu } from "./options";
+import { away, menuText, type SimMenu } from "./options";
 import { styleText } from "./styles";
-import { charts, hold, upgrades } from "./world";
+import { charts, hold, site, upgrades } from "./world";
 
 /** Which model plays this survivor, and how they lean. */
 export type Agent = { provider: Provider; style: string };
@@ -22,6 +22,8 @@ export type SimChoice = {
   approach: string;
   /** Things they want the GM to tell them before or as they commit. */
   questions?: string[];
+  /** Where they want to be taken next, on an expedition. The GM moves them, so this is a request. */
+  move?: string;
   /** Why, out of character. */
   reason: string;
   /** A rule or situation that read as ambiguous. The point of a test run. */
@@ -59,6 +61,7 @@ const TOOL: Tool = {
         description: "The tactical detail: route and door, where you stand, cover, breaching or cutting and in what order, gear in hand, what you seal or tether, who you want where, and your fallback if it turns. Be concrete about this ship's rooms.",
       },
       questions: { type: "array", items: { type: "string" }, description: "Short, answerable questions for the GM about anything your plan depends on." },
+      move: { type: "string", description: "On an expedition only: the one room you want to move into, by name, or empty to stay where you are. The GM moves you; you don't." },
       reason: { type: "string", description: "One line, out of character, on why this option." },
       unclear: { type: "string", description: "Only when a rule or the situation was genuinely ambiguous." },
     },
@@ -221,6 +224,18 @@ async function persona(agent: Agent): Promise<SystemBlock[]> {
  * at a time: no saving toward a module, no arguing for the derelict two columns over.
  */
 function world(g: GameState, c: Character, situation: string): string[] {
+  // Off the ship, the ladders and the star chart are noise: nothing in a derelict can be spent on a
+  // module, and the course they aren't flying is a day away. What replaces them is the room.
+  if (away(g, c)) {
+    return [
+      `YOU ARE\n\n${sheet(c)}`,
+      EXPEDITION,
+      `The GM describes what you can see:\n\n${situation}`,
+      `Where you are:\n\n${site(g, c.id)}`,
+      `What you have to hand:\n\n${hold(g, c.id)}`,
+      `What has happened recently:\n${recent(g) || "- (nothing logged yet)"}`,
+    ];
+  }
   return [
     `YOU ARE\n\n${sheet(c)}`,
     `The GM describes the situation:\n\n${situation}`,
@@ -231,6 +246,20 @@ function world(g: GameState, c: Character, situation: string): string[] {
     `What has happened recently aboard:\n${recent(g) || "- (nothing logged yet)"}`,
   ];
 }
+
+/**
+ * What changes off the ship. The map is the GM's: they can see the room and the crew can't, and the
+ * app doesn't offer movement as a choice, so wanting to go somewhere has to be said rather than
+ * taken. Everything else — one task, no narrating the outcome, ask about what you can't see —
+ * already holds, and is not repeated here.
+ */
+const EXPEDITION = `YOU ARE NOT ABOARD THE SHIP. You are inside a wreck, and the GM is running it room by room.
+
+They describe what you can see; you never describe the site. Don't invent a door, a corpse, a hatch, a sound, or what's in a container. If your plan needs something to be there, ask whether it is.
+
+You do not move yourself. Say where you want to go in "move" — one room, by name, from the ways out of the room you're in — and the GM takes you there if it's possible. "move" is a request, not a fact: never write as though you've already arrived, and take a task you can do from the room you're standing in now.
+
+Time is the pressure here. An Expedition Turn is twenty to forty minutes and eight of them use up the whole day segment, so standing in a corridor deciding costs the same as searching a room.`;
 
 /**
  * One remark in the huddle. Nothing is submitted here: the point is that whoever acts first does it
@@ -282,6 +311,7 @@ export async function decide(g: GameState, c: Character, menu: SimMenu, situatio
     approach: asText(value.approach, "(gave no approach)"),
     reason: asText(value.reason, "(gave no reason)"),
     questions: asLines(value.questions),
+    move: asText(value.move) || undefined,
     unclear: asText(value.unclear) || undefined,
   };
 }
