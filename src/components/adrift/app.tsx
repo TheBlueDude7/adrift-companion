@@ -27,6 +27,7 @@ import { leaveCampaign } from "@/lib/sync/client";
 import type { GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionsTab } from "./actions";
+import { CombatTab } from "./combat";
 import { ApplyConditionDialog } from "./conditions";
 import { CrewTab } from "./crew";
 import { usePerms } from "@/lib/use-perms";
@@ -208,6 +209,7 @@ function Header() {
 const TABS = [
   { value: "overview", label: "Overview" },
   { value: "actions", label: "Actions" },
+  { value: "combat", label: "Combat" },
   { value: "crew", label: "Crew" },
   { value: "ship", label: "Ship" },
   { value: "mechs", label: "Mechs" },
@@ -245,6 +247,7 @@ export function AdriftApp() {
           </div>
           <TabsContent value="overview" className="pt-3"><OverviewTab onOpenCharacter={(id) => { setSelected(id); setTab("crew"); }} onGo={setTab} /></TabsContent>
           <TabsContent value="actions" className="pt-3"><ActionsTab /></TabsContent>
+          <TabsContent value="combat" className="pt-3"><CombatTab /></TabsContent>
           <TabsContent value="crew" className="pt-3"><CrewTab selectedId={selected} onSelect={setSelected} /></TabsContent>
           <TabsContent value="ship" className="pt-3"><ShipTab /></TabsContent>
           <TabsContent value="mechs" className="pt-3"><MechsTab /></TabsContent>

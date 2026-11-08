@@ -5,8 +5,9 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeGame } from "../maps";
 import type { GameState } from "../types";
-import { applyOps, type Op } from "./ops";
+import { applyOps, diff, type Op } from "./ops";
 import type { Actor, Role } from "./permissions";
+import { playerView } from "./redact";
 
 /** A person as other clients see them. `id` is public; the key that proves identity is not. */
 export type Person = { id: string; name: string; role: Role; characterId: string | null; online: boolean };
@@ -109,6 +110,7 @@ function announce(room: Room) {
 }
 
 export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId: string }, claimNewCharacter?: string) {
+  const was = room.game;
   const before = new Set(room.game.characters.map((c) => c.id));
   room.game = applyOps(room.game, ops);
   room.version += 1;
@@ -119,9 +121,21 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
     if (created && room.members[claimNewCharacter]) room.members[claimNewCharacter].characterId = created.id;
   }
   scheduleSave(room);
-  broadcast(room, "ops", { version: room.version, ops, ...meta });
+  // A player's client tracks the redacted state, so their patch has to be the change between two
+  // redacted states — not the GM's, which would carry the numbers it exists to withhold. Both go
+  // out under the same version, including when the redacted change is empty, so clients stay in step.
+  const forPlayers = diff(playerView(was), playerView(room.game));
+  for (const c of room.conns) {
+    const gm = room.members[c.memberId]?.role === "gm";
+    c.send("ops", { version: room.version, ops: gm ? ops : forPlayers, ...meta });
+  }
   if (lost.length || claimNewCharacter) announce(room);
   return room.version;
+}
+
+/** The state as this key's holder may see it: whole for the GM, redacted for a player. */
+export function viewFor(room: Room, key: string): GameState {
+  return isGm(room, key) ? room.game : playerView(room.game);
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

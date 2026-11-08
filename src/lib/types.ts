@@ -10,6 +10,7 @@ import type {
   InjuryState,
   ModuleCondition,
   SkillKey,
+  ThreatBand,
   WeaponProfile,
 } from "./rules";
 import type { InjuryLocation } from "@/data/injuries";
@@ -128,14 +129,8 @@ export type InstalledCyber = {
 export type MechChassis = "utility" | "assault" | "recon";
 export type MechDamageType = DamageType;
 
-/**
- * Something the crew can fight. Deliberately thin: a name, what it can take, and what it shrugs off.
- * It has no attacks of its own, because the GM still plays it — the server only referees what the
- * crew does to it, so a hit lands by the same arithmetic as a hit on a survivor.
- */
-export type Threat = {
-  id: string;
-  name: string;
+/** What the GM knows about a threat and the crew doesn't. The server strips this from player traffic. */
+export type ThreatStats = {
   hp: number;
   maxHp: number;
   /** Ablative, like a survivor's: it absorbs 1 and loses a point. */
@@ -143,10 +138,31 @@ export type Threat = {
   resist: DamageType[];
   vulnerable: DamageType[];
   immune: DamageType[];
-  conditions: ActiveCondition[];
-  /** Out of the fight. Whether that means dead is the GM's call. */
-  downed: boolean;
   notes: string;
+};
+
+/** One thing the crew has pinned down about a damage type, and what they found. */
+export type KnownDefense = { type: DamageType; effect: "resists" | "vulnerable" | "immune" | "normal" };
+
+/**
+ * Something the crew can fight. It has no attacks of its own, because the GM still plays it — the
+ * server only referees what the crew does to it, so a hit lands by the same arithmetic as a hit on
+ * a survivor.
+ *
+ * Split in two on purpose. The fields here are public and go to every client; `stats` is the GM's
+ * and is removed before the state reaches a player, so a player's browser never holds the numbers
+ * and can't leak them however the interface is drawn. Everything a player is told either comes from
+ * `band`, from what the crew earned by Analyze in `known`, or from the GM's own mouth.
+ */
+export type Threat = {
+  id: string;
+  name: string;
+  band: ThreatBand;
+  conditions: ActiveCondition[];
+  /** Earned by a successful Analyze. The one route by which a secret becomes public. */
+  known: { defenses: KnownDefense[]; facts: string[] };
+  /** Absent in a player's copy of the state. Anything reading it must cope with that. */
+  stats?: ThreatStats;
 };
 
 export type InstalledModule = { id: string; key: string; damaged: boolean };
@@ -304,7 +320,12 @@ export type LogEntry = {
   kind: "info" | "roll" | "danger" | "day";
   /** Player who made the change, in shared campaigns. */
   by?: string;
+  /** The GM's eyes only: the numbers behind a hit on a threat. Never sent to a player. */
+  gm?: boolean;
 };
+
+/** A log line and who may read it, for the paths where some of what happened is the GM's alone. */
+export type Line = { text: string; gm?: boolean };
 
 export type Terrain = "floor" | "wall" | "door" | "airlock" | "cover" | "debris" | "hazard" | "objective";
 

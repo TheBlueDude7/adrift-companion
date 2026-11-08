@@ -336,6 +336,20 @@ export type ItemTier = (typeof ITEM_TIERS)[number];
 export const DAMAGE_TYPES = ["Physical", "Ballistic", "Fire", "Electric", "Chemical"] as const;
 export type DamageType = (typeof DAMAGE_TYPES)[number];
 
+/**
+ * How hurt a threat looks, worst first. A player is told this and never the numbers behind it, so
+ * they work out armor and Resistance from what they see — which is what the rules assume when they
+ * let an Affliction make the GM describe a damage reaction wrongly.
+ */
+export const THREAT_BANDS = ["down", "badly hurt", "hurt", "unhurt"] as const;
+export type ThreatBand = (typeof THREAT_BANDS)[number];
+
+export function threatBand(hp: number, maxHp: number): ThreatBand {
+  if (hp <= 0) return "down";
+  if (hp >= maxHp) return "unhurt";
+  return hp > maxHp / 2 ? "hurt" : "badly hurt";
+}
+
 /** How far a weapon reaches, in zones. Melee and Close are the same zone; the rest count outward. */
 export const WEAPON_RANGES = { melee: 0, close: 0, short: 1, medium: 2, long: 4 } as const;
 export type WeaponRange = keyof typeof WEAPON_RANGES;

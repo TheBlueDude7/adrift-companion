@@ -2,6 +2,7 @@ import { COVER_POINTS, deathCheck, resolveAttack, type Cover } from "@/lib/comba
 import { pushLog } from "@/lib/log";
 import { diff } from "@/lib/sync/ops";
 import { actorFor, applyToRoom, getRoom } from "@/lib/sync/rooms";
+import type { Line } from "@/lib/types";
 
 const COVERS = new Set(Object.keys(COVER_POINTS));
 /** Far enough to cover any weapon's reach plus the one-zone overreach. */
@@ -35,7 +36,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
   }
 
   const draft = structuredClone(room.game);
-  let lines: string[];
+  let lines: Line[];
 
   if (step === "death-check") {
     const down = draft.characters.find((c) => c.id === attackerId);
@@ -59,7 +60,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
   }
 
   const by = room.members[actor.memberId]?.name;
-  for (const line of lines.slice().reverse()) if (line) pushLog(draft, line, "roll", by);
+  for (const line of lines.slice().reverse()) if (line.text) pushLog(draft, line, "roll", by);
   const version = applyToRoom(room, diff(room.game, draft), { client, opId });
   return Response.json({ version });
 }

@@ -5,6 +5,7 @@ import { uid } from "../dice";
 import { normalizeGame } from "../maps";
 import { useGame, type Person } from "../store";
 import type { Resolution } from "../actions";
+import type { Cover } from "../combat";
 import type { GameState } from "../types";
 import { applyOps, type Op } from "./ops";
 import { outbox } from "./outbox";
@@ -232,6 +233,26 @@ export async function resolveOwnTask(actionId: string, step: TaskStep, r: Pick<R
   if (!res) return toast.error("Could not reach the server. Try again in a moment.");
   if (!res.ok) toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The server couldn't resolve that task.");
 }
+
+/**
+ * Attack with your own survivor, or make their death check. The server builds the pool, rolls it and
+ * applies the damage, so what goes over the wire is only who you shot at and from where.
+ */
+export async function attackOwnTarget(body: AttackRequest) {
+  const { session } = useGame.getState();
+  if (!session) return;
+  const res = await fetch(`/api/campaigns/${session.code}/attack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-adrift-key": keyFor() },
+    body: JSON.stringify({ client: clientId, opId: uid(), ...body }),
+  }).catch(() => null);
+  if (!res) return toast.error("Could not reach the server. Try again in a moment.");
+  if (!res.ok) toast.error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The server couldn't resolve that attack.");
+}
+
+export type AttackRequest =
+  | { step?: undefined; attackerId: string; targetId: string; itemId: string | null; zones: number; cover: Cover; aim: boolean; burst: boolean }
+  | { step: "death-check"; attackerId: string; willpower: boolean };
 
 /** Pick a character to play, or (as GM) assign one to another player. `null` releases it. */
 export async function claimCharacter(characterId: string | null, memberId?: string) {

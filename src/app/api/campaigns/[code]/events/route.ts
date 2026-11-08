@@ -1,4 +1,4 @@
-import { actorFor, getRoom, join, leave } from "@/lib/sync/rooms";
+import { actorFor, getRoom, join, leave, viewFor } from "@/lib/sync/rooms";
 
 const encoder = new TextEncoder();
 
@@ -39,7 +39,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/campaigns/[c
       write("retry: 2000\n\n");
       const actor = actorFor(room, key);
       send("me", { id: actor.memberId, role: actor.role });
-      send("snapshot", { version: room.version, game: room.game });
+      send("snapshot", { version: room.version, game: viewFor(room, key) });
       conn = join(room, key, name, send, cleanup);
     },
     cancel() {

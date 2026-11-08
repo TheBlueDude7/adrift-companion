@@ -1,6 +1,8 @@
-import { attackBlocker, deathCheck, newThreat, resolveAttack, UNARMED } from "../src/lib/combat";
+import { attackBlocker, deathCheck, defenseOf, newThreat, resolveAttack, UNARMED } from "../src/lib/combat";
+import { pushLog } from "../src/lib/log";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
-import { DEFAULT_ITEM_TEMPLATES } from "../src/lib/rules";
+import { DEFAULT_ITEM_TEMPLATES, threatBand } from "../src/lib/rules";
+import { playerView } from "../src/lib/sync/redact";
 import type { GameState } from "../src/lib/types";
 
 const tpl = (name: string) => DEFAULT_ITEM_TEMPLATES.find((t) => t.name === name)!;
@@ -63,7 +65,7 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const t = newThreat("Scavenger Drone", 10, 0);
   g.threats.push(t);
   resolveAttack(g, shooterId, t.id, id, shot);
-  check("rifle on an unarmored drone", g.threats[0].hp, 7);
+  check("rifle on an unarmored drone", g.threats[0].stats!.hp, 7);
 }
 
 // Strong Cover is 2 points and only counts against Ballistic.
@@ -74,7 +76,7 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const t = newThreat("Drone", 10, 0);
   g.threats.push(t);
   resolveAttack(g, shooterId, t.id, id, { ...shot, cover: "strong" });
-  check("rifle into Strong Cover", g.threats[0].hp, 9);
+  check("rifle into Strong Cover", g.threats[0].stats!.hp, 9);
 }
 
 // Fire ignores Cover entirely.
@@ -85,7 +87,7 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const t = newThreat("Drone", 10, 0);
   g.threats.push(t);
   resolveAttack(g, shooterId, t.id, id, { ...shot, cover: "strong" });
-  check("rocket ignores Cover", g.threats[0].hp, 4);
+  check("rocket ignores Cover", g.threats[0].stats!.hp, 4);
 }
 
 // Resistance halves, rounding down.
@@ -93,10 +95,11 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   allSixes();
   const { g, shooterId } = world();
   const id = give(g, shooterId, "Ballistic Rifle");
-  const t = { ...newThreat("Hardened Drone", 10, 0), resist: ["Ballistic" as const] };
+  const t = newThreat("Hardened Drone", 10, 0);
+  t.stats!.resist = ["Ballistic"];
   g.threats.push(t);
   resolveAttack(g, shooterId, t.id, id, shot);
-  check("Resistance halves 3 to 1", g.threats[0].hp, 9);
+  check("Resistance halves 3 to 1", g.threats[0].stats!.hp, 9);
 }
 
 // Plating is ablative: it stops 1 and loses a point.
@@ -106,7 +109,7 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const id = give(g, shooterId, "Ballistic Rifle");
   g.threats.push(newThreat("Plated Drone", 10, 2));
   resolveAttack(g, shooterId, g.threats[0].id, id, shot);
-  check("plating absorbs 1", [g.threats[0].hp, g.threats[0].armor], [8, 1]);
+  check("plating absorbs 1", [g.threats[0].stats!.hp, g.threats[0].stats!.armor], [8, 1]);
 }
 
 // "Pierces Armor" gets past the plating.
@@ -116,7 +119,7 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const id = give(g, shooterId, "Chemical Injector");
   g.threats.push(newThreat("Plated Drone", 10, 2));
   resolveAttack(g, shooterId, g.threats[0].id, id, { ...shot, zones: 0 });
-  check("injector pierces plating", [g.threats[0].hp, g.threats[0].armor], [9, 2]);
+  check("injector pierces plating", [g.threats[0].stats!.hp, g.threats[0].stats!.armor], [9, 2]);
 }
 
 // Immunity is absolute.
@@ -124,9 +127,11 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   allSixes();
   const { g, shooterId } = world();
   const id = give(g, shooterId, "Rocket Launcher");
-  g.threats.push({ ...newThreat("Fireproof Thing", 10, 0), immune: ["Fire" as const] });
+  const t = newThreat("Fireproof Thing", 10, 0);
+  t.stats!.immune = ["Fire"];
+  g.threats.push(t);
   resolveAttack(g, shooterId, g.threats[0].id, id, shot);
-  check("immune to Fire", g.threats[0].hp, 10);
+  check("immune to Fire", g.threats[0].stats!.hp, 10);
 }
 
 // A miss changes nothing.
@@ -136,7 +141,77 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   const id = give(g, shooterId, "Ballistic Rifle");
   g.threats.push(newThreat("Drone", 10, 0));
   const r = resolveAttack(g, shooterId, g.threats[0].id, id, shot);
-  check("a miss leaves it untouched", [g.threats[0].hp, "hits" in r ? r.hits : -1], [10, 0]);
+  check("a miss leaves it untouched", [g.threats[0].stats!.hp, "hits" in r ? r.hits : -1], [10, 0]);
+}
+
+// What the players hear, versus what the GM reads.
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Ballistic Rifle");
+  g.threats.push(newThreat("Plated Drone", 10, 2));
+  const r = resolveAttack(g, shooterId, g.threats[0].id, id, shot);
+  const lines = "lines" in r ? r.lines : [];
+  check("the numbers are marked for the GM alone", lines.filter((l) => l.gm).map((l) => l.text), ["Plated Drone's plating absorbs 1 (now 1).", "Plated Drone takes 2 Ballistic damage (HP 8/10)."]);
+  check("and the crew hears how it went, not by how much", lines.filter((l) => !l.gm).map((l) => l.text)[1], "Plated Drone takes it, though less of it than you'd hoped.");
+}
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Makeshift Pistol");
+  // Named so the assertion below can't match the word "armor" in the threat's own name.
+  const t = newThreat("Bulkhead Crawler", 10, 3);
+  g.threats.push(t);
+  const r = resolveAttack(g, shooterId, t.id, id, shot);
+  const said = ("lines" in r ? r.lines : []).filter((l) => !l.gm).map((l) => l.text);
+  check("fully absorbed reads as nothing happening", said[1], "The hit lands on Bulkhead Crawler and does nothing at all.");
+  check("and never says why", said.some((x) => /plating|armor|absorb/i.test(x)), false);
+}
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Rocket Launcher");
+  const t = newThreat("Fireproof Thing", 10, 0);
+  t.stats!.immune = ["Fire"];
+  g.threats.push(t);
+  const said = (() => { const r = resolveAttack(g, shooterId, t.id, id, shot); return ("lines" in r ? r.lines : []).filter((l) => !l.gm).map((l) => l.text); })();
+  check("immunity isn't announced to the crew", said.some((x) => /immune/i.test(x)), false);
+}
+
+// The band, which is the whole of what a player learns about its health.
+{
+  const t = newThreat("Thing", 10, 0);
+  const at = (hp: number) => { t.stats!.hp = hp; return threatBand(hp, 10); };
+  check("bands by remaining HP", [at(10), at(9), at(6), at(5), at(1), at(0)], ["unhurt", "hurt", "hurt", "badly hurt", "badly hurt", "down"]);
+}
+
+// Redaction: what actually goes over the wire to a player.
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Ballistic Rifle");
+  const t = newThreat("Secret Drone", 10, 2);
+  t.stats!.immune = ["Fire"];
+  t.stats!.notes = "Guards the reactor door";
+  g.threats.push(t);
+  const r = resolveAttack(g, shooterId, t.id, id, shot);
+  for (const line of ("lines" in r ? r.lines : [])) pushLog(g, line, "roll");
+  const seen = playerView(g);
+  check("a player's copy has no numbers", seen.threats[0].stats, undefined);
+  check("but still has what it needs to be shot at", [seen.threats[0].name, seen.threats[0].band], ["Secret Drone", "hurt"]);
+  check("no GM line survives the trip", seen.log.some((e) => e.gm), false);
+  check("and nothing left in the log leaks a number", seen.log.some((e) => /HP \d+\/\d+|plating|immune/i.test(e.text)), false);
+  check("while the GM keeps all of it", [g.threats[0].stats!.hp, g.log.filter((e) => e.gm).length], [8, 2]);
+}
+
+// An Analyze hands over one fact, truthfully.
+{
+  const t = newThreat("Thing", 10, 0);
+  t.stats!.resist = ["Ballistic"];
+  t.stats!.vulnerable = ["Electric"];
+  check("what an Analyze would report", [defenseOf(t.stats!, "Ballistic"), defenseOf(t.stats!, "Electric"), defenseOf(t.stats!, "Fire")], ["resists", "vulnerable", "normal"]);
+  t.known.defenses.push({ type: "Ballistic", effect: defenseOf(t.stats!, "Ballistic") });
+  check("and it reaches the player view", playerView({ ...world().g, threats: [t] }).threats[0].known.defenses, [{ type: "Ballistic", effect: "resists" }]);
 }
 
 // Nonlethal can't take the last point.

@@ -1,8 +1,8 @@
 import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
 import { maxMechArmor } from "./mechs";
-import { DEFAULT_ITEM_TEMPLATES } from "./rules";
-import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, TilePos, TokenKind } from "./types";
+import { DEFAULT_ITEM_TEMPLATES, threatBand } from "./rules";
+import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, ThreatStats, TilePos, TokenKind } from "./types";
 
 export const TERRAIN: { key: Terrain; name: string; fill: string; hint: string }[] = [
   { key: "floor", name: "Floor", fill: "#334155", hint: "Walkable deck" },
@@ -143,6 +143,19 @@ export function normalizeGame(g: GameState): GameState {
   g.maps = g.maps.map((m) => (m.kind === "star" && typeof (m as Partial<StarMap>).size !== "number" ? migrateStarMap(m as unknown as OldStarMap) : m));
   if (!Array.isArray(g.mechs)) g.mechs = [];
   if (!Array.isArray(g.threats)) g.threats = [];
+  // A threat's numbers used to sit alongside its name, where every player could read them.
+  for (const t of g.threats) {
+    const old = t as unknown as ThreatStats & { downed?: boolean };
+    if (typeof old.hp === "number") {
+      t.stats = { hp: old.hp, maxHp: old.maxHp, armor: old.armor, resist: old.resist ?? [], vulnerable: old.vulnerable ?? [], immune: old.immune ?? [], notes: old.notes ?? "" };
+      for (const k of ["hp", "maxHp", "armor", "resist", "vulnerable", "immune", "notes", "downed"] as const) delete old[k];
+    }
+    if (!Array.isArray(t.conditions)) t.conditions = [];
+    if (!t.known || !Array.isArray(t.known.defenses)) t.known = { defenses: [], facts: [] };
+    // A player's copy has no numbers to read the band from, so only recompute where they exist.
+    if (t.stats) t.band = threatBand(t.stats.hp, t.stats.maxHp);
+    else if (!t.band) t.band = "unhurt";
+  }
   // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
   for (const m of g.mechs) if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
   if (!Array.isArray(g.actions)) g.actions = [];

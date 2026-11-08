@@ -1,8 +1,8 @@
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
 import { applyDamage, damageSteps } from "./mechanics";
-import { PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, type WeaponProfile } from "./rules";
-import type { Character, GameState, Item, Threat } from "./types";
+import { PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type DamageType, type WeaponProfile } from "./rules";
+import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
 /** Unarmed: Close Combat needs no weapon, so a fist is 1 Physical in your own zone. */
 export const UNARMED: WeaponProfile = { damage: 1, damageType: "Physical", range: "melee", skill: "closeCombat" };
@@ -29,7 +29,16 @@ export function armed(g: GameState, characterId: string): { item: Item | null; w
 export const threatOf = (g: GameState, id: string) => g.threats.find((t) => t.id === id);
 
 export function newThreat(name: string, hp: number, armor = 0): Threat {
-  return { id: uid(), name, hp, maxHp: hp, armor, resist: [], vulnerable: [], immune: [], conditions: [], downed: false, notes: "" };
+  const stats: ThreatStats = { hp, maxHp: hp, armor, resist: [], vulnerable: [], immune: [], notes: "" };
+  return { id: uid(), name, band: threatBand(hp, hp), conditions: [], known: { defenses: [], facts: [] }, stats };
+}
+
+/** What a threat's own numbers say about a damage type, for the GM to hand over after an Analyze. */
+export function defenseOf(s: ThreatStats, type: DamageType): KnownDefense["effect"] {
+  if (s.immune.includes(type)) return "immune";
+  if (s.resist.includes(type)) return "resists";
+  if (s.vulnerable.includes(type)) return "vulnerable";
+  return "normal";
 }
 
 export type AttackShot = {
@@ -73,6 +82,10 @@ export function attackPool(c: Character, weapon: WeaponProfile, shot: AttackShot
     extra -= OVERREACH_PENALTY;
     extras.push(`beyond its range −${OVERREACH_PENALTY}`);
   }
+  if (c.encouraged) {
+    extra += 1;
+    extras.push("Encouraged +1");
+  }
   const b = rollBreakdown(c, skill, attr, extra);
   const parts = [`${SKILL_BY_KEY[skill].name} ${b.level} + ${attr} ${b.attrVal}`];
   if (b.pressure) parts.push(`${PRESSURE_STATES[c.pressure].name} ${b.pressure}`);
@@ -82,42 +95,62 @@ export function attackPool(c: Character, weapon: WeaponProfile, shot: AttackShot
 /** A nonlethal weapon can't take the last point, so it stops at 1 HP. */
 const capped = (hp: number, amount: number, weapon: WeaponProfile) => (weapon.nonlethal ? Math.min(amount, Math.max(0, hp - 1)) : amount);
 
+/**
+ * What the crew can see of a hit landing. Players are told how well it worked, never by how much,
+ * so they infer armor and Resistance from the fiction the way the rulebook assumes — and so the GM
+ * keeps the room to describe a reaction wrongly when something says they should.
+ */
+function visibleEffect(t: Threat, raw: number, lost: number, dropped: boolean): string {
+  if (dropped) return `${t.name} goes down.`;
+  if (raw === 0) return `It catches ${t.name} squarely.`;
+  if (lost === 0) return `The hit lands on ${t.name} and does nothing at all.`;
+  if (lost >= raw) return `It tells on ${t.name}.`;
+  return lost * 2 <= raw ? `${t.name} barely flinches.` : `${t.name} takes it, though less of it than you'd hoped.`;
+}
+
 /** A threat takes damage in the same order as a survivor, and its plating is ablative the same way. */
-function hurtThreat(t: Threat, weapon: WeaponProfile, coverPoints: number, out: string[]) {
+function hurtThreat(t: Threat, weapon: WeaponProfile, coverPoints: number, out: Line[]) {
+  const s = t.stats;
+  // Only ever called on the server or the GM's own device, both of which hold the numbers.
+  if (!s) return;
   const type = weapon.damageType;
-  if (t.immune.includes(type)) {
-    out.push(`${t.name} is immune to ${type} damage.`);
-    return;
+  const raw = capped(s.hp, weapon.damage, weapon);
+  const gm: string[] = [];
+  let lost = 0;
+  if (s.immune.includes(type)) {
+    gm.push(`${t.name} is immune to ${type} damage.`);
+  } else {
+    const scaled = scaleDamage(raw, s.resist.includes(type), s.vulnerable.includes(type));
+    if (scaled !== raw) gm.push(`${t.name} ${scaled < raw ? "resists" : "is vulnerable to"} ${type}: ${raw} becomes ${scaled}.`);
+    const ap = weapon.ap ?? 0;
+    const points = type === "Ballistic" ? coverPoints : 0;
+    const cover = Math.min(scaled, Math.max(0, points - ap));
+    const armored = s.armor > 0 && scaled - cover > 0 && ap <= points ? 1 : 0;
+    if (cover) gm.push(`Cover stops ${cover}.`);
+    if (armored) {
+      s.armor -= armored;
+      gm.push(`${t.name}'s plating absorbs 1 (now ${s.armor}).`);
+    } else if (s.armor > 0 && ap > points) gm.push(`The attack pierces ${t.name}'s plating.`);
+    lost = Math.min(s.hp, Math.max(0, scaled - cover - armored));
+    s.hp -= lost;
+    gm.push(`${t.name} takes ${lost} ${type} damage (HP ${s.hp}/${s.maxHp}).`);
   }
-  const amount = capped(t.hp, weapon.damage, weapon);
-  const scaled = scaleDamage(amount, t.resist.includes(type), t.vulnerable.includes(type));
-  if (scaled !== amount) out.push(`${t.name} ${scaled < amount ? "resists" : "is vulnerable to"} ${type}: ${amount} becomes ${scaled}.`);
-  const ap = weapon.ap ?? 0;
-  const points = type === "Ballistic" ? coverPoints : 0;
-  const cover = Math.min(scaled, Math.max(0, points - ap));
-  const armored = t.armor > 0 && scaled - cover > 0 && ap <= points ? 1 : 0;
-  if (cover) out.push(`Cover stops ${cover}.`);
-  if (armored) {
-    t.armor -= armored;
-    out.push(`${t.name}'s plating absorbs 1 (now ${t.armor}).`);
-  } else if (t.armor > 0 && ap > points) out.push(`The attack pierces ${t.name}'s plating.`);
-  const lost = Math.min(t.hp, Math.max(0, scaled - cover - armored));
-  t.hp -= lost;
-  out.push(`${t.name} takes ${lost} ${type} damage (HP ${t.hp}/${t.maxHp}).`);
-  if (t.hp === 0 && !t.downed) {
-    t.downed = true;
-    out.push(`${t.name} is down.`);
-  }
+  const was = t.band;
+  t.band = threatBand(s.hp, s.maxHp);
+  out.push({ text: visibleEffect(t, raw, lost, t.band === "down" && was !== "down") });
+  for (const text of gm) out.push({ text, gm: true });
 }
 
 /**
  * A survivor takes the hit through the ordinary damage path, so Vulnerability, Resistance, Cover and
- * ablative Armor all apply in their usual order. The Injury roll is worked out first, because
- * `applyDamage` needs the 2d6 up front and only an Injury-worthy hit should carry one.
+ * ablative Armor all apply in their usual order. None of it is hidden: a crew sees its own wounds.
+ * The Injury roll is worked out first, because `applyDamage` needs the 2d6 up front and only an
+ * Injury-worthy hit should carry one.
  */
-function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, coverPoints: number, out: string[]) {
+function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, coverPoints: number, out: Line[]) {
   const amount = capped(c.hp, weapon.damage, weapon);
-  if (amount < weapon.damage) out.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
+  const said: string[] = [];
+  if (amount < weapon.damage) said.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
   const vulnerable = c.conditions.some((x) => x.name === `Vulnerable: ${weapon.damageType}`);
   const opts = {
     amount,
@@ -129,10 +162,11 @@ function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, coverP
   };
   const { lost } = damageSteps(c, opts);
   const hurts = lost >= INJURY_THRESHOLD || (lost > 0 && lost >= c.hp);
-  applyDamage(g, c, { ...opts, gainPressure: true, injury: hurts ? { severity: d(6), location: d(6) } : null }, out);
+  applyDamage(g, c, { ...opts, gainPressure: true, injury: hurts ? { severity: d(6), location: d(6) } : null }, said);
+  for (const text of said) out.push({ text });
 }
 
-export type AttackResult = { dice: number[]; hits: number; lines: string[] };
+export type AttackResult = { dice: number[]; hits: number; lines: Line[] };
 
 /**
  * One attack, start to finish, against a draft of the state. The pool, the roll and the damage are
@@ -158,21 +192,22 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   const target = victim ?? threat;
   if (!target) return { error: "There's nothing there to attack." };
   if (victim?.dead) return { error: `${victim.name} is already dead.` };
+  if (threat && !threat.stats) return { error: "Only the GM's copy of the campaign can resolve that." };
 
   const pool = attackPool(c, weapon, shot);
   const dice = rollPool(pool.dice);
   const hits = sixes(dice);
   const what = item ? `the ${item.name}` : "their fists";
   const result = hits === 0 ? "a miss" : hits === 1 ? "a hit" : `a hit with ${hits - 1} success${hits === 2 ? "" : "es"} to spare`;
-  const lines = [`${c.name} attacks ${target.name} with ${what} (${pool.dice}d6: ${pool.parts.join(", ")}): [${dice.join(", ")}] — ${result}.`];
+  const lines: Line[] = [{ text: `${c.name} attacks ${target.name} with ${what} (${pool.dice}d6: ${pool.parts.join(", ")}): [${dice.join(", ")}] — ${result}.` }];
 
   if (item?.charges !== undefined) {
     item.charges = Math.max(0, item.charges - 1);
-    lines.push(`${item.name}: ${item.charges} use${item.charges === 1 ? "" : "s"} left.`);
+    lines.push({ text: `${item.name}: ${item.charges} use${item.charges === 1 ? "" : "s"} left.` });
   }
   if (c.encouraged) {
     delete c.encouraged;
-    lines.push(`${c.name}'s encouragement is spent.`);
+    lines.push({ text: `${c.name}'s encouragement is spent.` });
   }
   if (hits === 0) return { dice, hits, lines };
 
@@ -181,10 +216,10 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   else hurtCharacter(g, victim!, weapon, coverPoints, lines);
 
   for (const cond of weapon.applies ?? []) {
-    lines.push(weapon.zone ? `Everything in that zone is ${cond.name} (${cond.duration}).` : `${target.name} is ${cond.name} (${cond.duration}) — apply it.`);
+    lines.push({ text: weapon.zone ? `Everything in that zone is ${cond.name} (${cond.duration}).` : `${target.name} is ${cond.name} (${cond.duration}) — apply it.` });
   }
-  if (weapon.blast) lines.push(`Everything else in that zone takes ${weapon.blast} ${weapon.damageType} damage — apply it to each.`);
-  if (hits > 1) lines.push(`${hits - 1} extra success${hits === 2 ? "" : "es"} to spend on combat stunts.`);
+  if (weapon.blast) lines.push({ text: `Everything else in that zone takes ${weapon.blast} ${weapon.damageType} damage — apply it to each.` });
+  if (hits > 1) lines.push({ text: `${hits - 1} extra success${hits === 2 ? "" : "es"} to spend on combat stunts.` });
   return { dice, hits, lines };
 }
 
@@ -192,25 +227,25 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
  * The end-of-round death check: a flat Constitution roll, and any 6 keeps them alive. Spending
  * Willpower on a reroll is the player's call, so it's asked for rather than assumed.
  */
-export function deathCheck(c: Character, spendWillpower: boolean): string[] {
-  if (c.dead) return [`${c.name} is already dead.`];
-  if (c.hp > 0) return [`${c.name} isn't down.`];
-  if (c.stabilized) return [`${c.name} is stabilized — no more death checks.`];
-  const out: string[] = [];
+export function deathCheck(c: Character, spendWillpower: boolean): Line[] {
+  if (c.dead) return [{ text: `${c.name} is already dead.` }];
+  if (c.hp > 0) return [{ text: `${c.name} isn't down.` }];
+  if (c.stabilized) return [{ text: `${c.name} is stabilized — no more death checks.` }];
+  const out: Line[] = [];
   const held = (why: string) => {
     const dice = rollPool(attributeValue(c, "CON"));
     const ok = sixes(dice) > 0;
-    out.push(`${c.name}'s death check${why} [${dice.join(", ")}]: ${ok ? "they hold on" : "no 6"}.`);
+    out.push({ text: `${c.name}'s death check${why} [${dice.join(", ")}]: ${ok ? "they hold on" : "no 6"}.` });
     return ok;
   };
   if (held("")) return out;
   if (spendWillpower && c.willpower > 0) {
     c.willpower -= 1;
-    out.push(`${c.name} spends 1 Willpower to reroll (${c.willpower} left).`);
+    out.push({ text: `${c.name} spends 1 Willpower to reroll (${c.willpower} left).` });
     if (held(" again")) return out;
   }
   c.dead = true;
-  out.push(`☠ ${c.name} dies.`);
+  out.push({ text: `☠ ${c.name} dies.` });
   return out;
 }
 

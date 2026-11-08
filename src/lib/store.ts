@@ -9,7 +9,7 @@ import { applyOps, diff, type Op } from "./sync/ops";
 import { outbox } from "./sync/outbox";
 import { denyReason, type Actor, type Role } from "./sync/permissions";
 import { toast } from "sonner";
-import type { GameState, LogEntry } from "./types";
+import type { GameState, Line, LogEntry } from "./types";
 
 const HISTORY_LIMIT = 40;
 
@@ -29,8 +29,8 @@ type Store = {
   status: SyncStatus;
   people: Person[];
   me: { id: string; role: Role } | null;
-  /** Apply a change. The recipe mutates a draft copy; it may return log lines. */
-  act: (label: string, recipe: (g: GameState) => void | string | string[], kind?: LogEntry["kind"]) => void;
+  /** Apply a change. The recipe mutates a draft copy; it may return log lines, some GM-only. */
+  act: (label: string, recipe: (g: GameState) => void | string | (string | Line)[], kind?: LogEntry["kind"]) => void;
   undo: () => void;
   replace: (game: GameState, label: string) => void;
 };
@@ -72,6 +72,7 @@ export const useGame = create<Store>()(
           const out = recipe(draft);
           const lines = out === undefined ? [label] : Array.isArray(out) ? out : [out];
           for (const line of lines.slice().reverse()) if (line) pushLog(draft, line, kind);
+          // A GM-only line is written by the GM's own device; a player's never produces one.
           const { session, playerName } = get();
           if (session && playerName) {
             const known = new Set(prev.log.map((e) => e.id));
