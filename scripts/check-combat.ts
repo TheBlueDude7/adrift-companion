@@ -1,8 +1,12 @@
 import { newAction, taskPool } from "../src/lib/actions";
 import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, UNARMED, type AttackResult } from "../src/lib/combat";
-import { moveTo, scout, startExpedition, zoneDistance, zoneOf } from "../src/lib/expedition";
-import { actionBlocker, DECK_SIZE, endFight, nextTurn, reserveReaction, spendAction, spent, startFight, takeReaction } from "../src/lib/fight";
+import { maxHp } from "../src/lib/derive";
+import { uid } from "../src/lib/dice";
+import { movePlan, moveTo, scout, startExpedition, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { actionBlocker, clearOverwatch, DECK_SIZE, declareOverwatch, endFight, nextTurn, overwatchFor, reserveReaction, spendAction, spent, startFight, takeReaction } from "../src/lib/fight";
 import { pushLog } from "../src/lib/log";
+import { marksOn } from "../src/lib/marks";
+import { applyDamage } from "../src/lib/mechanics";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES, PRESSURE_STATES, threatBand } from "../src/lib/rules";
 import { playerView } from "../src/lib/sync/redact";
@@ -604,6 +608,192 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   check("the player is sent two", playerView(g).fight!.order.length, 2);
   check("and not the one in the unexplored room", playerView(g).fight!.order.some((x) => x.id === hidden.id), false);
   check("the Round and the card are public", [playerView(g).fight!.round, playerView(g).fight!.card], [1, g.fight!.card]);
+}
+
+// Sprint: two zones for the Slow Action, and not across anything that wants a Task.
+{
+  const { g, shooterId } = world();
+  startExpedition(g, { site: "", crew: [shooterId], siteId: "tanager" });
+  const e = g.expedition!;
+  const zone = (name: string) => e.zones.find((z) => z.name === name)!;
+  const plan = (name: string) => movePlan(g, shooterId, zone(name).id);
+  const how = (name: string) => {
+    const p = plan(name);
+    return "blocked" in p ? p.blocked : `${p.kind} for a ${p.cost}${p.via ? ` through the ${p.via.name}` : ""}`;
+  };
+
+  check("next door is a step", how("Spinal Corridor"), "step for a fast");
+  check("two doors down is a Sprint", how("Mess Deck"), "sprint for a slow through the Spinal Corridor");
+  check("and a shut door is only a shove on the way", how("Medical Bay"), "sprint for a slow through the Spinal Corridor");
+  check("four rooms off is too far for either", how("Cargo Hold"), "The Cargo Hold is 4 zones off, and a Sprint reaches two.");
+  check("and a command lockout isn't a way at all", how("Bridge"), "There's no way from the Docking Collar to the Bridge at all.");
+
+  // From the Mess Deck the hold is two away, but the second of them is a drop into the netting.
+  moveTo(g, shooterId, zone("Spinal Corridor").id);
+  moveTo(g, shooterId, zone("Mess Deck").id);
+  check("the duct is a step", how("Maintenance Crawl"), "step for a fast");
+  check("but a two-deck drop wants a Task, which a Sprint can't cross", how("Cargo Hold"), "Getting to the Cargo Hold means crossing something that wants a Task on the way, which a Sprint can't.");
+  moveTo(g, shooterId, zone("Spinal Corridor").id);
+  moveTo(g, shooterId, zone("Docking Collar").id);
+
+  startFight(g, { crew: [shooterId], threats: [] });
+  const f = g.fight!;
+  f.card = f.order[0].card;
+  const ran = text(moveTo(g, shooterId, zone("Mess Deck").id));
+  check("the Sprint says where it went through", ran[0], "Vale sprints from the Docking Collar through the Spinal Corridor into the Mess Deck.");
+  check("and spends the Slow Action for it", ran.some((l) => /spends a Slow Action/.test(l)), true);
+  check("the room run through counts as seen", zone("Spinal Corridor").seen, true);
+  check("with only the Fast one left, two zones is out", movePlan(g, shooterId, zone("Docking Collar").id), { blocked: "Vale has already taken a Slow Action this turn." });
+  check("though one zone still fits", "kind" in movePlan(g, shooterId, zone("Spinal Corridor").id), true);
+}
+
+// The five one-shot conditions: what they add, what they strip, and when they're spent.
+{
+  const mark = (name: string) => ({ id: uid(), name, duration: "Brief" as const, notes: "" });
+
+  check("Marked rolls two dice against a Ballistic hit", marksOn({ conditions: [mark("Marked")] }, "Ballistic").dice, 2);
+  check("and one against anything else", marksOn({ conditions: [mark("Marked")] }, "Fire").dice, 1);
+  check("Brittle waits for a Physical or Ballistic hit", marksOn({ conditions: [mark("Brittle")] }, "Fire").bonus, 0);
+  check("and then adds one, and a point of Armor with it", [marksOn({ conditions: [mark("Brittle")] }, "Physical").bonus, marksOn({ conditions: [mark("Brittle")] }, "Physical").armorExtra], [1, 1]);
+  check("Conductive waits for an Electric one", marksOn({ conditions: [mark("Conductive")] }, "Ballistic").applies, []);
+  check("and brings Staggered with it", marksOn({ conditions: [mark("Conductive")] }, "Electric").applies, ["Staggered"]);
+  check("with no type said, only the type-blind ones land", marksOn({ conditions: [mark("Brittle"), mark("Marked")] }, null).names, ["Marked"]);
+
+  // A marked threat, shot. Every die is a 6, so Marked's 2d4 are 4s and the rifle's 3 becomes 11.
+  allSixes();
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 20, 0);
+  t.conditions.push(mark("Marked"));
+  g.threats.push(t);
+  const rifle = give(g, shooterId, "Ballistic Rifle");
+  const lines = rolled(resolveAttack(g, shooterId, t.id, rifle, shot));
+  check("Marked adds its roll to the damage", t.stats!.hp, 9);
+  check("and says what it added", lines.some((l) => l === "Marked: 2d4 comes up [4, 4], so +8 damage."), true);
+  check("then it's spent", t.conditions.length, 0);
+  check("which the crew is told", lines.some((l) => l === "Marked is spent on that hit."), true);
+}
+
+// Corroded and Fortified wait on the Armor, and are only spent when the Armor was in it.
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const victim = bystander(g);
+  victim.armor = 2;
+  victim.conditions.push({ id: uid(), name: "Corroded", duration: "Brief", notes: "" });
+  const cleaver = give(g, shooterId, "Cleaver");
+  const lines = rolled(resolveAttack(g, shooterId, victim.id, cleaver, { ...shot, zones: 0 }));
+  check("Corroded leaves the Armor stopping nothing", lines.some((l) => /Armor stops nothing/.test(l)), true);
+  check("and takes two points of it", victim.armor, 0);
+  check("so all three of the cleaver's damage lands", victim.hp, maxHp(victim) - 3);
+  check("and Corroded is done", victim.conditions.some((x) => x.name === "Corroded"), false);
+}
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const victim = bystander(g);
+  victim.conditions.push({ id: uid(), name: "Fortified", duration: "Brief", notes: "" });
+  const cleaver = give(g, shooterId, "Cleaver");
+  const before = victim.hp;
+  const lines = rolled(resolveAttack(g, shooterId, victim.id, cleaver, { ...shot, zones: 0 }));
+  check("a Fortified point absorbs the cleaver", lines.some((l) => /temporary point of Armor absorbs 1/.test(l)), true);
+  check("so three damage lands as two", before - victim.hp, 2);
+  check("and the point is gone", victim.conditions.some((x) => x.name === "Fortified"), false);
+
+  // Armor Piercing goes through a temporary point like any other, so there's nothing for it to do.
+  victim.conditions.push({ id: uid(), name: "Fortified", duration: "Brief", notes: "" });
+  const injector = give(g, shooterId, "Chemical Injector");
+  const was = victim.hp;
+  resolveAttack(g, shooterId, victim.id, injector, { ...shot, zones: 0 });
+  check("a pierced hit lands whole", was - victim.hp, 1);
+  check("and leaves Fortified standing for the next one", victim.conditions.some((x) => x.name === "Fortified"), true);
+}
+
+// Overwatch: a Slow Action now for one ranged shot later, out of turn.
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 20, 0);
+  g.threats.push(t);
+  const rifle = give(g, shooterId, "Ballistic Rifle");
+  const cleaver = give(g, shooterId, "Cleaver");
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = f.order.find((x) => x.id === shooterId)!;
+  const beast = f.order.find((x) => x.id === t.id)!;
+
+  f.card = beast.card;
+  check("it can't be declared out of turn", text(declareOverwatch(g, shooterId, "the hatch", "when it opens")), [`It isn't Vale's turn: card ${beast.card} is up and they hold ${me.card}.`]);
+  f.card = me.card;
+  check("declaring it spends the Slow Action", said(declareOverwatch(g, shooterId, "the hatch", "when it opens"), /spends a Slow Action/), true);
+  check("and it's held where the server can see it", me.overwatch, { watching: "the hatch", trigger: "when it opens" });
+  check("twice is no", text(declareOverwatch(g, shooterId, "the door", "when it opens")), ["Vale is already watching the hatch."]);
+  check("their own turn isn't when it fires", overwatchFor(g, shooterId), null);
+
+  f.card = beast.card;
+  check("out of turn it is", overwatchFor(g, shooterId), { watching: "the hatch", trigger: "when it opens" });
+  check("a fist isn't what it bought", resolveAttack(g, shooterId, t.id, cleaver, { ...shot, zones: 0 }), { error: "An Overwatch buys a ranged attack, and the Cleaver isn't one." });
+  check("nor is there a Fast Action to Aim with", resolveAttack(g, shooterId, t.id, rifle, { ...shot, aim: true }), { error: "Vale is shooting out of turn, with no Fast Action to Aim with." });
+  const fired = rolled(resolveAttack(g, shooterId, t.id, rifle, shot));
+  check("the shot interrupts what it was watching for", fired.some((l) => /watching for exactly that — when it opens — and the shot interrupts it/.test(l)), true);
+  check("and it's over", me.overwatch, undefined);
+  check("so a second shot out of turn is refused", resolveAttack(g, shooterId, t.id, rifle, shot), { error: `It isn't Vale's turn: card ${beast.card} is up and they hold ${me.card}.` });
+  check("and the Slow Action it was declared with is still spent", me.slow, true);
+}
+
+// The other four ways it ends.
+{
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 20, 0);
+  g.threats.push(t);
+  startExpedition(g, { site: "", crew: [shooterId], siteId: "tanager" });
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = f.order.find((x) => x.id === shooterId)!;
+  const e = g.expedition!;
+  f.card = me.card;
+
+  declareOverwatch(g, shooterId, "the corridor", "when something comes down it");
+  check("moving gives it up", said(moveTo(g, shooterId, e.zones.find((z) => z.name === "Spinal Corridor")!.id), /Overwatch ends: they moved/), true);
+  check("and it's gone", me.overwatch, undefined);
+
+  me.slow = false;
+  declareOverwatch(g, shooterId, "the corridor", "when something comes down it");
+  const hurt: string[] = [];
+  applyDamage(g, g.characters[0], { amount: 3, useArmor: false, pierce: 0, gainPressure: false, injury: null }, hurt);
+  check("being hit breaks it", hurt.some((l) => /Overwatch ends/.test(l)), true);
+
+  me.slow = false;
+  declareOverwatch(g, shooterId, "the corridor", "when something comes down it");
+  check("losing sight of it ends it", clearOverwatch(g, shooterId, "they lost sight of it"), "Vale's Overwatch ends: they lost sight of it.");
+
+  // Their own next turn is the last of the five, which is a Round away when they hold the high card.
+  me.slow = false;
+  me.card = 7;
+  f.order.find((x) => x.id === t.id)!.card = 4;
+  f.card = 7;
+  declareOverwatch(g, shooterId, "the corridor", "when something comes down it");
+  check("the Round turning over doesn't end it", said(nextTurn(g), /Overwatch ends/), false);
+  check("so it's still theirs while the Drone acts", me.overwatch?.watching, "the corridor");
+  check("and their own turn coming round is what ends it", said(nextTurn(g), /Overwatch ends: their turn has come round again/), true);
+}
+
+// What a player is sent of an Overwatch: their own, and not the GM's plans for a monster.
+{
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 20, 0);
+  g.threats.push(t);
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = f.order.find((x) => x.id === shooterId)!;
+  const beast = f.order.find((x) => x.id === t.id)!;
+  f.card = me.card;
+  declareOverwatch(g, shooterId, "the hatch", "when it opens");
+  beast.overwatch = { watching: "the crawlway", trigger: "when they turn their backs" };
+
+  const sent = playerView(g).fight!.order;
+  check("their own watch is public", sent.find((x) => x.id === shooterId)!.overwatch, { watching: "the hatch", trigger: "when it opens" });
+  check("the monster's is not", sent.find((x) => x.id === t.id)!.overwatch, undefined);
+  check("and the key isn't even there to notice", Object.keys(sent.find((x) => x.id === t.id)!).includes("overwatch"), false);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

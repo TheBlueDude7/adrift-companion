@@ -469,7 +469,17 @@ export type Combatant = {
   reaction?: "reserved" | "used";
   /** They've finished a turn this Round. Surprise ends with the first of them. */
   acted?: boolean;
+  /** A Slow Action spent watching for something, which buys one ranged attack out of turn. */
+  overwatch?: Overwatch;
 };
+
+/**
+ * A declared Overwatch: what they're watching, and what they're watching for.
+ *
+ * `watching` is free text because the rules let it be a zone, a doorway, or a border, and which of
+ * those it is changes nothing the app can check. `trigger` is the condition in the GM's own words.
+ */
+export type Overwatch = { watching: string; trigger: string };
 
 /**
  * A fight in progress: the Initiative order, the Round, and which card is acting.

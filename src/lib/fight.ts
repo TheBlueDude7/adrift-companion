@@ -1,6 +1,6 @@
 import { d } from "./dice";
 import { applyCondition, endRound } from "./mechanics";
-import type { Combatant, Fight, GameState, Line } from "./types";
+import type { Combatant, Fight, GameState, Line, Overwatch } from "./types";
 
 /** Ten Initiative cards, numbered 1 to 10. The lowest acts first. */
 export const DECK_SIZE = 10;
@@ -143,6 +143,67 @@ export function takeReaction(g: GameState, id: string): (string | Line)[] {
   return [`${combatantName(g, x)} takes their Reaction.`];
 }
 
+/**
+ * Spend the Slow Action on watching something instead of doing something: one ranged attack, before
+ * their next turn, the moment the trigger happens.
+ *
+ * What they're watching and what they're watching for are both the GM's words. The app holds them so
+ * the shot it later lets through out of turn is one somebody actually paid for.
+ */
+export function declareOverwatch(g: GameState, id: string, watching: string, trigger: string): (string | Line)[] {
+  const x = combatantOf(g, id);
+  if (!x) return ["They aren't in this fight."];
+  const name = combatantName(g, x);
+  if (x.overwatch) return [`${name} is already watching ${x.overwatch.watching}.`];
+  if (!watching.trim() || !trigger.trim()) return ["An Overwatch needs somewhere to watch and something to watch for."];
+  const why = actionBlocker(g, id, "slow");
+  if (why) return [why];
+  x.overwatch = { watching: watching.trim(), trigger: trigger.trim() };
+  const out: (string | Line)[] = [`${name} takes Overwatch on ${x.overwatch.watching}, for ${x.overwatch.trigger}.`];
+  const spend = spendAction(g, id, "slow");
+  if (spend) out.push(spend);
+  return out;
+}
+
+/**
+ * The Overwatch this attack would be spending, or null when there's nothing to spend.
+ *
+ * Only out of turn: on their own turn the ordinary budget applies, and by then the watch is gone
+ * anyway, since the start of their turn is one of the things that ends it.
+ */
+export function overwatchFor(g: GameState, id: string): Overwatch | null {
+  const f = g.fight;
+  const x = f?.order.find((y) => y.id === id);
+  if (!f || !x?.overwatch || x.card === f.card) return null;
+  return x.overwatch;
+}
+
+/** The watched-for thing happened: the shot is taken and the watch is over. */
+export function fireOverwatch(g: GameState, id: string): string | null {
+  const x = combatantOf(g, id);
+  if (!x?.overwatch) return null;
+  const { trigger } = x.overwatch;
+  delete x.overwatch;
+  return `${combatantName(g, x)} was watching for exactly that — ${trigger} — and the shot interrupts it.`;
+}
+
+/**
+ * End an Overwatch for any of the other reasons: they moved, they were hit, they lost sight of what
+ * they were watching, or their own turn has come round again.
+ */
+export function clearOverwatch(g: GameState, id: string, why: string): string | null {
+  const x = combatantOf(g, id);
+  if (!x?.overwatch) return null;
+  delete x.overwatch;
+  return `${combatantName(g, x)}'s Overwatch ends: ${why}.`;
+}
+
+/** An Overwatch ends when its holder's own turn begins, whether or not it was ever fired. */
+const lapsed = (g: GameState, f: Fight): string[] =>
+  upNow(f)
+    .map((x) => clearOverwatch(g, x.id, "their turn has come round again"))
+    .filter((line): line is string => !!line);
+
 /** Drop anyone who has left the campaign, so a stale id can't hold up the order. */
 const prune = (g: GameState, f: Fight) =>
   (f.order = f.order.filter((x) => (x.kind === "crew" ? g.characters.some((c) => c.id === x.id) : g.threats.some((t) => t.id === x.id))));
@@ -173,7 +234,7 @@ export function nextTurn(g: GameState): (string | Line)[] {
   const above = f.order.map((x) => x.card).filter((n) => n > f.card);
   if (above.length) {
     f.card = Math.min(...above);
-    return [...out, ...upLine(g, f)];
+    return [...out, ...lapsed(g, f), ...upLine(g, f)];
   }
   f.round += 1;
   f.card = Math.min(...f.order.map((x) => x.card));
@@ -183,7 +244,7 @@ export function nextTurn(g: GameState): (string | Line)[] {
     delete x.reaction;
     delete x.acted;
   }
-  return [...out, ...endRound(g), `— Round ${f.round} —`, ...upLine(g, f)];
+  return [...out, ...endRound(g), `— Round ${f.round} —`, ...lapsed(g, f), ...upLine(g, f)];
 }
 
 export function endFight(g: GameState): (string | Line)[] {

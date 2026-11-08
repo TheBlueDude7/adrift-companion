@@ -1,9 +1,10 @@
 import { conditionPenalty } from "./conditions";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
+import { markDamage, marksOn, spendMarks, type Marks } from "./marks";
 import { applyDamage, damageSteps } from "./mechanics";
 import { zoneDistance } from "./expedition";
-import { actionBlocker, spendAction, type ActionKind } from "./fight";
+import { actionBlocker, clearOverwatch, fireOverwatch, overwatchFor, spendAction, type ActionKind } from "./fight";
 import { borderTransparent, COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
 import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
@@ -137,11 +138,14 @@ function visibleEffect(t: Threat, raw: number, lost: number, dropped: boolean): 
   return lost * 2 <= raw ? `${t.name} barely flinches.` : `${t.name} takes it, though less of it than you'd hoped.`;
 }
 
-/** A threat takes damage in the same order as a survivor, and its plating is ablative the same way. */
-function hurtThreat(t: Threat, weapon: WeaponProfile, damage: number, coverPoints: number, out: Line[]) {
+/**
+ * A threat takes damage in the same order as a survivor, and its plating is ablative the same way.
+ * Returns the HP it actually lost, which is the GM's number and stays in the caller rather than the log.
+ */
+function hurtThreat(t: Threat, weapon: WeaponProfile, damage: number, coverPoints: number, marks: Marks, out: Line[]) {
   const s = t.stats;
   // Only ever called on the server or the GM's own device, both of which hold the numbers.
-  if (!s) return;
+  if (!s) return 0;
   const type = weapon.damageType;
   const raw = capped(s.hp, damage, weapon);
   const gm: string[] = [];
@@ -154,20 +158,35 @@ function hurtThreat(t: Threat, weapon: WeaponProfile, damage: number, coverPoint
     const ap = weapon.ap ?? 0;
     const points = type === "Ballistic" ? coverPoints : 0;
     const cover = Math.min(scaled, Math.max(0, points - ap));
-    const armored = s.armor > 0 && scaled - cover > 0 && ap <= points ? 1 : 0;
+    const temp = ap <= points ? Math.min(marks.temp, Math.max(0, scaled - cover)) : 0;
+    const inPlay = s.armor > 0 && scaled - cover - temp > 0 && ap <= points;
+    const armored = inPlay && !marks.armorDead ? 1 : 0;
+    const stripped = inPlay ? Math.min(s.armor, 1 + marks.armorExtra) : 0;
     if (cover) gm.push(`Cover stops ${cover}.`);
-    if (armored) {
-      s.armor -= armored;
-      gm.push(`${t.name}'s plating absorbs 1 (now ${s.armor}).`);
-    } else if (s.armor > 0 && ap > points) gm.push(`The attack pierces ${t.name}'s plating.`);
-    lost = Math.min(s.hp, Math.max(0, scaled - cover - armored));
+    if (temp) gm.push(`${t.name} is Fortified: a temporary point of Armor absorbs ${temp}.`);
+    const left = s.armor - stripped;
+    if (armored && stripped === 1) gm.push(`${t.name}'s plating absorbs 1 (now ${left}).`);
+    else if (armored) gm.push(`${t.name}'s plating absorbs 1, and ${stripped} points of it go (now ${left}).`);
+    else if (stripped) gm.push(`${t.name} is Corroded: its plating stops nothing, and ${stripped} points of it go (now ${left}).`);
+    else if (s.armor > 0 && ap > points) gm.push(`The attack pierces ${t.name}'s plating.`);
+    s.armor = left;
+    lost = Math.min(s.hp, Math.max(0, scaled - cover - temp - armored));
     s.hp -= lost;
     gm.push(`${t.name} takes ${lost} ${type} damage (HP ${s.hp}/${s.maxHp}).`);
+    // A threat's conditions are public — the crew can see it reel — so these lines aren't GM-only.
+    for (const name of marks.applies) {
+      t.conditions.push({ id: uid(), name, duration: "Brief", notes: "" });
+      out.push({ text: `${t.name} is now ${name}.` });
+    }
+    const spent: string[] = [];
+    spendMarks(t, marks, { temp: temp > 0, armor: stripped > 0 }, spent);
+    for (const text of spent) out.push({ text });
   }
   const was = t.band;
   t.band = threatBand(s.hp, s.maxHp);
   out.push({ text: visibleEffect(t, raw, lost, t.band === "down" && was !== "down") });
   for (const text of gm) out.push({ text, gm: true });
+  return lost;
 }
 
 /**
@@ -176,7 +195,7 @@ function hurtThreat(t: Threat, weapon: WeaponProfile, damage: number, coverPoint
  * The Injury roll is worked out first, because `applyDamage` needs the 2d6 up front and only an
  * Injury-worthy hit should carry one.
  */
-function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, damage: number, coverPoints: number, out: Line[]) {
+function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, damage: number, coverPoints: number, marks: Marks, out: Line[]) {
   const amount = capped(c.hp, damage, weapon);
   const said: string[] = [];
   if (amount < damage) said.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
@@ -188,6 +207,7 @@ function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, damage
     cover: weapon.damageType === "Ballistic" ? coverPoints : 0,
     resistant: false,
     vulnerable,
+    marks,
   };
   const { lost } = damageSteps(c, opts);
   const hurts = lost >= INJURY_THRESHOLD || (lost > 0 && lost >= c.hp);
@@ -231,15 +251,19 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   if (blocked) return { error: blocked };
 
   // An attack is a Slow Action, and Aiming first is the Fast one. While a fight is running, whose
-  // turn it is and what they have left to spend are the server's to keep, like the range.
+  // turn it is and what they have left to spend are the server's to keep, like the range. The one
+  // way round that is an Overwatch, whose Slow Action was spent in advance on this very shot.
+  const watch = overwatchFor(g, attackerId);
+  if (watch && weapon.range === "melee") return { error: `An Overwatch buys a ranged attack, and ${item ? `the ${item.name}` : "a fist"} isn't one.` };
+  if (watch && shot.aim) return { error: `${c.name} is shooting out of turn, with no Fast Action to Aim with.` };
   const owed: ActionKind[] = shot.aim ? ["slow", "fast"] : ["slow"];
-  const unready = actionBlocker(g, attackerId, ...owed);
+  const unready = watch ? null : actionBlocker(g, attackerId, ...owed);
   if (unready) return { error: unready };
 
   const pool = attackPool(c, weapon, shot);
   const dice = rollPool(pool.dice);
   const hits = sixes(dice);
-  const budget = spendAction(g, attackerId, ...owed);
+  const budget = watch ? fireOverwatch(g, attackerId) : spendAction(g, attackerId, ...owed);
   const what = item ? `the ${item.name}` : "their fists";
   const result = hits === 0 ? "a miss" : hits === 1 ? "a hit" : `a hit with ${hits - 1} success${hits === 2 ? "" : "es"} to spare`;
   const lines: Line[] = [{ text: `${c.name} attacks ${target.name} with ${what} (${pool.dice}d6: ${pool.parts.join(", ")}): [${dice.join(", ")}] — ${result}.` }];
@@ -257,13 +281,22 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
 
   // Weakened takes a point off everything the attacker lands; Exposed stops the target's Cover counting.
   const hurt = attackConditions(c, weapon, shot).damage;
-  const damage = Math.max(0, weapon.damage + hurt);
-  if (hurt) lines.push({ text: `${c.name} is weakened, so it lands for ${damage} rather than ${weapon.damage}.` });
+  // What the target was already marked with is this hit's to use up: Marked and Brittle add to it,
+  // Fortified and Corroded wait for the Armor, and all of them are spent in the damage path below.
+  const marks = marksOn(target, weapon.damageType);
+  const mark = markDamage(marks);
+  const damage = Math.max(0, weapon.damage + hurt + mark.extra);
+  if (hurt) lines.push({ text: `${c.name} is weakened, so it lands for ${weapon.damage + hurt} rather than ${weapon.damage}.` });
+  for (const text of mark.lines) lines.push({ text });
   const exposed = conditionPenalty(target, { skill: null, attr: "STR" }).noCover;
   const coverPoints = exposed ? 0 : COVER_POINTS[shot.cover];
   if (exposed && shot.cover !== "none") lines.push({ text: `${target.name} is Exposed, so cover doesn't help it.` });
-  if (threat) hurtThreat(threat, weapon, damage, coverPoints, lines);
-  else hurtCharacter(g, victim!, weapon, damage, coverPoints, lines);
+  if (threat) {
+    const lost = hurtThreat(threat, weapon, damage, coverPoints, marks, lines);
+    // Taking HP damage breaks a threat's Overwatch as surely as it breaks a survivor's.
+    const ended = lost > 0 ? clearOverwatch(g, threat.id, "it was hit") : null;
+    if (ended) lines.push({ text: ended });
+  } else hurtCharacter(g, victim!, weapon, damage, coverPoints, marks, lines);
 
   for (const cond of weapon.applies ?? []) {
     lines.push({ text: weapon.zone ? `Everything in that zone is ${cond.name} (${cond.duration}).` : `${target.name} is ${cond.name} (${cond.duration}) — apply it.` });

@@ -15,8 +15,9 @@ import { firstAidPool, giveFirstAid, medkitsFor } from "@/lib/actions";
 import { maxHp } from "@/lib/derive";
 import { uid } from "@/lib/dice";
 import { addInjury, addInjuryFromRoll, injuryFor, resolveInjuryRoll, type InjuryRoll } from "@/lib/injuries";
+import { markDamage, marksNeedingType, marksOn } from "@/lib/marks";
 import { applyDamage, damageSteps, findChar, rollAffliction } from "@/lib/mechanics";
-import { CONDITION_DURATIONS, type ConditionDuration } from "@/lib/rules";
+import { CONDITION_DURATIONS, DAMAGE_TYPES, type ConditionDuration, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
 import type { Character } from "@/lib/types";
@@ -95,13 +96,18 @@ export function DamageDialog({ character }: { character: Character }) {
   const [pressureChoice, setPressure] = useState<boolean | null>(null);
   const [injuryChoice, setInjury] = useState<boolean | null>(null);
   const [roll, setRoll] = useState<RollDraft>(EMPTY_ROLL);
+  const [type, setType] = useState<DamageType | "">("");
   const injuryRoll = parseRoll(roll);
-  const steps = damageSteps(character, { amount, useArmor, pierce, cover, resistant, vulnerable });
+  // Brittle waits for a Physical or Ballistic hit and Conductive for an Electric one, so those need
+  // the hit to have a type. Fortified and Corroded meet it the same either way, so they don't ask.
+  const waiting = marksNeedingType(character);
+  const marks = marksOn(character, type || null);
+  const steps = damageSteps(character, { amount: amount + marks.bonus, useArmor, pierce, cover, resistant, vulnerable, marks });
   const pressure = pressureChoice ?? steps.lost >= 2;
   const injury = injuryChoice ?? (steps.lost >= 3 || (steps.lost > 0 && steps.lost >= character.hp));
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setPressure(null); setInjury(null); setResistant(false); setVulnerable(false); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setPressure(null); setInjury(null); setResistant(false); setVulnerable(false); setType(""); } }}>
       <DialogTrigger render={<Button size="sm" variant="destructive"><HeartCrackIcon /> Damage</Button>} />
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
@@ -123,6 +129,18 @@ export function DamageDialog({ character }: { character: Character }) {
               Vulnerable (+half)
             </label>
           </div>
+          {waiting.length > 0 && (
+            <div className="grid gap-1.5">
+              <Label>Damage type ({waiting.join(", ")} {waiting.length === 1 ? "is" : "are"} waiting on this hit)</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {["", ...DAMAGE_TYPES].map((x) => (
+                  <button key={x || "any"} type="button" onClick={() => setType(x as DamageType | "")} className={cn("rounded-md border py-1 text-xs", type === x ? "border-primary bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/40")}>
+                    {x || "Unsaid"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label>Cover (Ballistic attacks only)</Label>
             <div className="grid grid-cols-3 gap-1.5">
@@ -144,7 +162,17 @@ export function DamageDialog({ character }: { character: Character }) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {[steps.scaled !== amount && `${steps.scaled > amount ? "Vulnerability raises" : "Resistance halves"} it to ${steps.scaled}`, steps.cover && `Cover absorbs ${steps.cover}`, steps.armor && "Armor absorbs 1", steps.pierced && "Armor is pierced"].filter(Boolean).join(", ") || "Nothing absorbs it"}: {character.name} loses <span className="font-medium text-foreground">{steps.lost} HP</span>.
+            {[
+              marks.bonus > 0 && `${marks.names.join(" and ")} adds ${marks.bonus}`,
+              steps.scaled !== amount + marks.bonus && `${steps.scaled > amount + marks.bonus ? "Vulnerability raises" : "Resistance halves"} it to ${steps.scaled}`,
+              steps.cover && `Cover absorbs ${steps.cover}`,
+              steps.temp && "Fortified absorbs 1",
+              steps.armor && "Armor absorbs 1",
+              !steps.armor && steps.stripped && "Corroded leaves Armor stopping nothing",
+              steps.stripped > 1 && `${steps.stripped} points of Armor go`,
+              steps.pierced && "Armor is pierced",
+            ].filter(Boolean).join(", ") || "Nothing absorbs it"}: {character.name} loses <span className="font-medium text-foreground">{steps.lost} HP</span>
+            {marks.dice ? `, plus whatever Marked's ${marks.dice}d4 rolls` : ""}.
           </p>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={pressure} onCheckedChange={(v) => setPressure(!!v)} />
@@ -162,8 +190,13 @@ export function DamageDialog({ character }: { character: Character }) {
             disabled={injury && !injuryRoll}
             onClick={() => {
               act(`Damage ${character.name}`, (g) => {
-                const out: string[] = [];
-                applyDamage(g, findChar(g, character.id), { amount, useArmor, pierce, cover, resistant, vulnerable, gainPressure: pressure, injury: injury ? injuryRoll : null }, out);
+                const c = findChar(g, character.id);
+                // Marked's dice are rolled here rather than in the preview, so what's shown doesn't
+                // keep changing while the dialog is open.
+                const m = marksOn(c, type || null);
+                const mark = markDamage(m);
+                const out = [...mark.lines];
+                applyDamage(g, c, { amount: amount + mark.extra, useArmor, pierce, cover, resistant, vulnerable, gainPressure: pressure, injury: injury ? injuryRoll : null, marks: m }, out);
                 return out;
               }, "danger");
               setOpen(false);

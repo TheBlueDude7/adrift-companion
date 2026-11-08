@@ -5,6 +5,7 @@ import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, type InjuryRoll } from "./injuries";
+import { noMarks, spendMarks, type Marks } from "./marks";
 import { runSolarPanels } from "./modules";
 import { burnDailyPower } from "./power";
 import {
@@ -127,20 +128,33 @@ export type DamageOptions = {
   vulnerable?: boolean;
   gainPressure: boolean;
   injury: InjuryRoll | null;
+  /**
+   * What the target was already marked with. Whatever these add to the damage is in `amount`
+   * already, since Marked rolls dice and a preview mustn't roll them; what's left here is the part
+   * that bears on Armor, and the record of which conditions to spend.
+   */
+  marks?: Marks;
 };
 
 /**
  * Vulnerability and Resistance scale the hit first. Cover Armor then applies and doesn't wear down;
- * worn Armor absorbs 1 and loses 1 point. Armor Piercing X ignores the first X points of protection, Cover first.
+ * a Fortified point goes next and costs no repair; worn Armor absorbs 1 and loses 1 point, or loses
+ * more and absorbs nothing when the target is Corroded or Brittle. Armor Piercing X ignores the
+ * first X points of protection, Cover first.
  */
-export function damageSteps(c: Pick<Character, "armor" | "hp">, o: Pick<DamageOptions, "amount" | "useArmor" | "pierce" | "cover" | "resistant" | "vulnerable">) {
+export function damageSteps(c: Pick<Character, "armor" | "hp">, o: Pick<DamageOptions, "amount" | "useArmor" | "pierce" | "cover" | "resistant" | "vulnerable" | "marks">) {
+  const m = o.marks ?? noMarks();
   const scaled = scaleDamage(o.amount, !!o.resistant, !!o.vulnerable);
   const coverPoints = o.cover ?? 0;
   const cover = Math.min(scaled, Math.max(0, coverPoints - o.pierce));
   const pierceLeft = Math.max(0, o.pierce - coverPoints);
-  const armor = o.useArmor && c.armor > 0 && scaled - cover > 0 && pierceLeft === 0 ? 1 : 0;
-  const lost = Math.min(c.hp, scaled - cover - armor);
-  return { scaled, cover, armor, pierced: o.useArmor && c.armor > 0 && pierceLeft > 0, lost };
+  // Temporary Armor is Armor, so Armor Piercing goes through it the way it goes through the worn sort.
+  const temp = pierceLeft === 0 ? Math.min(m.temp, Math.max(0, scaled - cover)) : 0;
+  const inPlay = o.useArmor && c.armor > 0 && scaled - cover - temp > 0 && pierceLeft === 0;
+  const armor = inPlay && !m.armorDead ? 1 : 0;
+  const stripped = inPlay ? Math.min(c.armor, 1 + m.armorExtra) : 0;
+  const lost = Math.min(c.hp, scaled - cover - temp - armor);
+  return { scaled, cover, temp, armor, stripped, pierced: o.useArmor && c.armor > 0 && pierceLeft > 0, lost };
 }
 
 export function applyDamage(g: GameState, c: Character, o: DamageOptions, out: string[]) {
@@ -148,10 +162,13 @@ export function applyDamage(g: GameState, c: Character, o: DamageOptions, out: s
   if (s.scaled > o.amount) out.push(`Vulnerability raises the hit to ${s.scaled}.`);
   else if (s.scaled < o.amount) out.push(`Resistance halves the hit to ${s.scaled}.`);
   if (s.cover) out.push(`Cover absorbs ${s.cover}.`);
-  if (s.armor) {
-    c.armor -= 1;
-    out.push(`${c.name}'s Armor absorbs 1 (Armor now ${c.armor}).`);
-  } else if (s.pierced) out.push(`The attack pierces ${c.name}'s Armor.`);
+  if (s.temp) out.push(`${c.name} is Fortified: a temporary point of Armor absorbs ${s.temp}.`);
+  const left = c.armor - s.stripped;
+  if (s.armor && s.stripped === 1) out.push(`${c.name}'s Armor absorbs 1 (Armor now ${left}).`);
+  else if (s.armor) out.push(`${c.name}'s Armor absorbs 1, and ${s.stripped} points of it go (Armor now ${left}).`);
+  else if (s.stripped) out.push(`${c.name} is Corroded: their Armor stops nothing, and ${s.stripped} points of it go (Armor now ${left}).`);
+  else if (s.pierced) out.push(`The attack pierces ${c.name}'s Armor.`);
+  c.armor = left;
   const before = c.hp;
   c.hp -= s.lost;
   out.push(`${c.name} takes ${s.lost} damage (HP ${c.hp}/${maxHp(c)}).`);
@@ -161,6 +178,18 @@ export function applyDamage(g: GameState, c: Character, o: DamageOptions, out: s
     changePressure(g, c, 1, out);
   }
   if (o.injury && before - c.hp > 0) addInjuryFromRoll(g, c, o.injury, out);
+  // Taking HP damage breaks an Overwatch. Done by hand rather than through `clearOverwatch`, because
+  // the fight imports this module and not the other way about.
+  const watcher = s.lost > 0 ? g.fight?.order.find((x) => x.id === c.id) : undefined;
+  if (watcher?.overwatch) {
+    delete watcher.overwatch;
+    out.push(`${c.name} is hit, and their Overwatch ends.`);
+  }
+  if (o.marks) {
+    // Conductive applies Staggered without a stunt being spent on it, so the hit does it itself.
+    for (const name of o.marks.applies) applyCondition(g, c, name, "Brief", out);
+    spendMarks(c, o.marks, { temp: s.temp > 0, armor: s.stripped > 0 }, out);
+  }
   if (c.hp === 0 && before > 0) out.push(`${c.name} is down at 0 HP — make a flat Constitution death check each round.`);
   else if (c.hp === 0 && c.stabilized && o.amount > 0) {
     delete c.stabilized;

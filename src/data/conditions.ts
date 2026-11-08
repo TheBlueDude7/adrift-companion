@@ -47,8 +47,8 @@ export type ConditionRules = {
  * the table rather than the app.
  *
  * Deliberately absent: Marked, Brittle, Conductive, Corroded and Fortified all modify the *next hit
- * against* whoever carries them and are consumed by it. They want a one-shot mechanism in the
- * damage path rather than a dice-pool entry, so they are left for that.
+ * against* whoever carries them and are consumed by it, which is a different shape of rule from a
+ * dice-pool entry. Those live in `lib/marks.ts` and are applied in the damage path.
  */
 export const CONDITION_RULES: Record<string, ConditionRules> = {
   // "cannot take a Reaction or Fast Action", and Aim is a Fast Action.

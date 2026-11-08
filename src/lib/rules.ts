@@ -369,9 +369,16 @@ export type BorderState = (typeof BORDER_STATES)[number];
 const WALKABLE: readonly BorderState[] = ["open", "closed", "destroyed", "hazardous"];
 /** A closed door blocks sight. Smoke and steam limit it without closing it, so hazardous still sees. */
 const TRANSPARENT: readonly BorderState[] = ["open", "destroyed", "hazardous"];
+/**
+ * A Sprint "cannot cross a border requiring a Task", which rules out the hazardous ones on top of
+ * everything a Breach would be needed for: rubble and debris may want Acrobatics, and that's a Task.
+ * A shut door is still only a shove, so it stays.
+ */
+const SPRINTABLE: readonly BorderState[] = ["open", "closed", "destroyed"];
 
 export const borderWalkable = (state: BorderState) => WALKABLE.includes(state);
 export const borderTransparent = (state: BorderState) => TRANSPARENT.includes(state);
+export const borderSprintable = (state: BorderState) => SPRINTABLE.includes(state);
 
 /**
  * What a weapon does when it hits. Without this the server can't referee an attack, so a weapon

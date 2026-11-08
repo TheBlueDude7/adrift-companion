@@ -207,7 +207,6 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("a locked door refuses", said(moveTo(g, vale.id, zone("Bridge").id), /locked.*Command lockout/), true);
   check("a buckled bulkhead refuses", said(moveTo(g, vale.id, zone("Cargo Hold").id), /blocked/), true);
   check("so the survivor stays put", zoneOf(e, vale.id)?.name, "Spinal Corridor");
-  check("and you can't step across the ship", said(moveTo(g, vale.id, zone("Maintenance Crawl").id), /no way from the Spinal Corridor/), true);
 
   // Breaching the command lockout is the GM opening the border. The line it writes can't name the
   // room on the far side, which the crew is still being kept from knowing about.
@@ -221,6 +220,12 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("the GM hears what's really there", secret(scout(g, zone("Cargo Hold").id)), ["Cargo Hold: Start the creature here, behind the container wall. It knows the crawlway and the crew do not."]);
   check("and scouting counts as seeing it", zone("Cargo Hold").seen, true);
   check("a survivor who stayed aboard can't be moved", said(moveTo(g, bystander(g).id, zone("Bridge").id), /isn't on this expedition/), true);
+
+  // Two zones is as far as anyone goes in one move, and the second of them is a Sprint. With the
+  // duct blocked above and the bulkhead down, nothing now joins the Bridge to the hold at all.
+  check("the far end of the ship is cut off", said(moveTo(g, vale.id, zone("Cargo Hold").id), /no way from the Bridge to the Cargo Hold at all/), true);
+  check("two rooms it manages at a run", said(moveTo(g, vale.id, zone("Mess Deck").id), /sprints from the Bridge through the Spinal Corridor into the Mess Deck/), true);
+  check("and that's where they end up", zoneOf(e, vale.id)?.name, "Mess Deck");
 }
 
 // What a player receives of a site.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRightIcon, CrosshairIcon, EyeIcon, HeartPulseIcon, PlusIcon, ShieldIcon, SkullIcon, SwordsIcon, Trash2Icon } from "lucide-react";
+import { ChevronRightIcon, CrosshairIcon, EyeIcon, EyeOffIcon, HeartPulseIcon, PlusIcon, ShieldIcon, SkullIcon, SwordsIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { armed, attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, type AttackShot } from "@/lib/combat";
 import { maxHp } from "@/lib/derive";
-import { actionBlocker, combatantName, DECK_SIZE, endFight, nextTurn, reserveReaction, spendAction, spent, startFight, takeReaction } from "@/lib/fight";
+import { actionBlocker, clearOverwatch, combatantName, DECK_SIZE, declareOverwatch, endFight, nextTurn, overwatchFor, reserveReaction, spendAction, spent, startFight, takeReaction } from "@/lib/fight";
 import { COVER_POINTS, DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type Cover, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import { attackOwnTarget } from "@/lib/sync/client";
@@ -361,7 +361,16 @@ function AttackDialog({ attacker }: { attacker: Character }) {
   const mapped = seen && !("blocked" in seen) ? seen : null;
   const noSight = seen && "blocked" in seen ? seen.blocked : null;
   const shot: AttackShot = { zones: mapped?.zones ?? zones, cover: mapped?.cover ?? cover, aim, burst, answers };
-  const blocked = noSight ?? attackBlocker(choice.weapon, shot, attacker) ?? actionBlocker(game, attacker.id, ...(aim ? (["slow", "fast"] as const) : (["slow"] as const)));
+  // A held Overwatch is a shot already paid for, so it goes through out of turn and spends nothing.
+  const watch = overwatchFor(game, attacker.id);
+  const budget = watch
+    ? choice.weapon.range === "melee"
+      ? `An Overwatch buys a ranged attack, and ${choice.item ? `the ${choice.item.name}` : "a fist"} isn't one.`
+      : aim
+        ? `${attacker.name} is shooting out of turn, with no Fast Action to Aim with.`
+        : null
+    : actionBlocker(game, attacker.id, ...(aim ? (["slow", "fast"] as const) : (["slow"] as const)));
+  const blocked = noSight ?? attackBlocker(choice.weapon, shot, attacker) ?? budget;
   const pool = attackPool(attacker, choice.weapon, shot);
   const w = choice.weapon;
 
@@ -468,6 +477,7 @@ function AttackDialog({ attacker }: { attacker: Character }) {
             </div>
           )}
           <div className="grid gap-1 rounded-md bg-muted/40 p-2 text-sm">
+            {watch && <span className="text-xs text-sky-300">Out of turn, on the Overwatch: {watch.trigger}</span>}
             {blocked ? <span className="text-amber-300">{blocked}</span> : <span><span className="font-mono">{pool.dice}d6</span> <span className="text-xs text-muted-foreground">— {pool.parts.join(", ")}</span></span>}
             {!blocked && pool.dice === 0 && <span className="text-xs text-amber-300">No dice left, so this can only miss — and it still spends the ammunition.</span>}
           </div>
@@ -611,6 +621,61 @@ function StartFightDialog() {
   );
 }
 
+/**
+ * Spend the Slow Action watching something. Both fields are free text: the rules allow a zone, a
+ * doorway or a border, and the trigger is whatever the GM said it was.
+ */
+function OverwatchDialog({ x }: { x: Combatant }) {
+  const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
+  const [open, setOpen] = useState(false);
+  const [watching, setWatching] = useState("");
+  const [trigger, setTrigger] = useState("");
+  const name = combatantName(game, x);
+  const unready = actionBlocker(game, x.id, "slow");
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setWatching(""); setTrigger(""); } }}>
+      <DialogTrigger
+        render={
+          <Button size="xs" variant="ghost" disabled={!!unready || !!x.overwatch} title={unready ?? (x.overwatch ? `Already watching ${x.overwatch.watching}` : "A Slow Action spent waiting for one ranged shot")}>
+            <EyeIcon /> Overwatch
+          </Button>
+        }
+      />
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{name} takes Overwatch</DialogTitle>
+          <DialogDescription>
+            A Slow Action buys one ranged attack, taken the moment the trigger happens and interrupting it. It ends if they move, if they&apos;re hit, if they lose sight of the place, or when their own turn comes round.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Watching</Label>
+            <Input value={watching} onChange={(e) => setWatching(e.target.value)} placeholder="the corridor, the hatch, the far door" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>For</Label>
+            <Input value={trigger} onChange={(e) => setTrigger(e.target.value)} placeholder="when something comes through it" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            disabled={!watching.trim() || !trigger.trim()}
+            onClick={() => {
+              act(`${name} takes Overwatch`, (g) => declareOverwatch(g, x.id, watching, trigger), "danger");
+              setOpen(false);
+            }}
+          >
+            Watch and wait
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** One row of the order: their card, what they have left, and the GM's controls while they're up. */
 function CombatantRow({ x, up, mine }: { x: Combatant; up: boolean; mine: boolean }) {
   const game = useGame((s) => s.game);
@@ -626,9 +691,11 @@ function CombatantRow({ x, up, mine }: { x: Combatant; up: boolean; mine: boolea
       {x.kind === "threat" && <Pill tone="muted">threat</Pill>}
       {up && <Pill tone="warn">Up now</Pill>}
       {x.reaction && <Pill tone={x.reaction === "reserved" ? "info" : "muted"}>Reaction {x.reaction}</Pill>}
+      {x.overwatch && <Pill tone="info">Watching {x.overwatch.watching}</Pill>}
       <span className="ml-auto text-xs text-muted-foreground">
         {left === 0 ? "turn spent" : left === 2 ? "a Slow and a Fast to spend" : x.slow ? "one Fast left" : "one left, Slow or Fast"}
       </span>
+      {x.overwatch && <p className="w-full text-xs text-muted-foreground">On Overwatch: {x.overwatch.trigger}</p>}
       {isGM && up && (
         <div className="flex w-full flex-wrap gap-1 border-t pt-1.5">
           <Button size="xs" variant="ghost" disabled={!!actionBlocker(game, x.id, "slow")} title={actionBlocker(game, x.id, "slow") ?? "For a Slow Action the app doesn't roll: Reload, First Aid, Overwatch"}
@@ -647,6 +714,16 @@ function CombatantRow({ x, up, mine }: { x: Combatant; up: boolean; mine: boolea
               <ShieldIcon /> Reserve
             </Button>
           )}
+          <OverwatchDialog x={x} />
+        </div>
+      )}
+      {isGM && !up && x.overwatch && (
+        <div className="flex w-full flex-wrap gap-1 border-t pt-1.5">
+          <Button size="xs" variant="ghost" title="They can't see what they were watching any more"
+            onClick={() => act(`${name} loses sight`, (g) => clearOverwatch(g, x.id, "they lost sight of it") ?? "", "danger")}>
+            <EyeOffIcon /> Lost sight
+          </Button>
+          <span className="self-center text-xs text-muted-foreground">Their shot is taken by attacking out of turn, which the app allows while they&apos;re watching.</span>
         </div>
       )}
     </div>

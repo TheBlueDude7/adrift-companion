@@ -1,9 +1,9 @@
 import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
-import { actionBlocker, spendAction } from "./fight";
+import { actionBlocker, clearOverwatch, spendAction, type ActionKind } from "./fight";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
-import { borderWalkable, SEGMENTS, type BorderState } from "./rules";
+import { borderSprintable, borderWalkable, SEGMENTS, type BorderState } from "./rules";
 import type { Border, Expedition, GameState, Line, Zone } from "./types";
 
 /** Eight Expedition Turns consume one day segment. */
@@ -91,31 +91,85 @@ export function zoneDistance(e: Expedition, from: string, to: string, through: (
   return null;
 }
 
-/** Walk into the next zone. The border decides whether that's a step or a job of work. */
+/** The one zone a sprint could pass through on its way, or undefined when no such route exists. */
+const sprintVia = (e: Expedition, from: string, to: string) =>
+  neighbours(e, from)
+    .filter((n) => n.zone && n.zone.id !== to && borderSprintable(n.border.state))
+    .map((n) => n.zone!)
+    .find((z) => {
+      const onward = borderBetween(e, z.id, to);
+      return !!onward && borderSprintable(onward.state);
+    });
+
+/**
+ * What it would take for this survivor to get there: a step into the next zone for a Fast Action, a
+ * Sprint through one zone into a second for a Slow one, or a reason they can't.
+ *
+ * The Site tab asks this before offering the button, so the reason a move is refused is the same
+ * text whether it's read off a disabled button or out of the log.
+ */
+export type MovePlan = { kind: "entry" | "step" | "sprint"; cost: ActionKind | null; via?: Zone; warning?: string };
+
+export function movePlan(g: GameState, characterId: string, zoneId: string): MovePlan | { blocked: string } {
+  const e = g.expedition;
+  const c = g.characters.find((x) => x.id === characterId);
+  if (!e || !c) return { blocked: "No expedition is under way." };
+  if (!e.crew.includes(characterId)) return { blocked: `${c.name} isn't on this expedition.` };
+  const to = e.zones.find((z) => z.id === zoneId);
+  if (!to) return { blocked: "That zone isn't part of this site." };
+  const here = zoneOf(e, characterId);
+  // Arriving at the site costs nothing: they walked in off the ship, not out of a zone.
+  if (!here) return { kind: "entry", cost: null };
+  if (here.id === zoneId) return { blocked: `${c.name} is already in the ${to.name}.` };
+
+  const border = borderBetween(e, here.id, zoneId);
+  const step = !!border && borderWalkable(border.state);
+  const via = step ? undefined : sprintVia(e, here.id, zoneId);
+  if (!step && !via) {
+    // The authored note is a sentence of its own, so its full stop is dropped rather than doubled.
+    if (border) return { blocked: `The way into the ${to.name} is ${border.state}${border.note ? `: ${border.note.replace(/\.+$/, "")}` : ""}. Breach it or find another route.` };
+    const far = zoneDistance(e, here.id, zoneId);
+    if (far === null) return { blocked: `There's no way from the ${here.name} to the ${to.name} at all.` };
+    if (far === 2) return { blocked: `Getting to the ${to.name} means crossing something that wants a Task on the way, which a Sprint can't.` };
+    return { blocked: `The ${to.name} is ${far} zones off, and a Sprint reaches two.` };
+  }
+  // One zone is a Fast Action once a fight is on, two at a run is the Slow one. Whether leaving a
+  // hostile's zone costs a free swing is the GM's to rule: the app doesn't know who is Engaged.
+  const cost: ActionKind = step ? "fast" : "slow";
+  const unready = actionBlocker(g, characterId, cost);
+  if (unready) return { blocked: unready };
+  // Crossing a hazard is allowed and may cost an Acrobatics Task, which is the GM's to call for —
+  // so the move isn't refused, but it doesn't happen quietly either.
+  const warning = border?.state === "hazardous" ? `${border.note ? `${border.note.replace(/\.+$/, "")}. ` : ""}Crossing a hazard may want an Acrobatics Task.` : undefined;
+  return step ? { kind: "step", cost, ...(warning ? { warning } : {}) } : { kind: "sprint", cost, via };
+}
+
+/** Walk into the next zone, or run through one into a second. */
 export function moveTo(g: GameState, characterId: string, zoneId: string): (string | Line)[] {
   const e = g.expedition;
   const c = g.characters.find((x) => x.id === characterId);
   if (!e || !c) return ["No expedition is under way."];
-  if (!e.crew.includes(characterId)) return [`${c.name} isn't on this expedition.`];
-  const to = e.zones.find((z) => z.id === zoneId);
-  if (!to) return ["That zone isn't part of this site."];
+  const plan = movePlan(g, characterId, zoneId);
+  if ("blocked" in plan) return [plan.blocked];
+  const to = e.zones.find((z) => z.id === zoneId)!;
   const here = zoneOf(e, characterId);
-  if (here?.id === zoneId) return [`${c.name} is already in the ${to.name}.`];
-  if (here) {
-    const border = borderBetween(e, here.id, zoneId);
-    if (!border) return [`There's no way from the ${here.name} to the ${to.name} without going round.`];
-    if (!borderWalkable(border.state)) return [`The way into the ${to.name} is ${border.state}${border.note ? `: ${border.note}` : ""}. Breach it or find another route.`];
-  }
-  // One zone is a Fast Action once a fight is on. Whether leaving a hostile's zone costs them a
-  // free swing is the GM's to rule: the app doesn't know who counts as Engaged with whom.
-  const unready = here ? actionBlocker(g, characterId, "fast") : null;
-  if (unready) return [unready];
+  const first = [plan.via, to].filter((z) => z && !z.seen);
   e.at[characterId] = zoneId;
-  const first = !to.seen;
-  const out: (string | Line)[] = [here ? `${c.name} moves from the ${here.name} to the ${to.name}.` : `${c.name} enters the ${to.name}.`];
-  const spend = here ? spendAction(g, characterId, "fast") : null;
+
+  const out: (string | Line)[] = [
+    plan.kind === "entry"
+      ? `${c.name} enters the ${to.name}.`
+      : plan.kind === "sprint"
+        ? `${c.name} sprints from the ${here!.name} through the ${plan.via!.name} into the ${to.name}.`
+        : `${c.name} moves from the ${here!.name} to the ${to.name}.`,
+  ];
+  const spend = plan.cost ? spendAction(g, characterId, plan.cost) : null;
   if (spend) out.push(spend);
-  if (first) out.push(...see(e, to));
+  // Watching a doorway means standing still to do it, so going anywhere gives it up.
+  const watched = plan.kind === "entry" ? null : clearOverwatch(g, characterId, "they moved");
+  if (watched) out.push(watched);
+  // A room run through is a room they've been in, so it stops being unexplored like any other.
+  for (const z of first) out.push(...see(e, z!));
   return out;
 }
 

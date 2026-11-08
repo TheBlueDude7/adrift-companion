@@ -27,9 +27,16 @@ export function playerView(game: GameState): GameState {
   if (view.expedition) view.expedition = publicExpedition(view.expedition);
   // Initiative is public at the table, but a card held by something the crew hasn't met would
   // announce it. Those entries come out, which leaves a gap in the numbers and nothing more.
+  // What a threat is waiting for is the GM's plan rather than the order of play, so that comes out
+  // too: the crew can see something standing still, not what it's standing still for.
   if (view.fight) {
     const sent = new Set(threats.map((t) => t.id));
-    view.fight = { ...view.fight, order: view.fight.order.filter((x) => x.kind === "crew" || sent.has(x.id)) };
+    view.fight = {
+      ...view.fight,
+      order: view.fight.order
+        .filter((x) => x.kind === "crew" || sent.has(x.id))
+        .map(({ overwatch, ...rest }) => (rest.kind === "threat" || !overwatch ? rest : { ...rest, overwatch })),
+    };
   }
   return view;
 }
