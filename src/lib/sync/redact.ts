@@ -16,7 +16,12 @@ import type { Expedition, GameState, Threat } from "../types";
  * hidden until someone decides it should be public. Forgetting leaks nothing.
  */
 export function playerView(game: GameState): GameState {
-  const threats: Threat[] = game.threats.map((t) => ({ id: t.id, name: t.name, band: t.band, conditions: t.conditions, known: t.known }));
+  // A threat placed in a room the crew hasn't reached yet is not news they have, so it isn't sent.
+  // One with no zone at all is in the fight in front of them, which is how threats worked before sites.
+  const unseen = new Set(game.expedition?.zones.filter((z) => !z.seen).map((z) => z.id) ?? []);
+  const threats: Threat[] = game.threats
+    .filter((t) => !t.zone || !unseen.has(t.zone))
+    .map((t) => ({ id: t.id, name: t.name, band: t.band, conditions: t.conditions, known: t.known, ...(t.zone ? { zone: t.zone } : {}) }));
   const view: GameState = { ...game, threats, log: game.log.filter((e) => !e.gm) };
   // Left absent rather than set to undefined, so no expedition stays no key and the diff stays quiet.
   if (view.expedition) view.expedition = publicExpedition(view.expedition);

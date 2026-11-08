@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { DoorOpenIcon, EyeIcon, FootprintsIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
+import { CrosshairIcon, DoorOpenIcon, EyeIcon, FootprintsIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,7 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
   const { isGM } = usePerms();
   const e = game.expedition!;
   const here = occupants(game, e, zone.id);
+  const lurking = game.threats.filter((t) => t.zone === zone.id && t.band !== "down");
   const movingFrom = mover ? zoneOf(e, mover)?.id : undefined;
   const border = mover && movingFrom && movingFrom !== zone.id ? borderBetween(e, movingFrom, zone.id) : undefined;
   const who = mover ? game.characters.find((c) => c.id === mover) : null;
@@ -53,6 +54,12 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
           <p className="flex items-center gap-1.5 text-sm">
             <FootprintsIcon className="size-3.5 text-amber-500" />
             {here.map((c) => c.name).join(", ")}
+          </p>
+        )}
+        {lurking.length > 0 && (
+          <p className="flex items-center gap-1.5 text-sm text-rose-300">
+            <CrosshairIcon className="size-3.5" />
+            {lurking.map((t) => `${t.name} (${t.band})`).join(", ")}
           </p>
         )}
         {isGM && zone.secrets?.note && <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">{zone.secrets.note}</p>}

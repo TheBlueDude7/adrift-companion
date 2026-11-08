@@ -67,9 +67,12 @@ export const borderBetween = (e: Expedition, a: string, b: string) => e.borders.
 
 /**
  * Zones between two places, counting the way a weapon's range does: 0 for the same zone, 1 for
- * next door. Null when no walkable route joins them at all.
+ * next door. Null when no route joins them at all.
+ *
+ * `through` decides which borders count. Walking is the default; shooting passes
+ * `borderTransparent` instead, since a shut door is a reason you can't fire rather than a detour.
  */
-export function zoneDistance(e: Expedition, from: string, to: string): number | null {
+export function zoneDistance(e: Expedition, from: string, to: string, through: (state: BorderState) => boolean = borderWalkable): number | null {
   if (from === to) return 0;
   const seen = new Set([from]);
   let edge = [from];
@@ -77,7 +80,7 @@ export function zoneDistance(e: Expedition, from: string, to: string): number | 
     const next: string[] = [];
     for (const id of edge)
       for (const { border, zone } of neighbours(e, id)) {
-        if (!zone || seen.has(zone.id) || !borderWalkable(border.state)) continue;
+        if (!zone || seen.has(zone.id) || !through(border.state)) continue;
         if (zone.id === to) return step;
         seen.add(zone.id);
         next.push(zone.id);
@@ -274,6 +277,8 @@ export function endExpedition(g: GameState, end: ExpeditionEnd = {}): (string | 
   const left = e?.secrets?.capacity;
   if (left !== undefined) out.push({ text: `${e!.site} still holds ${left} salvage bundle${left === 1 ? "" : "s"}.`, gm: true });
   if (outcome) out.push(OUTCOME_NOTE[outcome]);
+  // Zone ids die with the expedition, so anything still standing in one is left standing nowhere.
+  for (const t of g.threats) delete t.zone;
   delete g.expedition;
   return out;
 }

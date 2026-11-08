@@ -2,7 +2,8 @@ import { conditionPenalty } from "./conditions";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
 import { applyDamage, damageSteps } from "./mechanics";
-import { COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
+import { zoneDistance } from "./expedition";
+import { borderTransparent, COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
 import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
 /** Unarmed: Close Combat needs no weapon, so a fist is 1 Physical in your own zone. */
@@ -49,6 +50,25 @@ export type AttackShot = {
   /** Answers to the condition penalties the rules leave to a ruling, keyed as `conditionPenalty` asks. */
   answers?: Record<string, boolean>;
 };
+
+/**
+ * What the site says about a shot: how far the target is, and what they have to hide behind.
+ *
+ * Null when the map can't say — no expedition, or one of them isn't standing anywhere on it — and
+ * then the numbers in the dialog stand. Distance is counted along borders you can see through, so a
+ * closed door between two zones is a reason you can't shoot rather than a zone of distance.
+ */
+export function sightline(g: GameState, attackerId: string, targetId: string): { zones: number; cover: Cover } | { blocked: string } | null {
+  const e = g.expedition;
+  if (!e?.zones.length) return null;
+  const threat = threatOf(g, targetId);
+  const here = e.zones.find((z) => z.id === e.at[attackerId]);
+  const there = e.zones.find((z) => z.id === (threat ? threat.zone : e.at[targetId]));
+  if (!here || !there) return null;
+  const zones = zoneDistance(e, here.id, there.id, borderTransparent);
+  if (zones === null) return { blocked: `There's no seeing ${there.seen ? `the ${there.name}` : "where that is"} from the ${here.name}.` };
+  return { zones, cover: there.cover };
+}
 
 /** How this character's conditions bear on this particular attack. */
 export const attackConditions = (c: Character, weapon: WeaponProfile, shot: AttackShot) =>
@@ -181,7 +201,7 @@ export type AttackResult = { dice: number[]; hits: number; lines: Line[] };
  * all worked out here, so a caller can never decide whether it hit. Extra successes are reported
  * rather than spent: the rulebook leaves what a stunt buys to the fiction, so that stays the GM's.
  */
-export function resolveAttack(g: GameState, attackerId: string, targetId: string, itemId: string | null, shot: AttackShot): AttackResult | { error: string } {
+export function resolveAttack(g: GameState, attackerId: string, targetId: string, itemId: string | null, asked: AttackShot): AttackResult | { error: string } {
   const c = g.characters.find((x) => x.id === attackerId);
   if (!c) return { error: "That attacker isn't in the campaign." };
   if (c.dead) return { error: `${c.name} is dead.` };
@@ -192,8 +212,6 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   if (item && item.broken) return { error: `The ${item.name} is broken.` };
   if (item && item.charges === 0) return { error: `The ${item.name} has no uses left.` };
   const weapon = weaponOf(item);
-  const blocked = attackBlocker(weapon, shot, c);
-  if (blocked) return { error: blocked };
 
   const victim = g.characters.find((x) => x.id === targetId);
   const threat = victim ? undefined : threatOf(g, targetId);
@@ -201,6 +219,15 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   if (!target) return { error: "There's nothing there to attack." };
   if (victim?.dead) return { error: `${victim.name} is already dead.` };
   if (threat && !threat.stats) return { error: "Only the GM's copy of the campaign can resolve that." };
+
+  // Where the site puts the two of them settles the range and the cover. Only when it can't say
+  // does the attacker's own account of the distance stand.
+  const seen = sightline(g, attackerId, targetId);
+  if (seen && "blocked" in seen) return { error: seen.blocked };
+  const shot = seen ? { ...asked, zones: seen.zones, cover: seen.cover } : asked;
+
+  const blocked = attackBlocker(weapon, shot, c);
+  if (blocked) return { error: blocked };
 
   const pool = attackPool(c, weapon, shot);
   const dice = rollPool(pool.dice);

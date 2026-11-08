@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { armed, attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, type AttackShot } from "@/lib/combat";
+import { armed, attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, type AttackShot } from "@/lib/combat";
 import { maxHp } from "@/lib/derive";
 import { COVER_POINTS, DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type Cover, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
@@ -97,8 +97,10 @@ function TypeRow({ label, chosen, others, onChange }: { label: string; chosen: D
 
 function ThreatDialog({ existing }: { existing?: Threat }) {
   const act = useGame((s) => s.act);
+  const zones = useGame((s) => s.game.expedition?.zones ?? []);
   const [open, setOpen] = useState(false);
   const s = existing?.stats;
+  const [zone, setZone] = useState(existing?.zone ?? "nowhere");
   const [name, setName] = useState(existing?.name ?? "");
   const [hp, setHp] = useState(s?.maxHp ?? 8);
   const [armor, setArmor] = useState(s?.armor ?? 0);
@@ -108,6 +110,7 @@ function ThreatDialog({ existing }: { existing?: Threat }) {
   const [notes, setNotes] = useState(s?.notes ?? "");
 
   function reset() {
+    setZone(existing?.zone ?? "nowhere");
     setName(existing?.name ?? "");
     setHp(s?.maxHp ?? 8);
     setArmor(s?.armor ?? 0);
@@ -125,6 +128,8 @@ function ThreatDialog({ existing }: { existing?: Threat }) {
         if (!t?.stats) return "";
         const grew = Math.max(0, hp - t.stats.maxHp);
         t.name = shown;
+        if (zone === "nowhere") delete t.zone;
+        else t.zone = zone;
         t.stats = { hp: Math.max(0, Math.min(hp, t.stats.hp + grew)), maxHp: hp, armor, resist, vulnerable, immune, notes };
         t.band = threatBand(t.stats.hp, t.stats.maxHp);
         // A defense the crew had worked out may no longer be true, so re-read what they know.
@@ -135,8 +140,16 @@ function ThreatDialog({ existing }: { existing?: Threat }) {
       act("Add a threat", (g) => {
         const t = newThreat(shown, hp, armor);
         t.stats = { ...t.stats!, resist, vulnerable, immune, notes };
+        if (zone !== "nowhere") t.zone = zone;
         g.threats.push(t);
-        return [{ text: `⚔ ${shown} enters the fight.` }, { text: `${shown}: ${hp} HP${armor ? `, ${armor} plating` : ""}.`, gm: true }];
+        const where = g.expedition?.zones.find((z) => z.id === zone);
+        // Something waiting in a room the crew hasn't reached isn't in any fight yet, and saying so
+        // out loud would be the one announcement that gives it away.
+        if (where && !where.seen) return [{ text: `${shown} is waiting in the ${where.name}: ${hp} HP${armor ? `, ${armor} plating` : ""}.`, gm: true }];
+        return [
+          { text: `⚔ ${shown} enters the fight${where ? ` in the ${where.name}` : ""}.` },
+          { text: `${shown}: ${hp} HP${armor ? `, ${armor} plating` : ""}.`, gm: true },
+        ];
       });
     }
     setOpen(false);
@@ -175,6 +188,19 @@ function ThreatDialog({ existing }: { existing?: Threat }) {
           <TypeRow label="Immune to" chosen={immune} others={[...resist, ...vulnerable]} onChange={setImmune} />
           <TypeRow label="Resists" chosen={resist} others={[...immune, ...vulnerable]} onChange={setResist} />
           <TypeRow label="Vulnerable to" chosen={vulnerable} others={[...immune, ...resist]} onChange={setVulnerable} />
+          {zones.length > 0 && (
+            <div className="grid gap-1.5">
+              <Label>Where it is</Label>
+              <Select value={zone} onValueChange={(v) => setZone(typeof v === "string" ? v : "nowhere")}>
+                <SelectTrigger className="w-full"><SelectValue>{zones.find((z) => z.id === zone)?.name ?? "Nowhere in particular"}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nowhere">Nowhere in particular</SelectItem>
+                  {zones.map((z) => <SelectItem key={z.id} value={z.id}>{z.name}{z.seen ? "" : " (unexplored)"}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Put it in a zone and the range to it is worked out from the site. While that zone is unexplored, the crew isn&apos;t told the thing exists.</p>
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="threat-notes">Notes</Label>
             <Input id="threat-notes" placeholder="Optional: how it fights, what it wants" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -254,6 +280,7 @@ function RevealDialog({ t }: { t: Threat }) {
 function ThreatCard({ t }: { t: Threat }) {
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
+  const where = useGame((s) => s.game.expedition?.zones.find((z) => z.id === t.zone));
   const s = t.stats;
   const down = t.band === "down";
 
@@ -275,6 +302,7 @@ function ThreatCard({ t }: { t: Threat }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{t.name}</span>
         <Pill tone={BAND_TONE[t.band]}>{down ? "Down" : t.band}</Pill>
+        {where && <Pill tone={where.seen ? "info" : "warn"}>{where.seen ? where.name : `${where.name} — unexplored`}</Pill>}
         {s && s.armor > 0 && <Pill tip="Ablative: it absorbs 1 from a hit, then loses a point. The crew is never told.">{s.armor} plating</Pill>}
         <TypePills t={t} gm={isGM} />
         {t.conditions.map((c) => <Pill key={c.name} tone="warn">{c.name}</Pill>)}
@@ -322,8 +350,13 @@ function AttackDialog({ attacker }: { attacker: Character }) {
   const choice = options.find((o) => (o.item?.id ?? "unarmed") === itemId) ?? options[0];
   const list = targets(game).filter((t) => t.id !== attacker.id);
   const target = list.find((t) => t.id === targetId);
-  const shot: AttackShot = { zones, cover, aim, burst, answers };
-  const blocked = attackBlocker(choice.weapon, shot, attacker);
+  // When both of them are standing somewhere on the site, the map settles the range and the cover,
+  // and the preview has to agree with the server about that or the dice shown would be a fiction.
+  const seen = target ? sightline(game, attacker.id, target.id) : null;
+  const mapped = seen && !("blocked" in seen) ? seen : null;
+  const noSight = seen && "blocked" in seen ? seen.blocked : null;
+  const shot: AttackShot = { zones: mapped?.zones ?? zones, cover: mapped?.cover ?? cover, aim, burst, answers };
+  const blocked = noSight ?? attackBlocker(choice.weapon, shot, attacker);
   const pool = attackPool(attacker, choice.weapon, shot);
   const w = choice.weapon;
 
@@ -334,7 +367,7 @@ function AttackDialog({ attacker }: { attacker: Character }) {
         const r = resolveAttack(g, attacker.id, target.id, choice.item?.id ?? null, shot);
         return "error" in r ? r.error : r.lines;
       }, "roll");
-    } else void attackOwnTarget({ attackerId: attacker.id, targetId: target.id, itemId: choice.item?.id ?? null, zones, cover, aim, burst, answers });
+    } else void attackOwnTarget({ attackerId: attacker.id, targetId: target.id, itemId: choice.item?.id ?? null, zones: shot.zones, cover: shot.cover, aim, burst, answers });
     setOpen(false);
   }
 
@@ -380,20 +413,32 @@ function AttackDialog({ attacker }: { attacker: Character }) {
               </Select>
             )}
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <Label>Zones away</Label>
-            <Stepper value={zones} onChange={setZones} min={0} max={10} label="zones" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Their cover</Label>
-            <Select value={cover} onValueChange={(v) => setCover(v as Cover)}>
-              <SelectTrigger className="w-full"><SelectValue>{COVER_LABEL[cover]}</SelectValue></SelectTrigger>
-              <SelectContent>
-                {(Object.keys(COVER_POINTS) as Cover[]).map((k) => <SelectItem key={k} value={k}>{COVER_LABEL[k]}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground">Cover Armor only absorbs Ballistic damage, and never wears down.</p>
-          </div>
+          {/* Where the two of them are standing answers both questions, so neither is asked. When
+              the map says there's no shot at all, the refusal at the foot of the dialog says so. */}
+          {mapped && (
+            <p className="rounded-md border bg-muted/30 px-2 py-1.5 text-sm">
+              {`${mapped.zones === 0 ? "In the same zone" : mapped.zones === 1 ? "One zone away" : `${mapped.zones} zones away`}, ${mapped.cover === "none" ? "no cover" : COVER_LABEL[mapped.cover]}`}
+              <span className="text-muted-foreground"> — from the site map, not yours to set.</span>
+            </p>
+          )}
+          {!seen && (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Zones away</Label>
+                <Stepper value={zones} onChange={setZones} min={0} max={10} label="zones" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Their cover</Label>
+                <Select value={cover} onValueChange={(v) => setCover(v as Cover)}>
+                  <SelectTrigger className="w-full"><SelectValue>{COVER_LABEL[cover]}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(COVER_POINTS) as Cover[]).map((k) => <SelectItem key={k} value={k}>{COVER_LABEL[k]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Cover Armor only absorbs Ballistic damage, and never wears down.</p>
+              </div>
+            </>
+          )}
           <div className="flex flex-wrap gap-5">
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={aim} onCheckedChange={(v) => setAim(!!v)} aria-label="Aim" /> Aimed first (+1d6)

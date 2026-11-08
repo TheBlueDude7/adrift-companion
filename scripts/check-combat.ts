@@ -1,5 +1,6 @@
 import { newAction, taskPool } from "../src/lib/actions";
-import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, UNARMED } from "../src/lib/combat";
+import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, UNARMED } from "../src/lib/combat";
+import { moveTo, scout, startExpedition, zoneDistance } from "../src/lib/expedition";
 import { pushLog } from "../src/lib/log";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES, threatBand } from "../src/lib/rules";
@@ -400,6 +401,59 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   const a = newAction(g, g.characters[0], "Embark Expedition");
   g.actions.push(a);
   check("even a task that rolls nothing", taskPool(g, a).blocked, "Freeze Response: is frozen and can't act.");
+}
+
+// A site decides the range and the cover, whatever the client says about them.
+{
+  const { g, shooterId } = world();
+  startExpedition(g, { site: "", crew: [shooterId], siteId: "tanager" });
+  const e = g.expedition!;
+  const zone = (name: string) => e.zones.find((z) => z.name === name)!;
+  const place = (name: string) => {
+    const t = newThreat(name, 10, 0);
+    g.threats.push(t);
+    return t;
+  };
+
+  const mess = place("Something in the mess");
+  mess.zone = zone("Mess Deck").id;
+  check("the map counts the zones between", sightline(g, shooterId, mess.id), { zones: 2, cover: "partial" });
+
+  const ward = place("Something in the medbay");
+  ward.zone = zone("Medical Bay").id;
+  check("a shut door is no shot", sightline(g, shooterId, ward.id), { blocked: "There's no seeing where that is from the Docking Collar." });
+
+  const hold = place("Something in the hold");
+  hold.zone = zone("Cargo Hold").id;
+  check("a way round the back is still a way to see", sightline(g, shooterId, hold.id), { zones: 4, cover: "partial" });
+
+  const unplaced = place("Something underfoot");
+  check("a threat in no zone leaves the numbers alone", sightline(g, shooterId, unplaced.id), null);
+
+  // The dialog claimed point-blank. Two zones is what the site says, and a cleaver doesn't reach.
+  allSixes();
+  const cleaver = give(g, shooterId, "Cleaver");
+  check(
+    "the server doesn't take the client's word for the range",
+    resolveAttack(g, shooterId, mess.id, cleaver, { ...shot, zones: 0 }),
+    { error: "That's 2 zones away and the weapon reaches only its own zone." },
+  );
+
+  // Nor for the cover: the Mess Deck's partial cover absorbs a point of the rifle's Ballistic hit.
+  const rifle = give(g, shooterId, "Ballistic Rifle");
+  resolveAttack(g, shooterId, mess.id, rifle, { ...shot, zones: 0, cover: "none" });
+  check("nor for the cover", mess.stats!.hp, 8);
+
+  // And nothing about a creature in a room they haven't opened reaches the players.
+  check("a threat in an unexplored zone isn't sent at all", playerView(g).threats.map((t) => t.name), ["Something underfoot"]);
+  moveTo(g, shooterId, zone("Spinal Corridor").id);
+  // One pace from the privacy door, and still no shot through it: walking and seeing count borders
+  // differently, which is the whole point of counting them separately.
+  check("standing next to a closed door is a step away", zoneDistance(e, zone("Spinal Corridor").id, zone("Medical Bay").id), 1);
+  check("and still no shot through it", sightline(g, shooterId, ward.id), { blocked: "There's no seeing where that is from the Spinal Corridor." });
+  scout(g, zone("Mess Deck").id);
+  check("scouting the room hands it over", playerView(g).threats.map((t) => t.name), ["Something in the mess", "Something underfoot"]);
+  check("with the zone it's standing in", playerView(g).threats[0].zone, zone("Mess Deck").id);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

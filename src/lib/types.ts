@@ -163,6 +163,8 @@ export type Threat = {
   conditions: ActiveCondition[];
   /** Earned by a successful Analyze. The one route by which a secret becomes public. */
   known: { defenses: KnownDefense[]; facts: string[] };
+  /** The zone it's in, when there's a site to be in. A threat in a zone the crew hasn't seen isn't sent to them. */
+  zone?: string;
   /** Absent in a player's copy of the state. Anything reading it must cope with that. */
   stats?: ThreatStats;
 };
