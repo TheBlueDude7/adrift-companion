@@ -494,28 +494,24 @@ export function fabricateLimit(c: Character, crafts: string[]) {
 }
 
 /**
- * The task's Energy covers every item the crafter is allowed: two normally, three for an Expert.
- * Only an item beyond that limit, which Redline Familiarity's overdrive buys, pays the Energy again.
+ * The task's Energy covers every item the crafter is allowed: two normally, three for an Expert, and
+ * one more again for a Redline overdrive. Only an item past that allowance pays the Energy again.
  */
 function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
   const terms = craftCheck(c, crafts, energy, TASK_BY_NAME["Fabricate Common Item"]);
   if (c.pressure >= OVERTAXED) terms.routine = false;
   if (crafts.length <= 1) return terms;
-  const extra = Math.max(0, crafts.length - normalFabricateLimit(c, crafts));
+  const extra = Math.max(0, crafts.length - fabricateLimit(c, crafts));
   const perk = extra > 0 ? `${crafts.length} items: ${extra} past the limit, at full Energy each` : `${crafts.length} items for one Energy cost`;
   return { ...terms, energy: terms.energy * (1 + extra), perks: [...terms.perks, perk] };
 }
 
-/** Overdriving the bench spends Redline Familiarity for the day and leaves the Workshop Damaged. */
-function redlineOverdrive(g: GameState, c: Character, crafts: string[], out: string[]) {
+/** Reaching past the normal limit spends Redline Familiarity for the day. The bench takes no harm. */
+function redlineOverdrive(c: Character, crafts: string[], out: string[]) {
   if (c.specialty !== REDLINE || crafts.length <= normalFabricateLimit(c, crafts)) return;
   c.abilityUsed[REDLINE_KEY] = true;
-  const bench = g.ship.rooms.find((r) => r.module === STATION_WORKSHOP && r.condition === "Operational");
-  if (bench) bench.condition = "Damaged";
-  out.push(`${c.name} overdrives the bench with Redline Familiarity${bench ? `; ${bench.name} is now Damaged` : ""}.`);
+  out.push(`${c.name} overdrives the bench with Redline Familiarity for one item past the usual limit.`);
 }
-
-const STATION_WORKSHOP = "Workshop / Fabrication Bay";
 
 /**
  * One check covers every item. Its terms come from the hardest item: Routine when the crafter meets
@@ -807,7 +803,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
     if (!cost) out.push(`⚠ ${SKILL_BY_KEY[a.trainSkill].name} is already maxed out.`);
     else if (haveInStorage(g, cost.name) < 1) out.push(`⚠ No ${cost.name} in the hold, so the training earns no XP.`);
     else {
-      spend(g, [{ name: cost.name, qty: 1 }]);
+      // A training resource with charges gives up one charge, not the whole unit.
+      spendUse(g, cost.name);
       out.push(ok ? `Used 1 ${cost.name}. ${gainXp(c, a.trainSkill)}` : `1 ${cost.name} is used up, but the session earns no XP.`);
     }
   }
@@ -844,7 +841,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       const recipe = RECIPE_BY_NAME[name];
       if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted"));
     });
-    if (c) redlineOverdrive(g, c, a.crafts ?? [], out);
+    if (c) redlineOverdrive(c, a.crafts ?? [], out);
   }
   if (def.effect === "cook") {
     for (const name of a.crafts ?? []) {

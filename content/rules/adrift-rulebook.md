@@ -395,6 +395,38 @@ Increasing a skill requires accumulating XP equal to the next level’s cost.
 | Level 9 | 9 XP |
 | Level 10 | 10 XP |
 
+### Training Resources
+
+<!-- updated: training-materials -->
+
+A Train Skill segment spends one unit of a resource from the hold and returns 1 XP. Which resource depends on the skill and on the level being trained **toward**, not the level already held: a common material for levels 1–3, a refined one for 4–7, and a rare one for 8–10. The resource is used whether or not the session earns its XP.
+
+Training only ever consumes raw materials and basic supplies. It never consumes finished equipment — no Medkits, Power Cells, Toolkits, or cooked meals. This matters because the XP ladder compounds: taking one skill from 0 to 10 is 6 units of its common material, 22 of its refined one, and 27 of its rare one. A finished item in any column would quietly price mastery at twenty-seven Glitterworld Medkits.
+
+If a training resource does carry charges, one segment gives up a single charge rather than the whole unit.
+
+| Skill | Levels 1–3 | Levels 4–7 | Levels 8–10 |
+| --- | --- | --- | --- |
+| Close Combat | Scrap Metal | Reinforced Steel | Neutronium |
+| Light Firearms | Scrap Components | Aluminum Alloy | Durasteel Alloy |
+| Heavy Weaponry | Chemical Mixture | Destructive Chemical Mixture | Adamantite Alloy |
+| Acrobatics | Food Unit | Reinforced Steel | Neutronium |
+| First Aid | Medical Supply | Chemical Mixture | Destructive Chemical Mixture |
+| Surgery | Medical Supply | Reinforced Steel | Neutronium |
+| Botany | Water Unit | Chemical Mixture | Scrapped Biomass |
+| Biology | Raw Food | Scrapped Biomass | Destructive Chemical Mixture |
+| Piloting | Fuel Unit | Components | Quantum Components |
+| Navigation | Scrap Components | Components | Quantum Components |
+| Mechanical Technician | Basic Adhesive | Advanced Adhesive | Neutronium |
+| Engineering | Scrap Components | Components | Quantum Components |
+| Perception | Water Unit | Food Unit | Quantum Components |
+| Stealth | Basic Adhesive | Advanced Adhesive | Quantum Components |
+| Scavenging | Scrap Metal | Reinforced Steel | Neutronium |
+| Cooking | Raw Food | Chemical Mixture | Destructive Chemical Mixture |
+| Entertainer | Water Unit | Raw Food | Destructive Chemical Mixture |
+
+Cooked meals are deliberately absent. A Delicious Meal already grants 1 XP in any skill when it is eaten, and a Delectable Meal grants 2 XP and clears a level of Stress, so spending one as training fodder for a single XP is always the worse use of it.
+
 ## Backgrounds
 
 A Background represents the training, profession, and life a character possessed before becoming Adrift.
@@ -622,7 +654,7 @@ One character may spend a task assisting another character. The assistant must h
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
-<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits, crop-varieties, xenoflora, labor-projects, machine-conditions, grid-cell -->
+<!-- updated: first-aid, bleeding, repair, unsafe-course, fabricate, cooking, cheap-tasks, assist, labor, acrobatics-rigging, water-skill, research-wits, crop-varieties, xenoflora, labor-projects, machine-conditions, grid-cell, training-materials -->
 
 | Task | Energy | Skill / Routine Threshold | Normal Result |
 | --- | --- | --- | --- |
@@ -3915,22 +3947,21 @@ Choose one.
 
 <!-- updated: redline, machine-conditions -->
 
-Once per day, you may overdrive a ship module, facility, or mech system. Every overdrive costs the system something afterward, and the option you choose decides what:
+Once per day, you may overdrive a ship module, facility, or mech system. Choose one option. Most leave the system worse off afterward, and the option you choose decides how:
 
 | Overdrive | Afterward |
 | --- | --- |
 | Treat a facility as one Grade higher for one Task. | The facility is **Overheated**: −2d6 on Tasks using it until it cools at End of Day. |
-| Fabricate one more item than your normal limit this segment. That item is past what the task’s Energy covers, so pay the task’s Energy again for it. | The Workshop or Fabrication Bay is **Damaged**. |
+| Fabricate one more item than your normal limit this segment, covered by the task’s ordinary Energy. | Nothing. The bench simply gives up a third item, or a fourth for an Expert. |
 | Give a mech +2 Frame Strength and +2 Frame Constitution for one Scene. | The mech is **Overheated** when the Scene ends. |
 | Allow an Offline system maintained by Keep It Running to operate at full output. | The system is **Power-Starved**, and Keep It Running no longer holds it up. |
 
-The three aftermaths are a ladder, and which one you earn is the real cost of the choice:
+The two aftermaths are a ladder, and which one you earn is the real cost of the choice:
 
 - **Overheated** clears itself. Wait for End of Day, or have the mech spend a Slow Action cooling.
 - **Power-Starved** costs an action. Someone restarts it with a Skilled Engineering or Mechanical Technician Task, spending nothing from the hold.
-- **Damaged** costs a repair. It is the ordinary module condition: −2d6, Routine work becomes Skilled, and it takes 1 Progress and materials to put right.
 
-Pushing a Workshop into making one more item is the only overdrive that genuinely breaks something, which is why it is the only one that leaves Damaged behind.
+Only the extra fabricated item costs nothing afterward. It is the one overdrive that asks the bench for more of what it already does, rather than pushing a system past what it was built for.
 
 #### Field Improviser
 

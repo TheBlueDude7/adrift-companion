@@ -183,7 +183,7 @@ function CraftPicker({ c, value, onChange }: { c: Character; value: string[]; on
       )}
       <p className="text-[11px] text-muted-foreground">
         {`Two items per task for the one Energy cost. Being ${EXPERT_MARGIN} levels above every item's threshold lets ${c.name.split(" ")[0]} add a third, covered by the same Energy.`}{" "}
-        {redline && "Redline Familiarity can overdrive the bench once per day for one more item than normal, which costs the Energy again, and the Workshop is Damaged afterward. "}
+        {redline && "Redline Familiarity can overdrive the bench once per day for one more item than normal, covered by the same Energy. "}
         A failed item loses half its materials (rounded up) and its toolkit charges.
       </p>
     </div>

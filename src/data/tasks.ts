@@ -105,7 +105,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Extract Research Trait", "Science", 2, ["biology"], 7, "Isolate a studied organism's Research Trait for crafting or augmentation.", "routine", null, { ...RESEARCH, facility: { modules: ["Biological Lab"], label: "a Biological Lab" } }),
   t("Scrap Biomass", "Science", 2, ["biology"], 3, "Recover biological crafting materials."),
   t("Analyze Technical Data", "Science", 1, ["engineering", "biology"], 3, "Interpret known human data or studied alien data.", "routine", null, RESEARCH),
-  t("Train Skill", "Crew", 2, [], 0, "Spend 1 training resource from the hold and gain 1 XP in the skill. Levels 1–3 use a common resource, 4–7 a refined one, and 8–10 a rare one.", "routine", "train"),
+  t("Train Skill", "Crew", 2, [], 0, "Spend 1 training resource from the hold and gain 1 XP in the skill. Levels 1–3 use a common material, 4–7 a refined one, and 8–10 a rare one. Training never consumes finished equipment, and a resource with charges gives up one charge instead of the whole unit.", "routine", "train"),
   t("Reduce Pressure", "Crew", 1, ["entertainer"], 1, "Reduce another character's Pressure by 1 in safety, never below their Stress floor.", "routine", "calm", { strong: "The target also gets +1d6 on their next skill roll." }),
   t("Morale Night", "Crew", 2, ["entertainer"], 6, "Music, stories, a stolen bottle: every other survivor aboard reduces Pressure by 1.", "routine", "morale", { facility: { modules: ["Crew Quarters", "Crewmate Quarters", "Crewmate Quarters Expanded"], label: "Crew Quarters" } }),
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
