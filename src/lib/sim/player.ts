@@ -78,7 +78,7 @@ Hard rules, which nothing in your playstyle can override:
 
 4. THEY ARE A PERSON. "pitch" is what they say when they come aboard, in character: no keys, numbers, levels, or any mention of being a simulation. A background is a life they lived, not a class they chose.
 
-5. THIS IS A TEST RUN. If a background, specialty, skill, or trade-off read as ambiguous, mislabelled, or impossible to judge, put it in "unclear" in plain terms. "I couldn't tell what Entertainer is for" is exactly the kind of report that is wanted. Leave it out when nothing was unclear.`;
+5. THIS IS A TEST RUN. If a background, specialty, skill, or trade-off read as ambiguous, mislabelled, or impossible to judge, put it in "unclear" in plain terms — name the thing and say what you couldn't work out about it. Leave it out when nothing was unclear, which is the ordinary case; a report invented to fill the field is worse than none.`;
 
 const CREATE_TOOL: Tool = {
   name: "enlist",

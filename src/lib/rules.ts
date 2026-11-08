@@ -9,25 +9,26 @@ export const ATTRIBUTE_NAMES: Record<Attribute, string> = {
   WIT: "Wits",
 };
 
+/** `what` is the rulebook's own one-line statement of what the skill covers. */
 export const SKILLS = [
-  { key: "closeCombat", name: "Close Combat", attr: "STR" },
-  { key: "lightFirearms", name: "Light Firearms", attr: "STR" },
-  { key: "heavyWeaponry", name: "Heavy Weaponry", attr: "STR" },
-  { key: "acrobatics", name: "Acrobatics", attr: "STR" },
-  { key: "firstAid", name: "First Aid", attr: "INT" },
-  { key: "surgery", name: "Surgery", attr: "INT" },
-  { key: "botany", name: "Botany", attr: "INT" },
-  { key: "biology", name: "Biology", attr: "INT" },
-  { key: "piloting", name: "Piloting", attr: "INT" },
-  { key: "navigation", name: "Navigation", attr: "INT" },
-  { key: "mechTech", name: "Mechanical Technician", attr: "INT" },
-  { key: "engineering", name: "Engineering", attr: "INT" },
-  { key: "perception", name: "Perception", attr: "WIT" },
-  { key: "stealth", name: "Stealth", attr: "WIT" },
-  { key: "scavenging", name: "Scavenging", attr: "WIT" },
-  { key: "cooking", name: "Cooking", attr: "WIT" },
-  { key: "entertainer", name: "Entertainer", attr: "WIT" },
-] as const satisfies readonly { key: string; name: string; attr: Attribute }[];
+  { key: "closeCombat", name: "Close Combat", attr: "STR", what: "Bludgeoning, swords, and other hand-to-hand weapons" },
+  { key: "lightFirearms", name: "Light Firearms", attr: "STR", what: "Pistols, rifles, and personal-scale ranged weapons" },
+  { key: "heavyWeaponry", name: "Heavy Weaponry", attr: "STR", what: "Mounted weapons, explosives, and heavy ordinance" },
+  { key: "acrobatics", name: "Acrobatics", attr: "STR", what: "Balance, zero-G movement, and physical agility" },
+  { key: "firstAid", name: "First Aid", attr: "INT", what: "Emergency treatment and stabilizing injuries" },
+  { key: "surgery", name: "Surgery", attr: "INT", what: "Complex medical procedures and invasive care" },
+  { key: "botany", name: "Botany", attr: "INT", what: "Growing food and controlled cultivation" },
+  { key: "biology", name: "Biology", attr: "INT", what: "Identifying and understanding viable organisms" },
+  { key: "piloting", name: "Piloting", attr: "INT", what: "Operating spacecraft and small craft under pressure" },
+  { key: "navigation", name: "Navigation", attr: "INT", what: "Charting courses, interpreting signals, and spatial orientation" },
+  { key: "mechTech", name: "Mechanical Technician", attr: "INT", what: "Repairing machinery, tools, and mechanical systems" },
+  { key: "engineering", name: "Engineering", attr: "INT", what: "Power systems, structural integrity, and advanced repairs" },
+  { key: "perception", name: "Perception", attr: "WIT", what: "Awareness, detection, and reading dangerous environments" },
+  { key: "stealth", name: "Stealth", attr: "WIT", what: "Avoiding detection and moving unseen" },
+  { key: "scavenging", name: "Scavenging", attr: "WIT", what: "Finding usable materials in wreckage and hostile environments" },
+  { key: "cooking", name: "Cooking", attr: "WIT", what: "Preparing food and safe water under limited conditions, stretching rations, and avoiding contamination" },
+  { key: "entertainer", name: "Entertainer", attr: "WIT", what: "Lowering another survivor's Pressure, treating long-term Stress, and persuasion" },
+] as const satisfies readonly { key: string; name: string; attr: Attribute; what: string }[];
 
 export type SkillKey = (typeof SKILLS)[number]["key"];
 
@@ -130,7 +131,7 @@ export const BACKGROUNDS: Background[] = [
     specialties: [
       { name: "You're Not Dying Today", frequency: "expedition", summary: "A reachable character who would die instead stays Stabilized at 0 HP until the Scene ends." },
       { name: "Combat Medic", frequency: "combat", summary: "Fast Action First Aid with no roll or kit: remove Bleeding, Burning, Poisoned, Staggered, Suffocating, or stabilize." },
-      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major/Critical Injury grants an extra benefit." },
+      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major/Critical Injury also does one of: restore 2 Maximum HP lost to that Injury and 3 current HP; cut postoperative Rest by two segments if the patient was at 1 HP; or operate on a second Injury in the same procedure. One benefit per Injury." },
     ],
   },
   {

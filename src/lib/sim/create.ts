@@ -198,13 +198,13 @@ export function creationMenu(): string {
 
   const shapes = SHAPES.map((s) => `- ${s.label} (key: ${s.key}) — skills at ${s.levels.join(", ")}. ${s.note}`).join("\n");
 
-  const skills = SKILLS.map((s) => `${s.name} (${s.attr})`).join(", ");
+  const skills = SKILLS.map((s) => `- ${s.name} (${s.attr}) — ${s.what}`).join("\n");
 
   return [
     `BACKGROUNDS — pick one, and one of its specialties:\n\n${backgrounds}`,
     `ATTRIBUTE SPREADS — pick one. Each spends the whole creation budget, so these are the final values before your background's grants are added on top:\n\n${spreads}`,
     `SKILL SHAPES — pick one. The numbers are fixed; you choose which skill goes on each, strongest first:\n\n${shapes}`,
-    `THE SKILLS, and the attribute each rolls with:\n${skills}`,
+    `THE SKILLS, what each covers, and the attribute it rolls with:\n\n${skills}`,
     `Your background's skill grants stack on what you buy, up to 10. Putting your highest level into a skill your background already boosts is how you get a true expert; spreading elsewhere is how you cover a job nobody else can do.`,
   ].join("\n\n");
 }
