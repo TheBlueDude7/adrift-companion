@@ -25,6 +25,7 @@ export function stockItem(g: GameState, name: string, qty: number, fallback: Par
     maxCharges: charges,
     armor: t?.armor ?? fallback.armor,
     heavy: t?.heavy ?? fallback.heavy,
+    weapon: t?.weapon ?? fallback.weapon,
     broken: false,
     notes: t?.notes ?? fallback.notes ?? "",
     location: "ship",

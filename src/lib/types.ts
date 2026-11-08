@@ -1,6 +1,7 @@
 import type {
   Attribute,
   ConditionDuration,
+  DamageType,
   FacilityGrade,
   ItemCategory,
   ItemTemplate,
@@ -9,6 +10,7 @@ import type {
   InjuryState,
   ModuleCondition,
   SkillKey,
+  WeaponProfile,
 } from "./rules";
 import type { InjuryLocation } from "@/data/injuries";
 
@@ -124,7 +126,28 @@ export type InstalledCyber = {
 };
 
 export type MechChassis = "utility" | "assault" | "recon";
-export type MechDamageType = "Ballistic" | "Physical" | "Fire" | "Electric" | "Chemical";
+export type MechDamageType = DamageType;
+
+/**
+ * Something the crew can fight. Deliberately thin: a name, what it can take, and what it shrugs off.
+ * It has no attacks of its own, because the GM still plays it — the server only referees what the
+ * crew does to it, so a hit lands by the same arithmetic as a hit on a survivor.
+ */
+export type Threat = {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  /** Ablative, like a survivor's: it absorbs 1 and loses a point. */
+  armor: number;
+  resist: DamageType[];
+  vulnerable: DamageType[];
+  immune: DamageType[];
+  conditions: ActiveCondition[];
+  /** Out of the fight. Whether that means dead is the GM's call. */
+  downed: boolean;
+  notes: string;
+};
 
 export type InstalledModule = { id: string; key: string; damaged: boolean };
 
@@ -175,6 +198,8 @@ export type Item = {
   armor?: number;
   /** Takes two inventory slots and slows whoever carries it. */
   heavy?: boolean;
+  /** Set from the catalog when the item is made, so an older save's weapon still fights. */
+  weapon?: WeaponProfile;
   broken: boolean;
   notes: string;
   /** "ship" or a character id */
@@ -352,6 +377,8 @@ export type GameState = {
   ship: Ship;
   log: LogEntry[];
   mechs: Mech[];
+  /** What the crew is fighting. Only the GM puts anything here. */
+  threats: Threat[];
   /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
   mechRequests?: { id: string; by: string; mech: Mech }[];
   /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */

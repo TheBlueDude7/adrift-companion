@@ -333,6 +333,42 @@ export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export const ITEM_TIERS = ["Scrap", "Tier I", "Tier II", "Tier III", "Alien"] as const;
 export type ItemTier = (typeof ITEM_TIERS)[number];
 
+export const DAMAGE_TYPES = ["Physical", "Ballistic", "Fire", "Electric", "Chemical"] as const;
+export type DamageType = (typeof DAMAGE_TYPES)[number];
+
+/** How far a weapon reaches, in zones. Melee and Close are the same zone; the rest count outward. */
+export const WEAPON_RANGES = { melee: 0, close: 0, short: 1, medium: 2, long: 4 } as const;
+export type WeaponRange = keyof typeof WEAPON_RANGES;
+
+/**
+ * What a weapon does when it hits. Without this the server can't referee an attack, so a weapon
+ * whose template has no profile can only be swung at the table.
+ */
+export type WeaponProfile = {
+  damage: number;
+  damageType: DamageType;
+  range: WeaponRange;
+  /** Close Combat, Light Firearms, or Heavy Weaponry, per the weapon. */
+  skill: SkillKey;
+  /**
+   * Armor Piercing X: ignores the first X points of protection, Cover before worn Armor. Worn Armor
+   * only ever absorbs 1 and Strong Cover 2, so 3 is what "Pierces Armor" amounts to.
+   */
+  ap?: number;
+  /** Also hits everything else in the target's zone, for this much. */
+  blast?: number;
+  /** Catches the whole zone rather than one target, like a flashbang. */
+  zone?: boolean;
+  /** Burst Fire is available: +2d6 for extra ammunition. */
+  auto?: boolean;
+  /** Stops at 1 HP rather than dropping anyone. */
+  nonlethal?: boolean;
+  /** Thrown rather than fired, so Close and adjacent are free and two zones out costs −3d6. */
+  thrown?: boolean;
+  /** Conditions a hit applies, whatever the damage did. */
+  applies?: { name: string; duration: ConditionDuration }[];
+};
+
 export type ItemTemplate = {
   name: string;
   category: ItemCategory;
@@ -340,6 +376,7 @@ export type ItemTemplate = {
   maxCharges?: number;
   armor?: number;
   heavy?: boolean;
+  weapon?: WeaponProfile;
   notes?: string;
 };
 
@@ -357,7 +394,7 @@ export const DEFAULT_ITEM_TEMPLATES: ItemTemplate[] = [
   ...MATERIALS.map((m): ItemTemplate => ({ name: m.name, category: "Material", tier: m.tier, heavy: m.heavy, notes: m.notes })),
   ...BASE_ITEM_TEMPLATES,
   ...RECIPES.filter((r) => !MATERIALS.some((m) => m.name === r.name) && !BASE_ITEM_TEMPLATES.some((b) => b.name === r.name)).map(
-    (r): ItemTemplate => ({ name: r.name, category: r.category, tier: r.tier, maxCharges: r.charges && r.charges > 1 ? r.charges : undefined, armor: r.armor, notes: r.notes }),
+    (r): ItemTemplate => ({ name: r.name, category: r.category, tier: r.tier, maxCharges: r.charges && r.charges > 1 ? r.charges : undefined, armor: r.armor, weapon: r.weapon, notes: r.notes }),
   ),
 ];
 

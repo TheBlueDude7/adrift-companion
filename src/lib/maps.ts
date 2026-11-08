@@ -142,6 +142,7 @@ export function normalizeGame(g: GameState): GameState {
   if (!Array.isArray(g.maps)) g.maps = defaultMaps();
   g.maps = g.maps.map((m) => (m.kind === "star" && typeof (m as Partial<StarMap>).size !== "number" ? migrateStarMap(m as unknown as OldStarMap) : m));
   if (!Array.isArray(g.mechs)) g.mechs = [];
+  if (!Array.isArray(g.threats)) g.threats = [];
   // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
   for (const m of g.mechs) if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
   if (!Array.isArray(g.actions)) g.actions = [];
@@ -164,10 +165,14 @@ export function normalizeGame(g: GameState): GameState {
     const d = DEFAULT_ITEM_TEMPLATES.find((x) => x.name === t.name);
     if (!d) continue;
     if (d.heavy && t.heavy === undefined) t.heavy = true;
+    // Weapons used to carry their damage only as prose, which nothing could referee.
+    if (d.weapon && !t.weapon) t.weapon = d.weapon;
     if (/Power Cell$/.test(t.name) && t.notes?.startsWith("Powers the ship")) t.notes = d.notes;
   }
   const heavy = new Set(g.catalog.filter((t) => t.heavy).map((t) => t.name));
   for (const i of g.items) if (i.heavy === undefined && (heavy.has(i.name) || i.name.endsWith("(mech module)"))) i.heavy = true;
+  const profiles = new Map(g.catalog.flatMap((t) => (t.weapon ? [[t.name, t.weapon] as const] : [])));
+  for (const i of g.items) if (!i.weapon && profiles.has(i.name)) i.weapon = profiles.get(i.name);
   for (const c of g.characters) {
     for (const inj of c.injuries) {
       if (!inj.location && !inj.legacy) inj.legacy = true;
