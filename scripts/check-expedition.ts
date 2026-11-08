@@ -2,7 +2,7 @@ import { newAction, resolveAction, taskTerms } from "../src/lib/actions";
 import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
-import { borderBetween, endExpedition, markExpeditionTurn, moveTo, scout, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { endExpedition, markExpeditionTurn, moveTo, scout, setBorderState, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES } from "../src/lib/rules";
@@ -194,7 +194,7 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("so does its Salvage Capacity", e.secrets?.capacity, 4);
   check("the crew starts at the docking collar", [zoneOf(e, vale.id)?.name, zoneOf(e, okonkwo.id)?.name], ["Docking Collar", "Docking Collar"]);
   check("which is the only zone they've seen", e.zones.filter((z) => z.seen).map((z) => z.name), ["Docking Collar"]);
-  check("and they're told how many ways on", said(lines, /One way on from here/), true);
+  check("and they're told how many ways on", said(lines, /One more way on, unexplored/), true);
   check("the authored slugs are gone", e.zones.every((z) => z.id.length > 20), true);
 
   check("the mess is two zones off", zoneDistance(e, zone("Docking Collar").id, zone("Mess Deck").id), 2);
@@ -209,8 +209,13 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("so the survivor stays put", zoneOf(e, vale.id)?.name, "Spinal Corridor");
   check("and you can't step across the ship", said(moveTo(g, vale.id, zone("Maintenance Crawl").id), /no way from the Spinal Corridor/), true);
 
-  // Breaching the command lockout is the GM opening the border.
-  borderBetween(e, zone("Spinal Corridor").id, zone("Bridge").id)!.state = "open";
+  // Breaching the command lockout is the GM opening the border. The line it writes can't name the
+  // room on the far side, which the crew is still being kept from knowing about.
+  const opened = setBorderState(g, zone("Spinal Corridor").id, zone("Bridge").id, "open");
+  check("opening a door names only the side they know", text(opened), ["One way out of the Spinal Corridor is now open, where it was locked."]);
+  check("and once both ends are known, both are named", text(setBorderState(g, zone("Docking Collar").id, zone("Spinal Corridor").id, "closed")), ["The way between the Docking Collar and the Spinal Corridor is now closed, where it was open."]);
+  check("a door between two unknown rooms is the GM's business", secret(setBorderState(g, zone("Mess Deck").id, zone("Maintenance Crawl").id, "blocked")), ["A way the crew hasn't found is now blocked, where it was destroyed."]);
+  setBorderState(g, zone("Docking Collar").id, zone("Spinal Corridor").id, "open");
   check("once it's breached the bridge opens up", zoneDistance(e, zone("Spinal Corridor").id, zone("Bridge").id), 1);
   check("walking in is then allowed", said(moveTo(g, vale.id, zone("Bridge").id), /moves from the Spinal Corridor to the Bridge/), true);
   check("the GM hears what's really there", secret(scout(g, zone("Cargo Hold").id)), ["Cargo Hold: Start the creature here, behind the container wall. It knows the crawlway and the crew do not."]);

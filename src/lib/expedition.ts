@@ -2,7 +2,7 @@ import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
-import { borderWalkable, SEGMENTS } from "./rules";
+import { borderWalkable, SEGMENTS, type BorderState } from "./rules";
 import type { Border, Expedition, GameState, Line, Zone } from "./types";
 
 /** Eight Expedition Turns consume one day segment. */
@@ -109,6 +109,27 @@ export function moveTo(g: GameState, characterId: string, zoneId: string): (stri
   return out;
 }
 
+/**
+ * Change what stands between two zones, which is what a successful Breach comes to.
+ *
+ * The line it writes names only zones the crew has seen. That a door has opened is public — they
+ * heard it — but which room is on the other side is not, and the log is the one place where a name
+ * the Site tab is carefully withholding could still get out.
+ */
+export function setBorderState(g: GameState, a: string, b: string, state: BorderState): (string | Line)[] {
+  const e = g.expedition;
+  const border = e && borderBetween(e, a, b);
+  if (!e || !border) return ["That isn't a way between two zones of this site."];
+  if (border.state === state) return [];
+  const was = border.state;
+  border.state = state;
+  const ends = [border.a, border.b].map((id) => e.zones.find((z) => z.id === id));
+  const known = ends.filter((z) => z?.seen);
+  if (known.length === 2) return [`The way between the ${known[0]!.name} and the ${known[1]!.name} is now ${state}, where it was ${was}.`];
+  if (known.length === 1) return [`One way out of the ${known[0]!.name} is now ${state}, where it was ${was}.`];
+  return [{ text: `A way the crew hasn't found is now ${state}, where it was ${was}.`, gm: true }];
+}
+
 /** A successful Scout Ahead: learn the next zone without walking into it. */
 export function scout(g: GameState, zoneId: string): (string | Line)[] {
   const e = g.expedition;
@@ -123,7 +144,8 @@ function see(e: Expedition, z: Zone): (string | Line)[] {
   z.seen = true;
   const ways = neighbours(e, z.id).filter((n) => n.zone && !n.zone.seen).length;
   const out: (string | Line)[] = [`The ${z.name}: ${z.look || "nothing the crew can make much of."}`];
-  if (ways) out.push(`${ways === 1 ? "One way on from here." : `${ways} ways on from here.`}`);
+  // Only the ways they haven't been through: the door they came in by needs no announcing.
+  if (ways) out.push(ways === 1 ? "One more way on, unexplored." : `${ways} more ways on, none of them explored.`);
   if (z.secrets?.note) out.push({ text: `${z.name}: ${z.secrets.note}`, gm: true });
   return out;
 }

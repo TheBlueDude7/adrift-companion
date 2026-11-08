@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { borderBetween, moveTo, neighbours, scout, zoneOf } from "@/lib/expedition";
+import { borderBetween, moveTo, neighbours, scout, setBorderState, zoneOf } from "@/lib/expedition";
 import { BORDER_STATES, borderWalkable, type BorderState } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Border, Expedition, GameState, Zone } from "@/lib/types";
@@ -41,7 +41,7 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
     <Card className={zone.seen ? undefined : "border-dashed opacity-70"}>
       <CardHeader className="gap-1">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          {zone.seen ? zone.name : "An unexplored way on"}
+          {zone.seen ? zone.name : "Unexplored"}
           {zone.seen && zone.cover !== "none" && <Pill tone="info">{COVER_LABEL[zone.cover]}</Pill>}
           {zone.secured && <Pill tone="good">Secured</Pill>}
           {zone.searched && <Pill tone="muted">Searched</Pill>}
@@ -128,14 +128,7 @@ function BorderRow({ border, other }: { border: Border; other: Zone }) {
       {isGM && (
         <Select
           value={border.state}
-          onValueChange={(v) =>
-            act(`Set the way to ${other.name} ${v}`, (g) => {
-              const b = g.expedition?.borders.find((x) => x.a === border.a && x.b === border.b);
-              if (!b || b.state === v) return;
-              b.state = v as BorderState;
-              return `The way between the ${g.expedition?.zones.find((z) => z.id === b.a)?.name} and the ${g.expedition?.zones.find((z) => z.id === b.b)?.name} is now ${v}.`;
-            }, "day")
-          }
+          onValueChange={(v) => act(`Set a border ${v}`, (g) => setBorderState(g, border.a, border.b, v as BorderState), "day")}
         >
           <SelectTrigger size="sm" className="ml-auto h-7 w-28 text-xs"><SelectValue>{border.state}</SelectValue></SelectTrigger>
           <SelectContent>
