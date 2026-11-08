@@ -3,7 +3,7 @@ import type { Attribute, SkillKey } from "@/lib/rules";
 export type TaskMode = "routine" | "skilled" | "crisis";
 
 /** How the tracker resolves the task's normal result. Everything else is narrated by the GM. */
-export type TaskEffect = "rest" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | "patch" | null;
+export type TaskEffect = "rest" | "breath" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | "patch" | null;
 
 /** A module the task needs. Several names mean any of them will do. */
 export type TaskFacility = { modules: string[]; level?: number; label: string };
@@ -111,6 +111,20 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
   t("Assist", "Crew", 1, [], 0, "Help another character with a task you have a level in. Roll against their task's skill; on a success only one assistant's dice count, the best Skill Level among them, up to +4d6. On a Project, you add 1 Progress if you meet its threshold and take one of its contributor slots.", "routine", "assist"),
   t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The GM starts it from the campaign menu, which tracks the site and its Expedition Turns; the rest plays out at the table.", "routine", null, { noStrong: true }),
+  // The Common Expedition Tasks. The rulebook names a skill and a category for each but no Energy
+  // cost and, apart from Stand Watch and the two Labor thresholds, no number — what a given door or
+  // specimen asks for is the GM's to set. So each costs 1 Energy, the lightest standard cost, and
+  // the ones with no threshold roll rather than going Routine. Treating an injury out there is the
+  // Medical tasks already in this table, which work anywhere and spend a medkit.
+  t("Scout Ahead", "Expedition", 1, ["perception", "stealth"], 0, "Examine the next zone without exposing the whole crew: creatures, traps, hazards, exits, cover, obvious salvage, or signs of recent movement. A failure may expose the scout, miss a danger, or create surprise.", "skilled", null, { gmResolves: true }),
+  t("Search", "Expedition", 1, ["scavenging"], 0, "Search a zone for concealed or valuable supplies, over one Expedition Turn. One success finds one salvage result or hidden feature. A zone normally allows one standard Search; a Thorough Search takes two Turns for +3d6 and always advances the site's Noise or Threat Clock.", "skilled", null, { strong: "Another salvage result, a better material tier, a unique item, a trap or contamination avoided, a quieter search, or where the rest of it is.", gmResolves: true }),
+  t("Analyze", "Expedition", 1, ["biology", "engineering", "navigation"], 0, "Understand an organism, machine, signal, structure, or hazard, learning one fact about it. Unknown alien subjects are normally Skilled or Crisis. Another skill may suit the subject better; the GM says which.", "skilled", null, { strong: "Learn two facts instead of one.", gmResolves: true }),
+  t("Breach", "Expedition", 1, ["mechTech", "engineering", "closeCombat", "heavyWeaponry"], 0, "Open a sealed door, cut through wreckage, or force an obstructed route. As a Labor task instead it's Strength against the obstruction's Labor Threshold: normally 2 for something stuck, 3 or more for something meant to stay shut. Breaching is usually loud.", "skilled"),
+  t("Secure", "Expedition", 1, ["engineering", "mechTech"], 0, "Seal doors, disable traps, restore atmosphere, anchor equipment, or otherwise make a zone safer. A zone counts as Secured when nothing hostile controls it, its traps and hazards are dealt with, and the crew holds its entrances.", "skilled"),
+  t("Field Repair", "Expedition", 1, ["mechTech", "engineering"], 0, "Restore a damaged piece of portable equipment, or make a temporary repair that holds for now. Repairs under immediate danger are Crisis tasks.", "skilled"),
+  t("Stand Watch", "Expedition", 1, ["perception"], 2, "Protect others while they work. Perception 2 catches obvious approaching threats in a secure, well-lit zone before they create surprise. It becomes a Skilled roll against anything hidden, silent, camouflaged, behind cover, or moving through darkness.", "routine", null, { gmResolves: true }),
+  t("Carry or Extract", "Expedition", 1, [], 2, "Move a downed survivor, Heavy object, specimen, or piece of machinery: Strength against the load's Labor Threshold, normally 2 for an awkward one and 3 or more for something that should take two people. The GM may call for Acrobatics instead when the route matters more than the weight.", "routine", null, { labor: true }),
+  t("Catch Your Breath", "Expedition", 0, [], 0, "Spend one Expedition Turn in a secured zone with no immediate threat to reduce Pressure by 1, never below the Stress floor. This is not Rest: it restores no Energy, doesn't count as sleep, and allows no injury recovery.", "routine", "breath", { noStrong: true }),
   t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true }),
 ];
 

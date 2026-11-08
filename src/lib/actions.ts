@@ -329,6 +329,9 @@ const byDistance = (dist: number) => (dist <= 1 ? 4 : dist === 2 ? 6 : 8);
 function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { threshold: number; blocker: string | null } {
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
   const dist = map?.shipAt && a.target ? tileDistance(map.shipAt, a.target) : 1;
+  // An Expedition Task needs an expedition under way: aboard the ship there's no zone to scout,
+  // search, or seal, and no Expedition Turn to spend getting your breath back.
+  if (def.group === "Expedition" && def.name !== "Embark Expedition" && !g.expedition) return { threshold: def.threshold, blocker: "The crew isn't on an expedition" };
   switch (def.name) {
     case "Plot Safe Course":
       return { threshold: byDistance(dist), blocker: null };
@@ -697,6 +700,13 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   out.push(`${head}.${a.outcome ? ` ${a.outcome}` : ""}`);
   if (strong && def.strong) out.push(`Strong Result: ${def.strong}`);
   if (c && ok && def.effect === "rest") rest(g, c, out);
+  // Catching Your Breath buys the one Pressure level and nothing else Rest would give.
+  if (c && ok && def.effect === "breath") {
+    if (c.pressure > pressureFloor(c.stress)) {
+      c.pressure -= 1;
+      out.push(`${c.name} gets their breath back: Pressure eases to ${PRESSURE_STATES[c.pressure].name}.`);
+    } else out.push(`${c.name} is already as settled as their Stress allows.`);
+  }
   if (ok && def.effect === "project" && a.projectId) out.push(...advanceProject(g, a.projectId, terms.progress));
   if (ok && def.effect === "tend") tendCrops(g, out);
   if (ok && def.effect === "harvest") harvestCrops(g, out, Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0));

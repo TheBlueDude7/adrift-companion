@@ -1,3 +1,6 @@
+import { newAction, resolveAction, taskTerms } from "../src/lib/actions";
+import { TASK_BY_NAME } from "../src/data/tasks";
+import { maxEnergy } from "../src/lib/derive";
 import { endExpedition, markExpeditionTurn, startExpedition, TURNS_PER_SEGMENT } from "../src/lib/expedition";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
@@ -117,6 +120,55 @@ function check(label: string, got: unknown, want: unknown) {
   check("players see where they are and what time it is", Object.keys(seen).sort(), ["crew", "site", "started", "turn"]);
   check("and not what's left to find", seen.secrets, undefined);
   check("no expedition stays no key", "expedition" in playerView(createInitialState()), false);
+}
+
+// The Common Expedition Tasks.
+{
+  const g = world();
+  const [vale] = g.characters;
+  vale.skills.scavenging = 5;
+  const search = newAction(g, vale, "Search");
+  g.actions.push(search);
+  check("searching the ship's corridors is refused", taskTerms(g, search).blocker, "The crew isn't on an expedition");
+  check("but embarking never is", taskTerms(g, newAction(g, vale, "Embark Expedition")).blocker, null);
+  startExpedition(g, { site: "The Tanager", crew: [vale.id] });
+  const terms = taskTerms(g, search);
+  check("out there it rolls Scavenging", [terms.blocker, terms.skill, terms.dice], [null, "scavenging", 6]);
+  check("and never goes Routine, whatever the level", terms.routine, false);
+  check("the GM resolves what's found", TASK_BY_NAME["Search"].gmResolves, true);
+}
+{
+  const g = world();
+  const [vale] = g.characters;
+  // Perception 2 catches an obvious threat without a roll; anything subtler is the GM's call.
+  vale.skills.perception = 2;
+  startExpedition(g, { site: "The Tanager", crew: [vale.id] });
+  check("Stand Watch is Routine at Perception 2", taskTerms(g, newAction(g, vale, "Stand Watch")).routine, true);
+  g.characters[1].skills.perception = 1;
+  startExpedition(g, { site: "The Tanager", crew: [vale.id] });
+  check("and a roll below it", taskTerms(g, newAction(g, g.characters[1], "Stand Watch")).routine, false);
+}
+{
+  const g = world();
+  const [vale] = g.characters;
+  vale.attributes.STR = 3;
+  startExpedition(g, { site: "The Tanager", crew: [vale.id] });
+  const terms = taskTerms(g, newAction(g, vale, "Carry or Extract"));
+  check("carrying someone out is Labor", [terms.labor, terms.skill, terms.attr, terms.threshold], [true, null, "STR", 2]);
+  check("and Strength 3 manages an awkward load", terms.routine, true);
+}
+{
+  const g = world();
+  const [vale] = g.characters;
+  vale.pressure = 2;
+  startExpedition(g, { site: "The Tanager", crew: [vale.id] });
+  const a = newAction(g, vale, "Catch Your Breath");
+  g.actions.push(a);
+  const terms = taskTerms(g, a);
+  check("catching your breath is free and automatic", [terms.energy, terms.routine], [0, true]);
+  resolveAction(g, a.id, { status: "success", energy: terms.energy, outcome: "" });
+  check("and buys one Pressure level", vale.pressure, 1);
+  check("but no Energy, unlike Rest", vale.energy, maxEnergy(vale));
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");
