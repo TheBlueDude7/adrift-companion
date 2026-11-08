@@ -3,6 +3,7 @@ import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
 import { applyDamage, damageSteps } from "./mechanics";
 import { zoneDistance } from "./expedition";
+import { actionBlocker, spendAction, type ActionKind } from "./fight";
 import { borderTransparent, COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
 import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
@@ -229,12 +230,20 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   const blocked = attackBlocker(weapon, shot, c);
   if (blocked) return { error: blocked };
 
+  // An attack is a Slow Action, and Aiming first is the Fast one. While a fight is running, whose
+  // turn it is and what they have left to spend are the server's to keep, like the range.
+  const owed: ActionKind[] = shot.aim ? ["slow", "fast"] : ["slow"];
+  const unready = actionBlocker(g, attackerId, ...owed);
+  if (unready) return { error: unready };
+
   const pool = attackPool(c, weapon, shot);
   const dice = rollPool(pool.dice);
   const hits = sixes(dice);
+  const budget = spendAction(g, attackerId, ...owed);
   const what = item ? `the ${item.name}` : "their fists";
   const result = hits === 0 ? "a miss" : hits === 1 ? "a hit" : `a hit with ${hits - 1} success${hits === 2 ? "" : "es"} to spare`;
   const lines: Line[] = [{ text: `${c.name} attacks ${target.name} with ${what} (${pool.dice}d6: ${pool.parts.join(", ")}): [${dice.join(", ")}] — ${result}.` }];
+  if (budget) lines.push({ text: budget });
 
   if (item?.charges !== undefined) {
     item.charges = Math.max(0, item.charges - 1);

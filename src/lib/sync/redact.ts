@@ -25,6 +25,12 @@ export function playerView(game: GameState): GameState {
   const view: GameState = { ...game, threats, log: game.log.filter((e) => !e.gm) };
   // Left absent rather than set to undefined, so no expedition stays no key and the diff stays quiet.
   if (view.expedition) view.expedition = publicExpedition(view.expedition);
+  // Initiative is public at the table, but a card held by something the crew hasn't met would
+  // announce it. Those entries come out, which leaves a gap in the numbers and nothing more.
+  if (view.fight) {
+    const sent = new Set(threats.map((t) => t.id));
+    view.fight = { ...view.fight, order: view.fight.order.filter((x) => x.kind === "crew" || sent.has(x.id)) };
+  }
   return view;
 }
 

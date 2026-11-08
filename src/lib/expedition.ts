@@ -1,6 +1,7 @@
 import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
+import { actionBlocker, spendAction } from "./fight";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
 import { borderWalkable, SEGMENTS, type BorderState } from "./rules";
 import type { Border, Expedition, GameState, Line, Zone } from "./types";
@@ -105,9 +106,15 @@ export function moveTo(g: GameState, characterId: string, zoneId: string): (stri
     if (!border) return [`There's no way from the ${here.name} to the ${to.name} without going round.`];
     if (!borderWalkable(border.state)) return [`The way into the ${to.name} is ${border.state}${border.note ? `: ${border.note}` : ""}. Breach it or find another route.`];
   }
+  // One zone is a Fast Action once a fight is on. Whether leaving a hostile's zone costs them a
+  // free swing is the GM's to rule: the app doesn't know who counts as Engaged with whom.
+  const unready = here ? actionBlocker(g, characterId, "fast") : null;
+  if (unready) return [unready];
   e.at[characterId] = zoneId;
   const first = !to.seen;
   const out: (string | Line)[] = [here ? `${c.name} moves from the ${here.name} to the ${to.name}.` : `${c.name} enters the ${to.name}.`];
+  const spend = here ? spendAction(g, characterId, "fast") : null;
+  if (spend) out.push(spend);
   if (first) out.push(...see(e, to));
   return out;
 }

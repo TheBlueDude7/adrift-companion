@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CrosshairIcon, EyeIcon, HeartPulseIcon, PlusIcon, SkullIcon, Trash2Icon } from "lucide-react";
+import { ChevronRightIcon, CrosshairIcon, EyeIcon, HeartPulseIcon, PlusIcon, ShieldIcon, SkullIcon, SwordsIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { armed, attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, type AttackShot } from "@/lib/combat";
 import { maxHp } from "@/lib/derive";
+import { actionBlocker, combatantName, DECK_SIZE, endFight, nextTurn, reserveReaction, spendAction, spent, startFight, takeReaction } from "@/lib/fight";
 import { COVER_POINTS, DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type Cover, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import { attackOwnTarget } from "@/lib/sync/client";
-import type { Character, GameState, Line, Threat } from "@/lib/types";
+import type { Character, Combatant, GameState, Line, Threat } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EmptyState, Meter, Pill, SectionTitle, Stepper } from "./common";
@@ -322,7 +323,11 @@ function ThreatCard({ t }: { t: Threat }) {
               variant="ghost"
               aria-label={`Remove ${t.name}`}
               title="Remove from the fight"
-              onClick={() => act("Remove a threat", (g) => { g.threats = g.threats.filter((x) => x.id !== t.id); return `${t.name} is no longer in the fight.`; })}
+              onClick={() => act("Remove a threat", (g) => {
+                g.threats = g.threats.filter((x) => x.id !== t.id);
+                if (g.fight) g.fight.order = g.fight.order.filter((x) => x.id !== t.id);
+                return `${t.name} is no longer in the fight.`;
+              })}
             >
               <Trash2Icon />
             </Button>
@@ -356,7 +361,7 @@ function AttackDialog({ attacker }: { attacker: Character }) {
   const mapped = seen && !("blocked" in seen) ? seen : null;
   const noSight = seen && "blocked" in seen ? seen.blocked : null;
   const shot: AttackShot = { zones: mapped?.zones ?? zones, cover: mapped?.cover ?? cover, aim, burst, answers };
-  const blocked = noSight ?? attackBlocker(choice.weapon, shot, attacker);
+  const blocked = noSight ?? attackBlocker(choice.weapon, shot, attacker) ?? actionBlocker(game, attacker.id, ...(aim ? (["slow", "fast"] as const) : (["slow"] as const)));
   const pool = attackPool(attacker, choice.weapon, shot);
   const w = choice.weapon;
 
@@ -510,6 +515,184 @@ function DeathCheckRow({ c }: { c: Character }) {
   );
 }
 
+/** The GM deals the cards: who's in, whether the minor enemies share one, and who got the jump. */
+function StartFightDialog() {
+  const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
+  const [open, setOpen] = useState(false);
+  const [crew, setCrew] = useState<string[]>([]);
+  const [threats, setThreats] = useState<string[]>([]);
+  const [share, setShare] = useState(false);
+  const [ambush, setAmbush] = useState<"none" | "crew" | "threats">("none");
+
+  const standing = game.characters.filter((c) => !c.dead);
+  const hostile = game.threats.filter((t) => t.band !== "down");
+  const toggle = (list: string[], set: (v: string[]) => void, id: string) =>
+    set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const cards = crew.length + (share && threats.length > 1 ? 1 : threats.length);
+
+  function reset() {
+    setCrew(standing.map((c) => c.id));
+    setThreats(hostile.map((t) => t.id));
+    setShare(hostile.length > 2);
+    setAmbush("none");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) reset(); }}>
+      <DialogTrigger render={<Button size="sm"><SwordsIcon /> Draw Initiative</Button>} />
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Start a fight</DialogTitle>
+          <DialogDescription>
+            Everyone picked draws a card from 1 to 10, and the lowest acts first. While a fight runs, an attack costs a Slow Action and a move costs a Fast one, and the app won&apos;t let either be spent out of turn.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Who&apos;s in it</Label>
+            {standing.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={crew.includes(c.id)} aria-label={c.name} onCheckedChange={() => toggle(crew, setCrew, c.id)} />
+                {c.name}{c.hp === 0 ? " (down)" : ""}
+              </label>
+            ))}
+            {hostile.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">No threats to draw for. Add one above and they&apos;ll be listed here.</p>
+            ) : hostile.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={threats.includes(t.id)} aria-label={t.name} onCheckedChange={() => toggle(threats, setThreats, t.id)} />
+                {t.name}
+              </label>
+            ))}
+          </div>
+          {threats.length > 1 && (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={share} onCheckedChange={(v) => setShare(!!v)} aria-label="Minor enemies share one card" />
+              <span className="grid">
+                <span>The enemies share one card</span>
+                <span className="text-[11px] text-muted-foreground">Several similar minor enemies act together when that card comes up, each still taking its own actions. Something important draws its own card.</span>
+              </span>
+            </label>
+          )}
+          <div className="grid gap-1.5">
+            <Label>Did either side get the jump?</Label>
+            <Select value={ambush} onValueChange={(v) => setAmbush((v as "none" | "crew" | "threats" | null) ?? "none")}>
+              <SelectTrigger className="w-full">
+                <SelectValue>{ambush === "none" ? "No, both sides saw it coming" : ambush === "crew" ? "The crew ambushes" : "The crew is surprised"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No, both sides saw it coming</SelectItem>
+                <SelectItem value="crew">The crew ambushes</SelectItem>
+                <SelectItem value="threats">The crew is surprised</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              An ambushing side draws two cards and keeps the higher. A surprised survivor becomes Shaken and gets no Fast Action or Reaction until the end of their first turn.
+            </p>
+          </div>
+          <p className={cn("text-[11px]", cards > DECK_SIZE ? "text-rose-300" : "text-muted-foreground")}>
+            {cards} card{cards === 1 ? "" : "s"} of {DECK_SIZE}.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button
+            disabled={cards === 0 || cards > DECK_SIZE}
+            onClick={() => {
+              act("Draw Initiative", (g) => startFight(g, { crew, threats, threatsShareCard: share, ambush }), "danger");
+              setOpen(false);
+            }}
+          >
+            Deal the cards
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** One row of the order: their card, what they have left, and the GM's controls while they're up. */
+function CombatantRow({ x, up, mine }: { x: Combatant; up: boolean; mine: boolean }) {
+  const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
+  const name = combatantName(game, x);
+  const left = 2 - spent(x);
+
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2 rounded-lg border p-2", up ? "border-amber-500/50 bg-amber-500/5" : "bg-background/40", !up && x.acted && "opacity-60")}>
+      <span className="tabular w-7 shrink-0 rounded-md border bg-muted/50 py-0.5 text-center font-mono text-sm">{x.card}</span>
+      <span className={cn("font-medium", mine && "text-primary")}>{name}</span>
+      {x.kind === "threat" && <Pill tone="muted">threat</Pill>}
+      {up && <Pill tone="warn">Up now</Pill>}
+      {x.reaction && <Pill tone={x.reaction === "reserved" ? "info" : "muted"}>Reaction {x.reaction}</Pill>}
+      <span className="ml-auto text-xs text-muted-foreground">
+        {left === 0 ? "turn spent" : left === 2 ? "a Slow and a Fast to spend" : x.slow ? "one Fast left" : "one left, Slow or Fast"}
+      </span>
+      {isGM && up && (
+        <div className="flex w-full flex-wrap gap-1 border-t pt-1.5">
+          <Button size="xs" variant="ghost" disabled={!!actionBlocker(game, x.id, "slow")} title={actionBlocker(game, x.id, "slow") ?? "For a Slow Action the app doesn't roll: Reload, First Aid, Overwatch"}
+            onClick={() => act(`${name} takes a Slow Action`, (g) => spendAction(g, x.id, "slow") ?? "", "danger")}>
+            Slow
+          </Button>
+          <Button size="xs" variant="ghost" disabled={!!actionBlocker(game, x.id, "fast")} title={actionBlocker(game, x.id, "fast") ?? "Get up, draw an item, open a door, take cover"}
+            onClick={() => act(`${name} takes a Fast Action`, (g) => spendAction(g, x.id, "fast") ?? "", "danger")}>
+            Fast
+          </Button>
+          {x.reaction === "reserved" ? (
+            <Button size="xs" variant="ghost" onClick={() => act(`${name} reacts`, (g) => takeReaction(g, x.id), "danger")}><ShieldIcon /> React</Button>
+          ) : (
+            <Button size="xs" variant="ghost" disabled={!!x.reaction || !!actionBlocker(game, x.id, "fast")} title="Hold a Fast Action back for a Block or a Dodge"
+              onClick={() => act(`${name} reserves a Reaction`, (g) => reserveReaction(g, x.id), "danger")}>
+              <ShieldIcon /> Reserve
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FightPanel() {
+  const game = useGame((s) => s.game);
+  const act = useGame((s) => s.act);
+  const { isGM, myCharacterId } = usePerms();
+  const f = game.fight;
+
+  if (!f)
+    return (
+      <EmptyState
+        title="No fight is running"
+        body={isGM
+          ? "Draw Initiative when precise order starts to matter. Until then, attacks and moves cost nothing and happen in whatever order you like."
+          : "Nothing is being fought over turn by turn. The GM draws Initiative when that changes."}
+        action={isGM ? <StartFightDialog /> : undefined}
+      />
+    );
+
+  const order = [...f.order].sort((a, b) => a.card - b.card);
+  return (
+    <div className="grid gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Pill tone="danger">Round {f.round}</Pill>
+        <Pill tone="warn">Card {f.card} up</Pill>
+        {isGM && (
+          <div className="ml-auto flex gap-1.5">
+            <Button size="xs" variant="outline" onClick={() => act("Next turn", (g) => nextTurn(g), "danger")}>
+              <ChevronRightIcon /> End this turn
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => act("End the fight", (g) => endFight(g), "danger")}>Stand down</Button>
+          </div>
+        )}
+      </div>
+      {order.map((x) => <CombatantRow key={x.id} x={x} up={x.card === f.card} mine={x.id === myCharacterId} />)}
+      <p className="text-[11px] text-muted-foreground">
+        A turn buys one Slow Action and one Fast Action in either order, or two Fast Actions. Ending the highest card&apos;s turn ends the Round, which resolves Bleeding and Burning and expires Brief conditions.
+      </p>
+    </div>
+  );
+}
+
 export function CombatTab() {
   const game = useGame((s) => s.game);
   const { isGM, myCharacterId } = usePerms();
@@ -518,6 +701,16 @@ export function CombatTab() {
 
   return (
     <div className="grid gap-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><SwordsIcon className="size-4 text-primary" /> Initiative</CardTitle>
+          <CardDescription>
+            Ten cards, numbered 1 to 10, and the lowest acts first. The order holds for the whole fight unless something changes it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent><FightPanel /></CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><SkullIcon className="size-4 text-primary" /> Threats</CardTitle>

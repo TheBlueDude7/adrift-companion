@@ -449,6 +449,40 @@ export type Expedition = {
   secrets?: ExpeditionSecrets;
 };
 
+/**
+ * One participant in a fight, and what they have left to spend this turn.
+ *
+ * A turn buys one Slow Action and one Fast Action in either order, or two Fast Actions — so what's
+ * tracked is the Slow and a count of Fasts, and two of anything is the whole turn.
+ */
+export type Combatant = {
+  /** A character id or a threat id. */
+  id: string;
+  kind: "crew" | "threat";
+  /** Their Initiative card, 1 to 10. Several minor enemies may share one and act together. */
+  card: number;
+  /** Their Slow Action is spent. */
+  slow: boolean;
+  /** Fast Actions spent this turn, 0 to 2. */
+  fast: number;
+  /** A Fast Action held back as a Reaction, and whether it's been used. One per Round. */
+  reaction?: "reserved" | "used";
+  /** They've finished a turn this Round. Surprise ends with the first of them. */
+  acted?: boolean;
+};
+
+/**
+ * A fight in progress: the Initiative order, the Round, and which card is acting.
+ *
+ * The card acts, not the combatant, because a group of minor enemies shares one and goes together.
+ */
+export type Fight = {
+  round: number;
+  /** The card now up. Everyone holding it is acting. */
+  card: number;
+  order: Combatant[];
+};
+
 export type GameState = {
   version: 1;
   maps: GameMap[];
@@ -466,6 +500,8 @@ export type GameState = {
   threats: Threat[];
   /** Where the crew is, when they're not aboard. The GM's to start and to end. */
   expedition?: Expedition;
+  /** Initiative, while precise action order matters. Absent the rest of the time. */
+  fight?: Fight;
   /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
   mechRequests?: { id: string; by: string; mech: Mech }[];
   /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */

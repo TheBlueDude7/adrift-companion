@@ -1,11 +1,12 @@
 import { newAction, taskPool } from "../src/lib/actions";
-import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, UNARMED } from "../src/lib/combat";
-import { moveTo, scout, startExpedition, zoneDistance } from "../src/lib/expedition";
+import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, UNARMED, type AttackResult } from "../src/lib/combat";
+import { moveTo, scout, startExpedition, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { actionBlocker, DECK_SIZE, endFight, nextTurn, reserveReaction, spendAction, spent, startFight, takeReaction } from "../src/lib/fight";
 import { pushLog } from "../src/lib/log";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
-import { DEFAULT_ITEM_TEMPLATES, threatBand } from "../src/lib/rules";
+import { DEFAULT_ITEM_TEMPLATES, PRESSURE_STATES, threatBand } from "../src/lib/rules";
 import { playerView } from "../src/lib/sync/redact";
-import type { Character, GameState } from "../src/lib/types";
+import type { Character, GameState, Line } from "../src/lib/types";
 
 const tpl = (name: string) => DEFAULT_ITEM_TEMPLATES.find((t) => t.name === name)!;
 
@@ -13,6 +14,9 @@ const tpl = (name: string) => DEFAULT_ITEM_TEMPLATES.find((t) => t.name === name
 const allSixes = () => void (Math.random = () => 0.9);
 /** Nothing but ones. */
 const allOnes = () => void (Math.random = () => 0);
+/** Real randomness again, for the cases about shuffling rather than arithmetic. */
+const realRandom = Math.random;
+const unrigged = () => void (Math.random = realRandom);
 
 /** No background and no specialty, so nothing quietly adds dice behind a case. */
 function world(): { g: GameState; shooterId: string } {
@@ -39,6 +43,11 @@ function give(g: GameState, who: string, name: string) {
 }
 
 let failures = 0;
+const text = (lines: (string | Line)[]) => lines.map((l) => (typeof l === "string" ? l : l.text));
+const said = (lines: (string | Line)[], re: RegExp) => text(lines).some((t) => re.test(t));
+/** Whatever an attack had to say, refusal or roll, as lines. */
+const rolled = (r: AttackResult | { error: string }) => ("error" in r ? [r.error] : text(r.lines));
+
 function check(label: string, got: unknown, want: unknown) {
   const ok = JSON.stringify(got) === JSON.stringify(want);
   if (!ok) failures++;
@@ -454,6 +463,147 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   scout(g, zone("Mess Deck").id);
   check("scouting the room hands it over", playerView(g).threats.map((t) => t.name), ["Something in the mess", "Something underfoot"]);
   check("with the zone it's standing in", playerView(g).threats[0].zone, zone("Mess Deck").id);
+}
+
+// Initiative, rounds, and what a turn buys.
+{
+  unrigged();
+  const { g, shooterId } = world();
+  const other = bystander(g);
+  const pack = Array.from({ length: 9 }, () => newThreat("Rat", 4, 0));
+  g.threats.push(...pack);
+  const all = { crew: [shooterId, other.id], threats: pack.map((t) => t.id) };
+
+  check("ten cards is the deck", DECK_SIZE, 10);
+  check("and eleven participants won't fit in it", text(startFight(g, all)), ["That's 11 cards and the deck holds 10. Let the minor enemies share one."]);
+  check("so no fight started", g.fight, undefined);
+
+  startFight(g, { ...all, threatsShareCard: true });
+  const f = g.fight!;
+  check("everyone drew", f.order.length, 11);
+  check("the rats share one card", new Set(pack.map((t) => f.order.find((x) => x.id === t.id)!.card)).size, 1);
+  check("and no two others hold the same", new Set(f.order.map((x) => x.card)).size, 3);
+  check("the lowest card is up first", f.card, Math.min(...f.order.map((x) => x.card)));
+  check("on the first Round", f.round, 1);
+  check("a second fight is refused", text(startFight(g, { crew: [shooterId], threats: [] })), ["A fight is already under way. End that one first."]);
+}
+
+// The budget: a Slow Action for the attack, and a Fast one if they Aimed first.
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 20, 0);
+  g.threats.push(t);
+  const rifle = give(g, shooterId, "Ballistic Rifle");
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = () => f.order.find((x) => x.id === shooterId)!;
+  f.card = me().card;
+
+  check("shooting spends the Slow Action", said(rolled(resolveAttack(g, shooterId, t.id, rifle, shot)), /spends a Slow Action/), true);
+  check("so a second shot is refused", resolveAttack(g, shooterId, t.id, rifle, shot), { error: "Vale has already taken a Slow Action this turn." });
+  check("but a Fast Action is still theirs", actionBlocker(g, shooterId, "fast"), null);
+  spendAction(g, shooterId, "fast");
+  check("and then the turn is spent", actionBlocker(g, shooterId, "fast"), "Vale has spent both actions this turn.");
+
+  // A fresh turn, where Aiming costs the Fast Action the attack would otherwise leave spare.
+  nextTurn(g);
+  f.card = me().card;
+  check("an aimed shot needs both", said(rolled(resolveAttack(g, shooterId, t.id, rifle, { ...shot, aim: true })), /spends a Slow and a Fast Action/), true);
+  check("and leaves nothing", 2 - spent(me()), 0);
+
+  nextTurn(g);
+  f.card = me().card;
+  spendAction(g, shooterId, "fast");
+  check("one action left can't buy an aimed shot", resolveAttack(g, shooterId, t.id, rifle, { ...shot, aim: true }), { error: "Vale has one action left this turn, and that needs two." });
+  check("though an unaimed one fits", "error" in resolveAttack(g, shooterId, t.id, rifle, shot), false);
+}
+
+// Out of turn, and the Round turning over.
+{
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 10, 0);
+  g.threats.push(t);
+  const rifle = give(g, shooterId, "Ballistic Rifle");
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = f.order.find((x) => x.id === shooterId)!;
+  const beast = f.order.find((x) => x.id === t.id)!;
+  f.card = beast.card;
+  check("nobody acts out of turn", resolveAttack(g, shooterId, t.id, rifle, shot), { error: `It isn't Vale's turn: card ${beast.card} is up and they hold ${me.card}.` });
+  check("and nothing outside a fight is refused for want of an action", actionBlocker(g, bystander(g).id, "slow"), null);
+
+  // Ending the highest card's turn ends the Round, which is where lingering effects land.
+  f.card = Math.max(...f.order.map((x) => x.card));
+  for (const x of f.order) { x.slow = true; x.fast = 1; }
+  const turned = text(nextTurn(g));
+  check("the Round ends on the last card", g.fight!.round, 2);
+  check("and says so", turned.some((l) => l === "— End of round —"), true);
+  check("everyone's actions come back", 2 - spent(me), 2);
+  check("and the lowest card is up again", g.fight!.card, Math.min(...f.order.map((x) => x.card)));
+}
+
+// Surprise: Shaken, no Fast Action, and over at the end of their own first turn.
+{
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 10, 0);
+  g.threats.push(t);
+  startFight(g, { crew: [shooterId], threats: [t.id], ambush: "threats" });
+  const c = g.characters[0];
+  check("a surprised survivor is Shaken", PRESSURE_STATES[c.pressure].name, "Shaken");
+  g.fight!.card = g.fight!.order.find((x) => x.id === shooterId)!.card;
+  check("and has no Fast Action", actionBlocker(g, shooterId, "fast"), "Vale is Surprised and has no Fast Action until the end of their turn.");
+  check("though the Slow one is theirs", actionBlocker(g, shooterId, "slow"), null);
+  check("surprise ends with their turn", said(nextTurn(g), /Surprised ends/), true);
+  check("and the condition is gone", c.conditions.some((x) => x.name === "Surprised"), false);
+}
+
+// A Reaction is the Fast Action, held back, and one per Round.
+{
+  const { g, shooterId } = world();
+  const t = newThreat("Drone", 10, 0);
+  g.threats.push(t);
+  startFight(g, { crew: [shooterId], threats: [t.id] });
+  const f = g.fight!;
+  const me = f.order.find((x) => x.id === shooterId)!;
+  f.card = me.card;
+  reserveReaction(g, shooterId);
+  check("reserving costs the Fast Action", [me.fast, me.reaction], [1, "reserved"]);
+  check("and only one is allowed", text(reserveReaction(g, shooterId)), ["Vale has already reserved one this Round."]);
+  check("using it is noted", said(takeReaction(g, shooterId), /takes their Reaction/), true);
+  check("and it can't be used twice", text(takeReaction(g, shooterId)), ["Vale has no Reaction reserved."]);
+}
+
+// Moving in a fight costs the Fast Action, out of a fight nothing.
+{
+  const { g, shooterId } = world();
+  startExpedition(g, { site: "", crew: [shooterId], siteId: "tanager" });
+  const e = g.expedition!;
+  const zone = (name: string) => e.zones.find((z) => z.name === name)!;
+  startFight(g, { crew: [shooterId], threats: [] });
+  const f = g.fight!;
+  f.card = f.order[0].card;
+  check("a move spends a Fast Action", said(moveTo(g, shooterId, zone("Spinal Corridor").id), /spends a Fast Action/), true);
+  spendAction(g, shooterId, "slow");
+  check("and with the turn spent they stay put", text(moveTo(g, shooterId, zone("Mess Deck").id)), ["Vale has spent both actions this turn."]);
+  check("so they really are still in the corridor", zoneOf(e, shooterId)?.name, "Spinal Corridor");
+  endFight(g);
+  check("with the fight over, moving is free again", said(moveTo(g, shooterId, zone("Mess Deck").id), /moves from the Spinal Corridor/), true);
+}
+
+// What a player is sent: the order, minus anything they haven't met.
+{
+  const { g, shooterId } = world();
+  startExpedition(g, { site: "", crew: [shooterId], siteId: "tanager" });
+  const hidden = newThreat("Something in the hold", 10, 0);
+  hidden.zone = g.expedition!.zones.find((z) => z.name === "Cargo Hold")!.id;
+  const seen = newThreat("Something at the hatch", 10, 0);
+  g.threats.push(hidden, seen);
+  startFight(g, { crew: [shooterId], threats: [hidden.id, seen.id] });
+  check("the GM holds three cards", g.fight!.order.length, 3);
+  check("the player is sent two", playerView(g).fight!.order.length, 2);
+  check("and not the one in the unexplored room", playerView(g).fight!.order.some((x) => x.id === hidden.id), false);
+  check("the Round and the card are public", [playerView(g).fight!.round, playerView(g).fight!.card], [1, g.fight!.card]);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { borderBetween, moveTo, neighbours, scout, setBorderState, zoneOf } from "@/lib/expedition";
+import { actionBlocker } from "@/lib/fight";
 import { BORDER_STATES, borderWalkable, type BorderState } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Border, Expedition, GameState, Zone } from "@/lib/types";
@@ -37,6 +38,9 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
   const movingFrom = mover ? zoneOf(e, mover)?.id : undefined;
   const border = mover && movingFrom && movingFrom !== zone.id ? borderBetween(e, movingFrom, zone.id) : undefined;
   const who = mover ? game.characters.find((c) => c.id === mover) : null;
+  // A zone is a Fast Action in a fight, so a spent turn is as much of a reason not to go as a
+  // welded door is — and the button says so rather than swallowing the click.
+  const unready = mover && movingFrom !== zone.id ? actionBlocker(game, mover, "fast") : null;
 
   return (
     <Card className={zone.seen ? undefined : "border-dashed opacity-70"}>
@@ -84,8 +88,8 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
             <Button
               size="sm"
               variant="outline"
-              disabled={!border || !borderWalkable(border.state)}
-              title={!border ? "Not adjacent to where they're standing" : borderWalkable(border.state) ? undefined : `The way is ${border.state}`}
+              disabled={!border || !borderWalkable(border.state) || !!unready}
+              title={!border ? "Not adjacent to where they're standing" : !borderWalkable(border.state) ? `The way is ${border.state}` : (unready ?? undefined)}
               onClick={() => act(`Move to ${zone.seen ? zone.name : "the next zone"}`, (g) => moveTo(g, mover, zone.id), "day")}
             >
               <FootprintsIcon /> Move {who?.name.split(" ")[0] ?? "here"} in
