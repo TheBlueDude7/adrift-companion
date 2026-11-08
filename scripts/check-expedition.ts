@@ -1,7 +1,8 @@
 import { newAction, resolveAction, taskTerms } from "../src/lib/actions";
+import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
-import { endExpedition, markExpeditionTurn, startExpedition, TURNS_PER_SEGMENT } from "../src/lib/expedition";
+import { borderBetween, endExpedition, markExpeditionTurn, moveTo, scout, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES } from "../src/lib/rules";
@@ -16,6 +17,12 @@ function world(): GameState {
 }
 
 const ids = (g: GameState) => g.characters.map((c) => c.id);
+/** Someone who stayed aboard. */
+const bystander = (g: GameState) => {
+  const c = newCharacter("Ferrier", null, null, "gm");
+  g.characters.push(c);
+  return c;
+};
 const text = (lines: (string | Line)[]) => lines.map((l) => (typeof l === "string" ? l : l.text));
 const said = (lines: (string | Line)[], re: RegExp) => text(lines).some((t) => re.test(t));
 const secret = (lines: (string | Line)[]) => lines.filter((l): l is Line => typeof l !== "string" && !!l.gm).map((l) => l.text);
@@ -117,7 +124,7 @@ function check(label: string, got: unknown, want: unknown) {
   const g = world();
   startExpedition(g, { site: "The Tanager", crew: ids(g), capacity: 4, notes: "The reactor is still hot." });
   const seen = playerView(g).expedition!;
-  check("players see where they are and what time it is", Object.keys(seen).sort(), ["crew", "site", "started", "turn"]);
+  check("players see where they are and what time it is", Object.keys(seen).sort(), ["at", "borders", "crew", "site", "started", "turn", "zones"]);
   check("and not what's left to find", seen.secrets, undefined);
   check("no expedition stays no key", "expedition" in playerView(createInitialState()), false);
 }
@@ -169,6 +176,66 @@ function check(label: string, got: unknown, want: unknown) {
   resolveAction(g, a.id, { status: "success", energy: terms.energy, outcome: "" });
   check("and buys one Pressure level", vale.pressure, 1);
   check("but no Energy, unlike Rest", vale.energy, maxEnergy(vale));
+}
+
+// Every authored site, before anyone sits down to play it.
+for (const def of SITES) check(`${def.name} is authored correctly`, siteProblems(def), []);
+check("a border to nowhere is caught", siteProblems({ id: "x", name: "X", capacity: 1, zones: [{ id: "a", name: "A" }], borders: [{ from: "a", to: "b" }] }), ['A border names "b", which is no zone of this site.']);
+check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", capacity: 1, zones: [{ id: "a", name: "A" }, { id: "b", name: "B" }], borders: [] }), ['Zone "b" can\'t be reached from the entrance.']);
+
+// Walking a site.
+{
+  const g = world();
+  const [vale, okonkwo] = g.characters;
+  const lines = startExpedition(g, { site: "", crew: ids(g), siteId: "tanager" });
+  const e = g.expedition!;
+  const zone = (name: string) => e.zones.find((z) => z.name === name)!;
+  check("the site's name carries over", e.site, "The Tanager");
+  check("so does its Salvage Capacity", e.secrets?.capacity, 4);
+  check("the crew starts at the docking collar", [zoneOf(e, vale.id)?.name, zoneOf(e, okonkwo.id)?.name], ["Docking Collar", "Docking Collar"]);
+  check("which is the only zone they've seen", e.zones.filter((z) => z.seen).map((z) => z.name), ["Docking Collar"]);
+  check("and they're told how many ways on", said(lines, /One way on from here/), true);
+  check("the authored slugs are gone", e.zones.every((z) => z.id.length > 20), true);
+
+  check("the mess is two zones off", zoneDistance(e, zone("Docking Collar").id, zone("Mess Deck").id), 2);
+  check("the hold is only reachable the hard way", zoneDistance(e, zone("Docking Collar").id, zone("Cargo Hold").id), 4);
+  check("and the bridge not at all while it's locked", zoneDistance(e, zone("Spinal Corridor").id, zone("Bridge").id), null);
+
+  check("walking into the next room works", said(moveTo(g, vale.id, zone("Spinal Corridor").id), /moves from the Docking Collar to the Spinal Corridor/), true);
+  check("and reveals it", zone("Spinal Corridor").seen, true);
+  check("but not what's past it", zone("Mess Deck").seen, false);
+  check("a locked door refuses", said(moveTo(g, vale.id, zone("Bridge").id), /locked.*Command lockout/), true);
+  check("a buckled bulkhead refuses", said(moveTo(g, vale.id, zone("Cargo Hold").id), /blocked/), true);
+  check("so the survivor stays put", zoneOf(e, vale.id)?.name, "Spinal Corridor");
+  check("and you can't step across the ship", said(moveTo(g, vale.id, zone("Maintenance Crawl").id), /no way from the Spinal Corridor/), true);
+
+  // Breaching the command lockout is the GM opening the border.
+  borderBetween(e, zone("Spinal Corridor").id, zone("Bridge").id)!.state = "open";
+  check("once it's breached the bridge opens up", zoneDistance(e, zone("Spinal Corridor").id, zone("Bridge").id), 1);
+  check("walking in is then allowed", said(moveTo(g, vale.id, zone("Bridge").id), /moves from the Spinal Corridor to the Bridge/), true);
+  check("the GM hears what's really there", secret(scout(g, zone("Cargo Hold").id)), ["Cargo Hold: Start the creature here, behind the container wall. It knows the crawlway and the crew do not."]);
+  check("and scouting counts as seeing it", zone("Cargo Hold").seen, true);
+  check("a survivor who stayed aboard can't be moved", said(moveTo(g, bystander(g).id, zone("Bridge").id), /isn't on this expedition/), true);
+}
+
+// What a player receives of a site.
+{
+  const g = world();
+  startExpedition(g, { site: "", crew: ids(g), siteId: "tanager" });
+  const e = g.expedition!;
+  const corridor = e.zones.find((z) => z.name === "Spinal Corridor")!;
+  moveTo(g, g.characters[0].id, corridor.id);
+  const seen = playerView(g).expedition!;
+  const named = seen.zones.filter((z) => z.seen).map((z) => z.name).sort();
+  check("players see the zones the crew has been in", named, ["Docking Collar", "Spinal Corridor"]);
+  check("and that there are five more ways on", seen.zones.filter((z) => !z.seen).length, 5);
+  check("but not a thing about them", [...new Set(seen.zones.filter((z) => !z.seen).map((z) => z.name))], ["Somewhere else"]);
+  check("no zone carries its secrets", seen.zones.every((z) => !("secrets" in z)), true);
+  // The hold does reach them, as a blocked bulkhead off the corridor. The crawlway behind the mess
+  // touches nothing they've seen, so they have no reason to think it exists.
+  check("but a room two doors away isn't mentioned at all", seen.zones.some((z) => z.id === e.zones.find((x) => x.name === "Maintenance Crawl")!.id), false);
+  check("doors the crew can see are described", seen.borders.length, e.borders.filter((b) => [b.a, b.b].some((id) => e.zones.find((z) => z.id === id)?.seen)).length);
+  check("and the crew's own positions are no secret", Object.keys(seen.at).length, 2);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

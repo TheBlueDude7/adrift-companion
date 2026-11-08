@@ -159,6 +159,12 @@ export function normalizeGame(g: GameState): GameState {
   // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
   for (const m of g.mechs) if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
   if (!Array.isArray(g.actions)) g.actions = [];
+  // An expedition that began before sites had zones is one unmapped room the crew is standing in.
+  if (g.expedition) {
+    if (!Array.isArray(g.expedition.zones)) g.expedition.zones = [];
+    if (!Array.isArray(g.expedition.borders)) g.expedition.borders = [];
+    if (!g.expedition.at) g.expedition.at = {};
+  }
   delete (g.ship as { powerDays?: number }).powerDays;
   if (!g.research || !Array.isArray(g.research.cybernetics)) g.research = { cybernetics: [] };
   // Hydroponics grew food and nothing else, so `ready` was a plain count of Raw Food.

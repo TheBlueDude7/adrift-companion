@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { SITES, SITE_BY_ID } from "@/data/sites";
 import { endExpedition, markExpeditionTurn, startExpedition, TURNS_PER_SEGMENT, type SiteOutcome } from "@/lib/expedition";
 import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
@@ -43,6 +44,7 @@ import { MechsTab } from "./mechs";
 import { OverviewTab } from "./overview";
 import { RulesTab } from "./rules";
 import { ShipTab } from "./ship";
+import { SiteTab } from "./site";
 import { StorageTab } from "./storage";
 
 function Header() {
@@ -61,6 +63,7 @@ function Header() {
   const [leaving, setLeaving] = useState<{ site: string; crew: string[] } | null>(null);
   const [starting, setStarting] = useState(false);
   const [site, setSite] = useState("");
+  const [siteId, setSiteId] = useState<string | null>(null);
   const [capacity, setCapacity] = useState("3");
   const [siteNotes, setSiteNotes] = useState("");
   const [crew, setCrew] = useState<string[]>([]);
@@ -169,7 +172,7 @@ function Header() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => { setShipName(game.ship.name); setRenaming(true); }}><PencilIcon /> Rename ship</DropdownMenuItem>
                   {!away && (
-                    <DropdownMenuItem onClick={() => { setSite(""); setCapacity("3"); setSiteNotes(""); setCrew(living.map((c) => c.id)); setStarting(true); }}><FootprintsIcon /> Start expedition</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setSite(""); setSiteId(null); setCapacity("3"); setSiteNotes(""); setCrew(living.map((c) => c.id)); setStarting(true); }}><FootprintsIcon /> Start expedition</DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={() => { setPanicked([]); setSafe(true); setOutcome("active"); setLeaving(away ? { site: away.site, crew: away.crew } : null); setEnding(true); }}><FlagIcon /> End expedition</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { act("Complete Act", (g) => completeAct(g), "day"); toast.success("Act complete — Willpower restored"); }}><SparklesIcon /> Complete Act</DropdownMenuItem>
@@ -194,14 +197,31 @@ function Header() {
             onSubmit={(e) => {
               e.preventDefault();
               const cap = Number(capacity);
-              act("Start expedition", (g) => startExpedition(g, { site, crew, capacity: Number.isFinite(cap) ? cap : 0, notes: siteNotes }), "day");
+              act("Start expedition", (g) => startExpedition(g, { site, crew, capacity: Number.isFinite(cap) ? cap : 0, notes: siteNotes, siteId: siteId ?? undefined }), "day");
               setStarting(false);
               toast.success(`Expedition to ${site.trim() || "an unnamed site"} begins`);
             }}
           >
             <div className="grid gap-1.5">
+              <Label htmlFor="site-file">Authored site</Label>
+              <Select
+                value={siteId ?? "none"}
+                onValueChange={(v) => {
+                  const def = typeof v === "string" && v !== "none" ? SITE_BY_ID[v] : undefined;
+                  setSiteId(def?.id ?? null);
+                  if (def) { setSite(def.name); setCapacity(String(def.capacity)); setSiteNotes(def.notes ?? ""); }
+                }}
+              >
+                <SelectTrigger id="site-file"><SelectValue>{(siteId && SITE_BY_ID[siteId]?.name) || "None — no zones to move between"}</SelectValue></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None — no zones to move between</SelectItem>
+                  {SITES.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.zones.length} zones)</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
               <Label htmlFor="site-name">Site</Label>
-              <Input id="site-name" value={site} maxLength={60} autoFocus placeholder="The Tanager, lower decks" onChange={(e) => setSite(e.target.value)} />
+              <Input id="site-name" value={site} maxLength={60} placeholder="The Tanager, lower decks" onChange={(e) => setSite(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="site-capacity">Salvage Capacity</Label>
@@ -316,6 +336,7 @@ function Header() {
 const TABS = [
   { value: "overview", label: "Overview" },
   { value: "actions", label: "Actions" },
+  { value: "site", label: "Site", expedition: true },
   { value: "combat", label: "Combat" },
   { value: "crew", label: "Crew" },
   { value: "ship", label: "Ship" },
@@ -330,6 +351,7 @@ const subscribeNoop = () => () => {};
 
 export function AdriftApp() {
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  const away = useGame((s) => !!s.game.expedition);
   const [tab, setTab] = useState("overview");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -347,13 +369,14 @@ export function AdriftApp() {
         <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
           <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             <TabsList className="h-9!">
-              {TABS.map((t) => (
+              {TABS.filter((t) => away || !t.expedition).map((t) => (
                 <TabsTrigger key={t.value} value={t.value} className="px-3">{t.label}</TabsTrigger>
               ))}
             </TabsList>
           </div>
           <TabsContent value="overview" className="pt-3"><OverviewTab onOpenCharacter={(id) => { setSelected(id); setTab("crew"); }} onGo={setTab} /></TabsContent>
           <TabsContent value="actions" className="pt-3"><ActionsTab /></TabsContent>
+          {away && <TabsContent value="site" className="pt-3"><SiteTab /></TabsContent>}
           <TabsContent value="combat" className="pt-3"><CombatTab /></TabsContent>
           <TabsContent value="crew" className="pt-3"><CrewTab selectedId={selected} onSelect={setSelected} /></TabsContent>
           <TabsContent value="ship" className="pt-3"><ShipTab /></TabsContent>

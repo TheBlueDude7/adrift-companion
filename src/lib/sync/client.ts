@@ -5,7 +5,7 @@ import { uid } from "../dice";
 import { normalizeGame } from "../maps";
 import { useGame, type Person } from "../store";
 import type { Resolution } from "../actions";
-import type { Cover } from "../combat";
+import type { Cover } from "../rules";
 import type { GameState } from "../types";
 import { applyOps, type Op } from "./ops";
 import { outbox } from "./outbox";

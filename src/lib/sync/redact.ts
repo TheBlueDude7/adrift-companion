@@ -23,7 +23,31 @@ export function playerView(game: GameState): GameState {
   return view;
 }
 
-/** The crew knows where they are, who came, and what time it is. The site's contents are the GM's. */
+/**
+ * The crew knows where they are, who came, and what time it is. The site's contents are the GM's.
+ *
+ * Zones are the interesting part. A zone the crew has walked into or scouted goes over whole, minus
+ * what a Search would find. A zone they haven't goes over as a door and nothing else: standing in a
+ * room tells you there's a way out of it, and that's all it tells you. Even the name is withheld,
+ * which is why zone ids are generated rather than the readable slugs the site was authored with.
+ */
 function publicExpedition(e: Expedition): Expedition {
-  return { site: e.site, started: e.started, turn: e.turn, crew: e.crew };
+  const seen = new Set(e.zones.filter((z) => z.seen).map((z) => z.id));
+  const edge = new Set(e.borders.filter((b) => seen.has(b.a) !== seen.has(b.b)).map((b) => (seen.has(b.a) ? b.b : b.a)));
+  const zones = e.zones
+    .filter((z) => seen.has(z.id) || edge.has(z.id))
+    .map((z) =>
+      z.seen
+        ? { id: z.id, name: z.name, look: z.look, cover: z.cover, seen: true, secured: z.secured, searched: z.searched }
+        : { id: z.id, name: "Somewhere else", look: "", cover: "none" as const, seen: false, secured: false, searched: false },
+    );
+  return {
+    site: e.site,
+    started: e.started,
+    turn: e.turn,
+    crew: e.crew,
+    zones,
+    borders: e.borders.filter((b) => seen.has(b.a) || seen.has(b.b)),
+    at: e.at,
+  };
 }

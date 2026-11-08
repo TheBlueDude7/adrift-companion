@@ -355,6 +355,25 @@ export const WEAPON_RANGES = { melee: 0, close: 0, short: 1, medium: 2, long: 4 
 export type WeaponRange = keyof typeof WEAPON_RANGES;
 
 /**
+ * Cover Armor, which only counts against Ballistic damage and doesn't wear down. Full Cover isn't
+ * here: it blocks line of sight rather than absorbing anything, which makes it a border's business.
+ */
+export const COVER_POINTS = { none: 0, partial: 1, strong: 2 } as const;
+export type Cover = keyof typeof COVER_POINTS;
+
+/** What stands between two zones. */
+export const BORDER_STATES = ["open", "closed", "destroyed", "hazardous", "locked", "sealed", "blocked"] as const;
+export type BorderState = (typeof BORDER_STATES)[number];
+
+/** Crossing these needs no more than a hand on the door. The rest want a Breach or a ruling. */
+const WALKABLE: readonly BorderState[] = ["open", "closed", "destroyed", "hazardous"];
+/** A closed door blocks sight. Smoke and steam limit it without closing it, so hazardous still sees. */
+const TRANSPARENT: readonly BorderState[] = ["open", "destroyed", "hazardous"];
+
+export const borderWalkable = (state: BorderState) => WALKABLE.includes(state);
+export const borderTransparent = (state: BorderState) => TRANSPARENT.includes(state);
+
+/**
  * What a weapon does when it hits. Without this the server can't referee an attack, so a weapon
  * whose template has no profile can only be swung at the table.
  */

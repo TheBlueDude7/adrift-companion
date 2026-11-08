@@ -1,0 +1,82 @@
+{
+  "id": "tanager",
+  "name": "The Tanager",
+  "capacity": 4,
+  "entrance": "collar",
+  "notes": "A survey cutter, dead four months. The crew sealed themselves into the reactor annex and did not come out. Whatever they were running from is still in the hold.",
+  "zones": [
+    {
+      "id": "collar",
+      "name": "Docking Collar",
+      "look": "A short umbilical, frost on every surface. The inner hatch stands open on a dark corridor.",
+      "cover": "none",
+      "note": "Safe. Nothing comes this far forward.",
+      "search": "A crew manifest: eleven names, four struck through in pen."
+    },
+    {
+      "id": "corridor",
+      "name": "Spinal Corridor",
+      "look": "The ship's length in one straight run, handrails on both sides, half the ceiling panels hanging.",
+      "cover": "partial",
+      "note": "Noise here carries to the hold. Advance the Threat Clock on anything loud.",
+      "search": "A dropped toolkit, one charge left."
+    },
+    {
+      "id": "mess",
+      "name": "Mess Deck",
+      "look": "Tables bolted down, trays still on them. Someone ate here in a hurry and did not clear up.",
+      "cover": "partial",
+      "search": "Three Food Units in a sealed locker, and a bottle of something strong."
+    },
+    {
+      "id": "medbay",
+      "name": "Medical Bay",
+      "look": "Two berths, one with the restraints cut through from the inside.",
+      "cover": "partial",
+      "note": "The cut restraints are the clue: whatever is in the hold was treated here first.",
+      "search": "A Medkit and two doses of something unlabelled."
+    },
+    {
+      "id": "annex",
+      "name": "Reactor Annex",
+      "look": "A pressure door with a handwritten sign taped to it, and behind that, warmth.",
+      "cover": "strong",
+      "note": "Four bodies, sat down, no injuries. They suffocated politely. The log on the console explains why.",
+      "search": "Two Power Cells and the reactor log."
+    },
+    {
+      "id": "bridge",
+      "name": "Bridge",
+      "look": "Consoles dark but for one amber telltale, and a chair turned to face the door.",
+      "cover": "strong",
+      "note": "The telltale is a distress beacon, still transmitting on a dead channel.",
+      "search": "Navigational charts for three systems, and a sidearm in the captain's locker."
+    },
+    {
+      "id": "hold",
+      "name": "Cargo Hold",
+      "look": "Two decks of open space, netting torn down, containers moved into a rough wall at the far end.",
+      "cover": "partial",
+      "note": "Start the creature here, behind the container wall. It knows the crawlway and the crew do not.",
+      "search": "Scrap Metal and Scrap Components in quantity, if there's time to cut it free."
+    },
+    {
+      "id": "crawl",
+      "name": "Maintenance Crawl",
+      "look": "A duct a person fits through on their elbows, running the length of the ship.",
+      "cover": "none",
+      "note": "The creature's road. Anyone in here alone when it uses the crawl has a very bad turn.",
+      "search": "Nothing worth the bruises."
+    }
+  ],
+  "borders": [
+    { "from": "collar", "to": "corridor", "note": "The inner hatch, wedged open with a fire axe." },
+    { "from": "corridor", "to": "mess" },
+    { "from": "corridor", "to": "medbay", "state": "closed", "note": "A privacy door, shut but not locked." },
+    { "from": "corridor", "to": "annex", "state": "sealed", "note": "Welded from the inside. The sign reads DO NOT OPEN." },
+    { "from": "corridor", "to": "bridge", "state": "locked", "note": "Command lockout, still powered." },
+    { "from": "corridor", "to": "hold", "state": "blocked", "note": "The bulkhead buckled inward and the frame has dropped." },
+    { "from": "mess", "to": "crawl", "state": "destroyed", "note": "A wall panel kicked out from the duct side." },
+    { "from": "crawl", "to": "hold", "state": "hazardous", "note": "The duct ends over a two-deck drop into the netting." }
+  ]
+}

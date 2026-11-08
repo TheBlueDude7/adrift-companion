@@ -1,6 +1,8 @@
 import type {
   Attribute,
+  BorderState,
   ConditionDuration,
+  Cover,
   DamageType,
   FacilityGrade,
   ItemCategory,
@@ -385,6 +387,36 @@ export type StarMap = {
 /** `createdBy` is the character who made the map; players may delete only their own. */
 export type GameMap = (GridMap | StarMap) & { createdBy?: string };
 
+/** What a zone is hiding. Absent from a player's copy, like everything else a Search is for. */
+export type ZoneSecrets = { note: string; search: string };
+
+/**
+ * A distinct area the crew can move and fight in. The rules measure no distance inside one, so a
+ * zone has no position and no size — only which other zones it touches, which the borders say.
+ */
+export type Zone = {
+  id: string;
+  name: string;
+  /** What anyone standing in it can see without looking harder. */
+  look: string;
+  /** Cover available to someone fighting here. */
+  cover: Cover;
+  /** The crew has been here, or scouted it from next door. Unseen zones never reach a player. */
+  seen: boolean;
+  /** Nothing hostile holds it, its hazards are dealt with, and the crew controls the ways in. */
+  secured: boolean;
+  /** A zone normally allows one standard Search. */
+  searched: boolean;
+  /** Absent in a player's copy. */
+  secrets?: ZoneSecrets;
+};
+
+/**
+ * What stands between two zones, and therefore that they adjoin at all: two zones are adjacent
+ * when a character could move directly between them.
+ */
+export type Border = { a: string; b: string; state: BorderState; note: string };
+
 /**
  * What the site holds that the crew hasn't found out yet. Absent from a player's copy of the state,
  * on the same grounds as a threat's numbers: Salvage Capacity is how much useful material is left,
@@ -406,6 +438,11 @@ export type Expedition = {
   turn: number;
   /** Characters who went. The rest are aboard and may still take shipboard tasks this segment. */
   crew: string[];
+  /** The site's zones. Ids are generated, so an unseen zone's identifier gives nothing away. */
+  zones: Zone[];
+  borders: Border[];
+  /** Which zone each survivor is standing in, by character id. */
+  at: Record<string, string>;
   /** Absent in a player's copy. Anything reading it must cope with that. */
   secrets?: ExpeditionSecrets;
 };

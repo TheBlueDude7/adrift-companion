@@ -1,4 +1,5 @@
-import { COVER_POINTS, deathCheck, resolveAttack, type Cover } from "@/lib/combat";
+import { deathCheck, resolveAttack } from "@/lib/combat";
+import { COVER_POINTS, type Cover } from "@/lib/rules";
 import { pushLog } from "@/lib/log";
 import { diff } from "@/lib/sync/ops";
 import { actorFor, applyToRoom, getRoom } from "@/lib/sync/rooms";

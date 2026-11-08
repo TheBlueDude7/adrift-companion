@@ -2,15 +2,11 @@ import { conditionPenalty } from "./conditions";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
 import { applyDamage, damageSteps } from "./mechanics";
-import { PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type DamageType, type WeaponProfile } from "./rules";
+import { COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
 import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
 /** Unarmed: Close Combat needs no weapon, so a fist is 1 Physical in your own zone. */
 export const UNARMED: WeaponProfile = { damage: 1, damageType: "Physical", range: "melee", skill: "closeCombat" };
-
-/** Cover Armor, which only counts against Ballistic damage and doesn't wear down. */
-export const COVER_POINTS = { none: 0, partial: 1, strong: 2 } as const;
-export type Cover = keyof typeof COVER_POINTS;
 
 const BURST_DICE = 2;
 const AIM_DICE = 1;

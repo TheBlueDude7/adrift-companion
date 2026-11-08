@@ -9,9 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { armed, attackBlocker, attackPool, COVER_POINTS, deathCheck, defenseOf, newThreat, resolveAttack, type AttackShot, type Cover } from "@/lib/combat";
+import { armed, attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, type AttackShot } from "@/lib/combat";
 import { maxHp } from "@/lib/derive";
-import { DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type DamageType } from "@/lib/rules";
+import { COVER_POINTS, DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type Cover, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import { attackOwnTarget } from "@/lib/sync/client";
 import type { Character, GameState, Line, Threat } from "@/lib/types";

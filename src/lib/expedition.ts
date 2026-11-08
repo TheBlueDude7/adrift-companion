@@ -1,7 +1,9 @@
+import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
+import { uid } from "./dice";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
-import { SEGMENTS } from "./rules";
-import type { Expedition, GameState, Line } from "./types";
+import { borderWalkable, SEGMENTS } from "./rules";
+import type { Border, Expedition, GameState, Line, Zone } from "./types";
 
 /** Eight Expedition Turns consume one day segment. */
 export const TURNS_PER_SEGMENT = 8;
@@ -25,7 +27,106 @@ export type ExpeditionStart = {
   capacity?: number;
   /** The GM's own notes on the site. Never sent to a player. */
   notes?: string;
+  /** An authored site from `content/sites`, which brings its zones with it. */
+  siteId?: string;
 };
+
+/**
+ * Copy an authored site into campaign state.
+ *
+ * The slugs its author used become generated ids here, which is what lets a player be told that a
+ * door leads somewhere without being told where. Nothing starts seen: the entrance is seen because
+ * the crew walks into it, and everything past that is earned by walking in or scouting ahead.
+ */
+export function instantiate(def: SiteDefinition): { zones: Zone[]; borders: Border[]; entrance: string } {
+  const ids = new Map(def.zones.map((z) => [z.id, uid()]));
+  const entrance = ids.get(entranceOf(def) ?? "") ?? "";
+  const zones: Zone[] = def.zones.map((z) => ({
+    id: ids.get(z.id)!,
+    name: z.name,
+    look: z.look ?? "",
+    cover: z.cover ?? "none",
+    seen: false,
+    secured: false,
+    searched: false,
+    secrets: { note: z.note ?? "", search: z.search ?? "" },
+  }));
+  const borders: Border[] = (def.borders ?? [])
+    .filter((b) => ids.has(b.from) && ids.has(b.to))
+    .map((b) => ({ a: ids.get(b.from)!, b: ids.get(b.to)!, state: b.state ?? "open", note: b.note ?? "" }));
+  return { zones, borders, entrance };
+}
+
+export const zoneOf = (e: Expedition, characterId: string) => e.zones.find((z) => z.id === e.at[characterId]);
+
+/** Zones a border joins to this one, whatever state that border is in. */
+export const neighbours = (e: Expedition, zoneId: string) =>
+  e.borders.filter((b) => b.a === zoneId || b.b === zoneId).map((b) => ({ border: b, zone: e.zones.find((z) => z.id === (b.a === zoneId ? b.b : b.a)) }));
+
+export const borderBetween = (e: Expedition, a: string, b: string) => e.borders.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a));
+
+/**
+ * Zones between two places, counting the way a weapon's range does: 0 for the same zone, 1 for
+ * next door. Null when no walkable route joins them at all.
+ */
+export function zoneDistance(e: Expedition, from: string, to: string): number | null {
+  if (from === to) return 0;
+  const seen = new Set([from]);
+  let edge = [from];
+  for (let step = 1; edge.length; step++) {
+    const next: string[] = [];
+    for (const id of edge)
+      for (const { border, zone } of neighbours(e, id)) {
+        if (!zone || seen.has(zone.id) || !borderWalkable(border.state)) continue;
+        if (zone.id === to) return step;
+        seen.add(zone.id);
+        next.push(zone.id);
+      }
+    edge = next;
+  }
+  return null;
+}
+
+/** Walk into the next zone. The border decides whether that's a step or a job of work. */
+export function moveTo(g: GameState, characterId: string, zoneId: string): (string | Line)[] {
+  const e = g.expedition;
+  const c = g.characters.find((x) => x.id === characterId);
+  if (!e || !c) return ["No expedition is under way."];
+  if (!e.crew.includes(characterId)) return [`${c.name} isn't on this expedition.`];
+  const to = e.zones.find((z) => z.id === zoneId);
+  if (!to) return ["That zone isn't part of this site."];
+  const here = zoneOf(e, characterId);
+  if (here?.id === zoneId) return [`${c.name} is already in the ${to.name}.`];
+  if (here) {
+    const border = borderBetween(e, here.id, zoneId);
+    if (!border) return [`There's no way from the ${here.name} to the ${to.name} without going round.`];
+    if (!borderWalkable(border.state)) return [`The way into the ${to.name} is ${border.state}${border.note ? `: ${border.note}` : ""}. Breach it or find another route.`];
+  }
+  e.at[characterId] = zoneId;
+  const first = !to.seen;
+  const out: (string | Line)[] = [here ? `${c.name} moves from the ${here.name} to the ${to.name}.` : `${c.name} enters the ${to.name}.`];
+  if (first) out.push(...see(e, to));
+  return out;
+}
+
+/** A successful Scout Ahead: learn the next zone without walking into it. */
+export function scout(g: GameState, zoneId: string): (string | Line)[] {
+  const e = g.expedition;
+  const to = e?.zones.find((z) => z.id === zoneId);
+  if (!e || !to) return ["That zone isn't part of this site."];
+  if (to.seen) return [`The crew already knows the ${to.name}.`];
+  return see(e, to);
+}
+
+/** Everything the crew learns by laying eyes on a zone: what it looks like, and how many ways on. */
+function see(e: Expedition, z: Zone): (string | Line)[] {
+  z.seen = true;
+  const ways = neighbours(e, z.id).filter((n) => n.zone && !n.zone.seen).length;
+  const out: (string | Line)[] = [`The ${z.name}: ${z.look || "nothing the crew can make much of."}`];
+  if (ways) out.push(`${ways === 1 ? "One way on from here." : `${ways} ways on from here.`}`);
+  if (z.secrets?.note) out.push({ text: `${z.name}: ${z.secrets.note}`, gm: true });
+  return out;
+}
 
 export type ExpeditionEnd = {
   /** Characters who reached Panicked during it. Each gains 1 Stress, once. */
@@ -45,20 +146,27 @@ export type ExpeditionEnd = {
  */
 export function startExpedition(g: GameState, start: ExpeditionStart): (string | Line)[] {
   if (g.expedition) return [`The crew is already on an expedition to ${g.expedition.site}. End that one first.`];
-  const site = start.site.trim() || "an unnamed site";
+  const def = start.siteId ? SITE_BY_ID[start.siteId] : undefined;
+  const site = start.site.trim() || def?.name || "an unnamed site";
   const crew = g.characters.filter((c) => start.crew.includes(c.id) && !c.dead);
   if (!crew.length) return ["Nobody is going, so there's no expedition."];
+  const { zones, borders, entrance } = def ? instantiate(def) : { zones: [], borders: [], entrance: "" };
 
   g.expedition = {
     site,
     started: { day: g.day, segment: g.segment },
     turn: 0,
     crew: crew.map((c) => c.id),
-    secrets: { capacity: Math.max(0, start.capacity ?? 0), notes: start.notes ?? "" },
+    zones,
+    borders,
+    at: Object.fromEntries(entrance ? crew.map((c) => [c.id, entrance]) : []),
+    secrets: { capacity: Math.max(0, start.capacity ?? def?.capacity ?? 0), notes: start.notes ?? def?.notes ?? "" },
   };
 
   const out: (string | Line)[] = [`— Expedition to ${site} begins (${SEGMENTS[g.segment]}, Day ${g.day}) —`];
   out.push(`Going in: ${crew.map((c) => c.name).join(", ")}.`);
+  const first = zones.find((z) => z.id === entrance);
+  if (first) out.push(...see(g.expedition, first));
   const aboard = g.characters.filter((c) => !c.dead && !start.crew.includes(c.id));
   out.push(aboard.length ? `Still aboard and free to work the ship: ${aboard.map((c) => c.name).join(", ")}.` : "Nobody is left aboard.");
   for (const c of crew) {
