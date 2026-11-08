@@ -9,7 +9,7 @@ type Spec = {
   label: string;
   keyEnv: string;
   modelEnv: string;
-  /** Chat-completions base. Only Anthropic needs its own request shape. */
+  /** API root. The path and request shape under it differ by provider. */
   base: string;
   /** Identifies this provider's conversational models in its catalogue. */
   hint: string;
@@ -17,7 +17,10 @@ type Spec = {
   fallback: string;
 };
 
-/** Google and xAI both serve an OpenAI-compatible endpoint, so only Anthropic needs a second adapter. */
+/**
+ * Three request shapes between four providers: Anthropic's messages endpoint, OpenAI's responses
+ * endpoint, and the OpenAI-compatible chat completions that Google and xAI both serve.
+ */
 export const PROVIDERS: Record<Provider, Spec> = {
   anthropic: { label: "Claude", keyEnv: "ANTHROPIC_API_KEY", modelEnv: "ANTHROPIC_MODEL", base: "https://api.anthropic.com/v1", hint: "sonnet", fallback: "claude-sonnet-4-5" },
   openai: { label: "ChatGPT", keyEnv: "OPENAI_API_KEY", modelEnv: "OPENAI_MODEL", base: "https://api.openai.com/v1", hint: "gpt", fallback: "gpt-4.1" },
@@ -146,10 +149,49 @@ async function anthropic<T>(key: string, model: string, system: SystemBlock[], t
 }
 
 /**
- * One request shape for ChatGPT, Grok, and Gemini. These providers cache automatically rather than
- * on request, so the saving comes from keeping the prompt's opening identical between turns.
+ * OpenAI's own endpoint, which is the only one of theirs that takes a function tool from a model
+ * that reasons. Chat completions refuses the combination outright, and its suggested remedy —
+ * reasoning off — is itself rejected by their newest models, so there is nothing to fall back to.
  */
-async function openAiCompatible<T>(provider: Provider, spec: Spec, key: string, model: string, system: SystemBlock[], tool: Tool, prompt: string): Promise<{ value: T; usage: Usage }> {
+async function openAiResponses<T>(spec: Spec, key: string, model: string, system: SystemBlock[], tool: Tool, prompt: string): Promise<{ value: T; usage: Usage }> {
+  const res = await fetch(`${spec.base}/responses`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      instructions: system.map((s) => s.text).join("\n\n"),
+      input: prompt,
+      // Flat here, unlike chat completions, and non-strict on purpose: these schemas allow omissions.
+      tools: [{ type: "function", name: tool.name, description: tool.description, parameters: tool.schema, strict: false }],
+      tool_choice: { type: "function", name: tool.name },
+      // Thinking is billed as output and spends this budget, so it has to cover the tool call as well.
+      max_output_tokens: 4000,
+      prompt_cache_key: "adrift-sim",
+      store: false,
+    }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  const body = (await res.json()) as {
+    status?: string;
+    incomplete_details?: { reason?: string };
+    output?: { type: string; name?: string; arguments?: string }[];
+    usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
+  };
+  const args = body.output?.find((o) => o.type === "function_call" && o.name === tool.name)?.arguments;
+  // Reasoning items share the output array, so a model that thought until the budget ran out leaves
+  // a reply with no call in it. Say so, rather than report it as a model that wouldn't answer.
+  if (!args) throw new Error(body.status === "incomplete" ? `the reply stopped early (${body.incomplete_details?.reason ?? "incomplete"})` : "no tool call in the reply");
+  const u = body.usage ?? {};
+  const cached = u.input_tokens_details?.cached_tokens ?? 0;
+  return { value: JSON.parse(args) as T, usage: { input: Math.max(0, (u.input_tokens ?? 0) - cached), cached, output: u.output_tokens ?? 0 } };
+}
+
+/**
+ * One request shape for Grok and Gemini, both of which serve an OpenAI-compatible endpoint. They
+ * cache automatically rather than on request, so the saving comes from keeping the prompt's opening
+ * identical between turns.
+ */
+async function openAiCompatible<T>(spec: Spec, key: string, model: string, system: SystemBlock[], tool: Tool, prompt: string): Promise<{ value: T; usage: Usage }> {
   const res = await fetch(`${spec.base}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -161,8 +203,6 @@ async function openAiCompatible<T>(provider: Provider, spec: Spec, key: string, 
       ],
       tools: [{ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.schema } }],
       tool_choice: { type: "function", function: { name: tool.name } },
-      // Only OpenAI documents this, and the compatibility layers reject parameters they don't know.
-      ...(provider === "openai" ? { prompt_cache_key: "adrift-sim" } : {}),
     }),
   });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
@@ -187,7 +227,13 @@ export async function structured<T>(provider: Provider, system: SystemBlock[], t
   if (!key) throw new Error(`${spec.keyEnv} is not set, so ${spec.label} can't play.`);
   const model = await pickModel(provider);
   try {
-    const { value, usage } = provider === "anthropic" ? await anthropic<T>(key, model, system, tool, prompt) : await openAiCompatible<T>(provider, spec, key, model, system, tool, prompt);
+    const call =
+      provider === "anthropic"
+        ? anthropic<T>(key, model, system, tool, prompt)
+        : provider === "openai"
+          ? openAiResponses<T>(spec, key, model, system, tool, prompt)
+          : openAiCompatible<T>(spec, key, model, system, tool, prompt);
+    const { value, usage } = await call;
     return { value, model, usage: usage.input || usage.output ? usage : ZERO };
   } catch (e) {
     throw new Error(`${spec.label} (${model}) failed: ${e instanceof Error ? e.message : "unknown error"}`);
