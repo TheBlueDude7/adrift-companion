@@ -5,7 +5,7 @@ import { ATTRIBUTES, PRESSURE_STATES, SKILLS } from "../rules";
 import type { Character, GameState } from "../types";
 import { playerBrief } from "./brief";
 import { creationMenu, crewContext, type SimBuildPick } from "./create";
-import { structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
+import { asLines, asText, structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
 import { menuText, type SimMenu } from "./options";
 import { styleText } from "./styles";
 import { charts, hold, upgrades } from "./world";
@@ -255,7 +255,7 @@ export async function confer(
       `It is Day ${g.day}. The options you'll be choosing from once the talking is done:\n\n${menuText(menu)}`,
     ].join("\n\n"),
   );
-  return { ...value, model, usage };
+  return { say: asText(value.say, "(says nothing)"), intent: asText(value.intent, "(gave no preference)"), model, usage };
 }
 
 export async function decide(g: GameState, c: Character, menu: SimMenu, situation: string, agent: Agent, answers = "", briefing = ""): Promise<SimChoice & { model: string; usage: Usage }> {
@@ -273,7 +273,17 @@ export async function decide(g: GameState, c: Character, menu: SimMenu, situatio
       .join("\n\n"),
   );
   const n = Math.round(value.choice);
-  return { ...value, model, usage, choice: menu.options.some((o) => o.n === n) ? n : (menu.options[0]?.n ?? 0) };
+  return {
+    ...value,
+    model,
+    usage,
+    choice: menu.options.some((o) => o.n === n) ? n : (menu.options[0]?.n ?? 0),
+    speech: asText(value.speech, "(says nothing)"),
+    approach: asText(value.approach, "(gave no approach)"),
+    reason: asText(value.reason, "(gave no reason)"),
+    questions: asLines(value.questions),
+    unclear: asText(value.unclear) || undefined,
+  };
 }
 
 /**
@@ -307,7 +317,15 @@ export async function decideCreate(agent: Agent, crew: Character[], directive: s
       .filter(Boolean)
       .join("\n\n"),
   );
-  return { ...value, model, usage };
+  return {
+    ...value,
+    model,
+    usage,
+    name: asText(value.name, "Unnamed survivor"),
+    pitch: asText(value.pitch, "(came aboard without a word)"),
+    reason: asText(value.reason, "(gave no reason)"),
+    unclear: asText(value.unclear) || undefined,
+  };
 }
 
 /**
@@ -323,5 +341,5 @@ export async function decidePush(c: Character, agent: Agent, task: string, dice:
     PUSH_TOOL,
     `YOU ARE\n\n${sheet(c)}\n\n${c.name} rolled ${dice.join(", ")} on ${task} — ${dice.filter((d) => d === 6).length} successes. Pushing rerolls every die that isn't a 6 and costs ${cost}. Do they push?`,
   );
-  return { ...value, usage };
+  return { push: value.push === true, speech: asText(value.speech, "(says nothing)"), usage };
 }

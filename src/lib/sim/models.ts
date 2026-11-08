@@ -37,6 +37,15 @@ export type Tool = { name: string; description: string; schema: Record<string, u
 /** What the call cost, so caching can be measured instead of assumed. `cached` is input served from a cache. */
 export type Usage = { input: number; cached: number; output: number };
 
+/**
+ * A schema can mark a field required and a model can still leave it out. Nothing a model writes is
+ * trusted to exist, so every free-text field is read through here rather than used straight.
+ */
+export const asText = (v: unknown, fallback = ""): string => (typeof v === "string" && v.trim() ? v : fallback);
+
+/** The same, for a list of strings: anything that isn't one is dropped rather than carried along. */
+export const asLines = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()) : []);
+
 /** Node says only "fetch failed" when a connection never lands; the reason sits in the cause. */
 export function reason(e: unknown): string {
   if (!(e instanceof Error)) return "something went wrong";
