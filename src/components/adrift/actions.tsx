@@ -624,6 +624,26 @@ const RESULT_TONE = { failed: "danger", success: "good", strong: "info" } as con
 /** A player's server-side roll for their task: the pool, then the dice, a Push, and the result they earn. */
 const pushCost = (c: Character) => (c.energy > 0 ? "−1 Energy, +1 Pressure" : "Exhausted: an Affliction, +1 Pressure");
 
+/**
+ * Condition penalties whose scope the rules leave open — "sight-dependent", "involving physical
+ * force". The pool can't apply them without a ruling, so they are put where nobody can forget them.
+ * Unlike an attack, a task has no channel to send the answer back on yet, so these are told rather
+ * than asked, and the GM takes them off the result.
+ */
+function ConditionAsks({ pool }: { pool: ReturnType<typeof taskPool> }) {
+  if (pool.blocked) return <p className="text-xs text-rose-300">{pool.blocked} This task can&apos;t be attempted.</p>;
+  if (pool.asks.length === 0) return null;
+  return (
+    <div className="grid gap-0.5">
+      {pool.asks.map((x) => (
+        <p key={x.key} className="text-[11px] text-amber-300">
+          <span className="font-medium">{x.condition}:</span> {x.dice < 0 ? `−${-x.dice}d6` : `+${x.dice}d6`} if the GM rules yes — {x.question.toLowerCase()} Not in the pool above.
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onStep: (s: TaskStep) => Promise<unknown> }) {
   const game = useGame((s) => s.game);
   const terms = taskTerms(game, a);
@@ -639,6 +659,7 @@ function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onSte
     return (
       <div className="grid gap-2 rounded-lg bg-muted/40 p-3">
         <p className="font-mono text-xs text-muted-foreground">{pool.parts.join(" + ")}</p>
+        <ConditionAsks pool={pool} />
         {waiting.length > 0 && (
           <p className="text-[11px] text-amber-300">
             {waiting.join(" and ")} {waiting.length > 1 ? "have" : "has"} not resolved their Assist yet. Their dice only join the pool once it succeeds.
@@ -717,6 +738,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
             </p>
           )}
           {def.effect === "course" && c && masterPilotReady(game, c, a) && <p className="text-[11px] text-emerald-300">Master Pilot: this move burns no Power Cell (once per day).</p>}
+          {isGM && <ConditionAsks pool={taskPool(game, a)} />}
           {isGM
             ? (terms.skill || terms.labor) && c && <DiceRoller character={c} initialSkill={terms.skill ?? "flat:STR"} initialAttr={terms.attr ?? undefined} trigger={<Button size="sm" variant="outline"><DicesIcon /> Open the dice roller</Button>} />
             : c && <TaskRollPanel a={a} c={c} onStep={playerStep} />}

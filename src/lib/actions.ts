@@ -5,6 +5,7 @@ import { harvestCrops, tendCrops } from "./crops";
 import { attributeValue, maxHp, maxWillpower, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
 import { cellKey, tileDistance, tileLabel } from "./maps";
+import { conditionPenalty, type ConditionAsk } from "./conditions";
 import { injuryPenalty } from "./injuries";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
@@ -853,8 +854,14 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   return out;
 }
 
-/** Dice for rolling a task: Attribute + Skill, Pressure dice, each assistant's skill (up to +4d6), and the unscanned-tile penalty. */
-export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts: string[] } {
+/**
+ * Dice for rolling a task: Attribute + Skill, Pressure dice, injuries, conditions, each assistant's
+ * skill (up to +4d6), and the unscanned-tile penalty.
+ *
+ * `asks` are the condition penalties whose scope the rules leave to a ruling. They are reported
+ * rather than applied, so nothing is quietly decided on the GM's behalf.
+ */
+export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts: string[]; asks: ConditionAsk[]; blocked: string | null } {
   const c = g.characters.find((x) => x.id === a.characterId);
   const terms = taskTerms(g, a);
   let dice = terms.dice;
@@ -869,6 +876,13 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice -= hurt.dice;
     parts.push(...hurt.sources);
   }
+  // Unlike the injury penalty, this runs even when the task rolls no attribute: being unconscious
+  // stops a survivor doing anything, whether or not the task has a stat attached to it.
+  const cond = c ? conditionPenalty(c, { skill: terms.skill, attr: terms.attr }) : null;
+  if (cond?.dice) {
+    dice += cond.dice;
+    parts.push(...cond.sources);
+  }
   if (c?.encouraged) {
     dice += 1;
     parts.push("Encouraged +1");
@@ -882,7 +896,7 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice -= 3;
     parts.push("unscanned −3");
   }
-  return { dice: Math.max(0, dice), parts };
+  return { dice: Math.max(0, dice), parts, asks: cond?.asks ?? [], blocked: cond?.blocked ?? null };
 }
 
 /**

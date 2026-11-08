@@ -1,9 +1,10 @@
-import { attackBlocker, deathCheck, defenseOf, newThreat, resolveAttack, UNARMED } from "../src/lib/combat";
+import { newAction, taskPool } from "../src/lib/actions";
+import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, UNARMED } from "../src/lib/combat";
 import { pushLog } from "../src/lib/log";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES, threatBand } from "../src/lib/rules";
 import { playerView } from "../src/lib/sync/redact";
-import type { GameState } from "../src/lib/types";
+import type { Character, GameState } from "../src/lib/types";
 
 const tpl = (name: string) => DEFAULT_ITEM_TEMPLATES.find((t) => t.name === name)!;
 
@@ -297,6 +298,108 @@ const shot = { zones: 1, cover: "none" as const, aim: false, burst: false };
   g.characters[0].stabilized = true;
   deathCheck(g.characters[0], false);
   check("stabilized means no check at all", g.characters[0].dead, false);
+}
+
+// Conditions, which used to change nothing at all.
+const condition = (c: Character, name: string) => void c.conditions.push({ id: name, name, duration: "Scene", notes: "" });
+
+// Every weapon skill is Strength-based, so Poisoned reaches all of them.
+{
+  const { g } = world();
+  const c = g.characters[0];
+  const rifle = tpl("Ballistic Rifle").weapon!;
+  const base = attackPool(c, rifle, shot).dice;
+  const a = newAction(g, c, "Scan Nearby Tile");
+  g.actions.push(a);
+  const scanBase = taskPool(g, a).dice;
+  condition(c, "Poisoned");
+  check("Poisoned costs 2 on a Strength weapon", attackPool(c, rifle, shot).dice, base - 2);
+  check("and nothing on a Wits task", taskPool(g, a).dice, scanBase);
+}
+{
+  const { g } = world();
+  const c = g.characters[0];
+  const rifle = tpl("Ballistic Rifle").weapon!;
+  const base = attackPool(c, rifle, shot).dice;
+  condition(c, "Dissociation");
+  check("a Mind Break costs 6 everywhere", attackPool(c, rifle, shot).dice, Math.max(0, base - 6));
+}
+{
+  const { g } = world();
+  const c = g.characters[0];
+  const club = tpl("Makeshift Club").weapon!;
+  const melee = { ...shot, zones: 0 };
+  const base = attackPool(c, club, melee).dice;
+  condition(c, "Enraged");
+  check("Enraged pays for a Physical attack", attackPool(c, club, melee).dice, base + 2);
+  const stun = tpl("Stun Baton").weapon!;
+  check("and not an Electric one", attackPool(c, stun, melee).dice, attackPool(world().g.characters[0], stun, melee).dice);
+}
+{
+  const { g } = world();
+  const c = g.characters[0];
+  const rifle = tpl("Ballistic Rifle").weapon!;
+  condition(c, "Blinded");
+  const asked = attackPool(c, rifle, shot);
+  check("Blinded is asked, not assumed", asked.asks.map((a) => [a.condition, a.dice, a.key]), [["Blinded", -5, "Blinded:0"]]);
+  check("so the pool is unchanged until answered", asked.dice, attackPool(world().g.characters[0], rifle, shot).dice);
+  const answered = attackPool(c, rifle, { ...shot, answers: { "Blinded:0": true } });
+  check("and costs 5 once it is", [answered.dice, answered.asks.length], [Math.max(0, asked.dice - 5), 0]);
+}
+{
+  const { g } = world();
+  condition(g.characters[0], "Freeze Response");
+  const blocked = attackBlocker(tpl("Ballistic Rifle").weapon!, shot, g.characters[0]);
+  check("a frozen survivor can't attack", blocked, "Vale Freeze Response: is frozen and can't act.");
+}
+{
+  const { g } = world();
+  condition(g.characters[0], "Surprised");
+  check("Surprised has no Fast Action to Aim with", attackBlocker(tpl("Ballistic Rifle").weapon!, { ...shot, aim: true }, g.characters[0]), "Vale has no Fast Action to Aim with.");
+}
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Ballistic Rifle");
+  condition(g.characters[0], "Weakened");
+  g.threats.push(newThreat("Drone", 10, 0));
+  resolveAttack(g, shooterId, g.threats[0].id, id, shot);
+  check("Weakened takes a point off the damage", g.threats[0].stats!.hp, 8);
+}
+{
+  allSixes();
+  const { g, shooterId } = world();
+  const id = give(g, shooterId, "Ballistic Rifle");
+  const t = newThreat("Drone", 10, 0);
+  t.conditions.push({ id: "e", name: "Exposed", duration: "Scene", notes: "" });
+  g.threats.push(t);
+  resolveAttack(g, shooterId, t.id, id, { ...shot, cover: "strong" });
+  check("Exposed means Strong Cover stops nothing", g.threats[0].stats!.hp, 7);
+}
+
+// Tasks see conditions too, which they never used to.
+{
+  const { g } = world();
+  const c = g.characters[0];
+  c.skills.navigation = 6;
+  const a = newAction(g, c, "Scan Nearby Tile");
+  g.actions.push(a);
+  const base = taskPool(g, a).dice;
+  check("the task has dice to lose", base > 6, true);
+  condition(c, "Disoriented");
+  check("Disoriented costs Navigation 4 and 1 more", taskPool(g, a).dice, base - 5);
+  condition(c, "Blinded");
+  check("and sight is still asked about", taskPool(g, a).asks.map((x) => x.condition), ["Blinded"]);
+  condition(c, "Total Shutdown");
+  check("and an unconscious survivor is refused outright", taskPool(g, a).blocked, "Total Shutdown: is unconscious.");
+}
+// A task with no attribute at all still can't be done by someone unconscious.
+{
+  const { g } = world();
+  condition(g.characters[0], "Freeze Response");
+  const a = newAction(g, g.characters[0], "Embark Expedition");
+  g.actions.push(a);
+  check("even a task that rolls nothing", taskPool(g, a).blocked, "Freeze Response: is frozen and can't act.");
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

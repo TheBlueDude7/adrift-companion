@@ -251,7 +251,7 @@ export async function attackOwnTarget(body: AttackRequest) {
 }
 
 export type AttackRequest =
-  | { step?: undefined; attackerId: string; targetId: string; itemId: string | null; zones: number; cover: Cover; aim: boolean; burst: boolean }
+  | { step?: undefined; attackerId: string; targetId: string; itemId: string | null; zones: number; cover: Cover; aim: boolean; burst: boolean; answers: Record<string, boolean> }
   | { step: "death-check"; attackerId: string; willpower: boolean };
 
 /** Pick a character to play, or (as GM) assign one to another player. `null` releases it. */

@@ -24,7 +24,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
   } catch {
     return Response.json({ error: "Invalid JSON." }, { status: 400 });
   }
-  const { client, opId, attackerId, targetId, itemId, zones, cover, aim, burst, step, willpower } = body;
+  const { client, opId, attackerId, targetId, itemId, zones, cover, aim, burst, step, willpower, answers } = body;
   if (typeof client !== "string" || typeof opId !== "string" || typeof attackerId !== "string") {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
@@ -49,11 +49,19 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
       return Response.json({ error: `How far away? 0 to ${MAX_ZONES} zones.` }, { status: 400 });
     }
     if (cover !== undefined && !(typeof cover === "string" && COVERS.has(cover))) return Response.json({ error: "Invalid cover." }, { status: 400 });
+    // Which of the rules' "if this depends on sight" penalties the roller accepted. Only ever costs
+    // them dice, so a lie here is a lie against themselves and needs no further guarding.
+    const said: Record<string, boolean> = {};
+    if (answers !== undefined) {
+      if (typeof answers !== "object" || answers === null || Array.isArray(answers)) return Response.json({ error: "Invalid answers." }, { status: 400 });
+      for (const [k, v] of Object.entries(answers).slice(0, 40)) if (typeof k === "string" && k.length <= 60 && v === true) said[k] = true;
+    }
     const result = resolveAttack(draft, attackerId, targetId, (itemId as string | null) ?? null, {
       zones,
       cover: ((cover as Cover | undefined) ?? "none"),
       aim: aim === true,
       burst: burst === true,
+      answers: said,
     });
     if ("error" in result) return Response.json({ error: result.error }, { status: 409 });
     lines = result.lines;

@@ -316,13 +316,14 @@ function AttackDialog({ attacker }: { attacker: Character }) {
   const [cover, setCover] = useState<Cover>("none");
   const [aim, setAim] = useState(false);
   const [burst, setBurst] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, boolean>>({});
 
   const options = armed(game, attacker.id);
   const choice = options.find((o) => (o.item?.id ?? "unarmed") === itemId) ?? options[0];
   const list = targets(game).filter((t) => t.id !== attacker.id);
   const target = list.find((t) => t.id === targetId);
-  const shot: AttackShot = { zones, cover, aim, burst };
-  const blocked = attackBlocker(choice.weapon, shot);
+  const shot: AttackShot = { zones, cover, aim, burst, answers };
+  const blocked = attackBlocker(choice.weapon, shot, attacker);
   const pool = attackPool(attacker, choice.weapon, shot);
   const w = choice.weapon;
 
@@ -333,12 +334,12 @@ function AttackDialog({ attacker }: { attacker: Character }) {
         const r = resolveAttack(g, attacker.id, target.id, choice.item?.id ?? null, shot);
         return "error" in r ? r.error : r.lines;
       }, "roll");
-    } else void attackOwnTarget({ attackerId: attacker.id, targetId: target.id, itemId: choice.item?.id ?? null, zones, cover, aim, burst });
+    } else void attackOwnTarget({ attackerId: attacker.id, targetId: target.id, itemId: choice.item?.id ?? null, zones, cover, aim, burst, answers });
     setOpen(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setItemId(options[options.length - 1]?.item?.id ?? "unarmed"); setTargetId(list[0]?.id ?? ""); setZones(0); setCover("none"); setAim(false); setBurst(false); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setItemId(options[options.length - 1]?.item?.id ?? "unarmed"); setTargetId(list[0]?.id ?? ""); setZones(0); setCover("none"); setAim(false); setBurst(false); setAnswers({}); } }}>
       <DialogTrigger render={<Button size="xs" variant="outline"><CrosshairIcon /> Attack</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -402,6 +403,20 @@ function AttackDialog({ attacker }: { attacker: Character }) {
             </label>
           </div>
           {!w.auto && <p className="text-[11px] text-muted-foreground">Burst Fire needs an automatic weapon, and nothing craftable is one — it will come from salvage.</p>}
+          {pool.asks.length > 0 && (
+            <div className="grid gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+              <Label>Conditions the rules leave to a ruling</Label>
+              {pool.asks.map((a) => (
+                <label key={a.key} className="flex items-start gap-2 text-sm">
+                  <Checkbox checked={answers[a.key] === true} aria-label={`${a.condition}: ${a.question}`} onCheckedChange={(v) => setAnswers((x) => ({ ...x, [a.key]: !!v }))} />
+                  <span className="grid">
+                    <span>{a.question}</span>
+                    <span className="text-[11px] text-muted-foreground">{a.condition} {a.dice < 0 ? `−${-a.dice}d6` : `+${a.dice}d6`} if so{a.once ? ", and then it's spent" : ""}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
           <div className="grid gap-1 rounded-md bg-muted/40 p-2 text-sm">
             {blocked ? <span className="text-amber-300">{blocked}</span> : <span><span className="font-mono">{pool.dice}d6</span> <span className="text-xs text-muted-foreground">— {pool.parts.join(", ")}</span></span>}
             {!blocked && pool.dice === 0 && <span className="text-xs text-amber-300">No dice left, so this can only miss — and it still spends the ammunition.</span>}

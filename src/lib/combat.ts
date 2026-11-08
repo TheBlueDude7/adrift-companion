@@ -1,3 +1,4 @@
+import { conditionPenalty } from "./conditions";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, rollBreakdown } from "./derive";
 import { applyDamage, damageSteps } from "./mechanics";
@@ -49,14 +50,23 @@ export type AttackShot = {
   aim: boolean;
   /** Burst Fire: +2d6, and the extra ammunition is the GM's to track. */
   burst: boolean;
+  /** Answers to the condition penalties the rules leave to a ruling, keyed as `conditionPenalty` asks. */
+  answers?: Record<string, boolean>;
 };
 
+/** How this character's conditions bear on this particular attack. */
+export const attackConditions = (c: Character, weapon: WeaponProfile, shot: AttackShot) =>
+  conditionPenalty(c, { skill: weapon.skill, attr: SKILL_BY_KEY[weapon.skill].attr, attack: true, damageType: weapon.damageType }, shot.answers);
+
 /** Why an attack can't be made at all, or null when it can. */
-export function attackBlocker(weapon: WeaponProfile, shot: AttackShot): string | null {
+export function attackBlocker(weapon: WeaponProfile, shot: AttackShot, c?: Character): string | null {
   const reach = WEAPON_RANGES[weapon.range];
+  const cond = c ? attackConditions(c, weapon, shot) : null;
+  if (cond?.blocked) return `${c!.name} ${cond.blocked}`;
   if (shot.zones < 0) return "That target isn't anywhere.";
   if (shot.burst && !weapon.auto) return "That weapon isn't automatic, so it can't Burst Fire.";
   if (shot.aim && weapon.range === "melee") return "Aim helps a ranged attack, not a melee one.";
+  if (shot.aim && cond?.noAim) return `${c!.name} has no Fast Action to Aim with.`;
   if (shot.zones > reach + 1) return `That's ${shot.zones} zones away and the weapon reaches ${reach === 0 ? "only its own zone" : `${reach}`}.`;
   return null;
 }
@@ -86,10 +96,12 @@ export function attackPool(c: Character, weapon: WeaponProfile, shot: AttackShot
     extra += 1;
     extras.push("Encouraged +1");
   }
+  const cond = attackConditions(c, weapon, shot);
+  extra += cond.dice;
   const b = rollBreakdown(c, skill, attr, extra);
   const parts = [`${SKILL_BY_KEY[skill].name} ${b.level} + ${attr} ${b.attrVal}`];
   if (b.pressure) parts.push(`${PRESSURE_STATES[c.pressure].name} ${b.pressure}`);
-  return { dice: b.dice, parts: [...parts, ...b.hurt.sources, ...extras] };
+  return { dice: b.dice, parts: [...parts, ...b.hurt.sources, ...cond.sources, ...extras], asks: cond.asks };
 }
 
 /** A nonlethal weapon can't take the last point, so it stops at 1 HP. */
@@ -109,12 +121,12 @@ function visibleEffect(t: Threat, raw: number, lost: number, dropped: boolean): 
 }
 
 /** A threat takes damage in the same order as a survivor, and its plating is ablative the same way. */
-function hurtThreat(t: Threat, weapon: WeaponProfile, coverPoints: number, out: Line[]) {
+function hurtThreat(t: Threat, weapon: WeaponProfile, damage: number, coverPoints: number, out: Line[]) {
   const s = t.stats;
   // Only ever called on the server or the GM's own device, both of which hold the numbers.
   if (!s) return;
   const type = weapon.damageType;
-  const raw = capped(s.hp, weapon.damage, weapon);
+  const raw = capped(s.hp, damage, weapon);
   const gm: string[] = [];
   let lost = 0;
   if (s.immune.includes(type)) {
@@ -147,10 +159,10 @@ function hurtThreat(t: Threat, weapon: WeaponProfile, coverPoints: number, out: 
  * The Injury roll is worked out first, because `applyDamage` needs the 2d6 up front and only an
  * Injury-worthy hit should carry one.
  */
-function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, coverPoints: number, out: Line[]) {
-  const amount = capped(c.hp, weapon.damage, weapon);
+function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, damage: number, coverPoints: number, out: Line[]) {
+  const amount = capped(c.hp, damage, weapon);
   const said: string[] = [];
-  if (amount < weapon.damage) said.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
+  if (amount < damage) said.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
   const vulnerable = c.conditions.some((x) => x.name === `Vulnerable: ${weapon.damageType}`);
   const opts = {
     amount,
@@ -184,7 +196,7 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   if (item && item.broken) return { error: `The ${item.name} is broken.` };
   if (item && item.charges === 0) return { error: `The ${item.name} has no uses left.` };
   const weapon = weaponOf(item);
-  const blocked = attackBlocker(weapon, shot);
+  const blocked = attackBlocker(weapon, shot, c);
   if (blocked) return { error: blocked };
 
   const victim = g.characters.find((x) => x.id === targetId);
@@ -211,9 +223,15 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   }
   if (hits === 0) return { dice, hits, lines };
 
-  const coverPoints = COVER_POINTS[shot.cover];
-  if (threat) hurtThreat(threat, weapon, coverPoints, lines);
-  else hurtCharacter(g, victim!, weapon, coverPoints, lines);
+  // Weakened takes a point off everything the attacker lands; Exposed stops the target's Cover counting.
+  const hurt = attackConditions(c, weapon, shot).damage;
+  const damage = Math.max(0, weapon.damage + hurt);
+  if (hurt) lines.push({ text: `${c.name} is weakened, so it lands for ${damage} rather than ${weapon.damage}.` });
+  const exposed = conditionPenalty(target, { skill: null, attr: "STR" }).noCover;
+  const coverPoints = exposed ? 0 : COVER_POINTS[shot.cover];
+  if (exposed && shot.cover !== "none") lines.push({ text: `${target.name} is Exposed, so cover doesn't help it.` });
+  if (threat) hurtThreat(threat, weapon, damage, coverPoints, lines);
+  else hurtCharacter(g, victim!, weapon, damage, coverPoints, lines);
 
   for (const cond of weapon.applies ?? []) {
     lines.push({ text: weapon.zone ? `Everything in that zone is ${cond.name} (${cond.duration}).` : `${target.name} is ${cond.name} (${cond.duration}) — apply it.` });
