@@ -1,4 +1,4 @@
-import type { GameState, Threat } from "../types";
+import type { Expedition, GameState, Threat } from "../types";
 
 /**
  * What a player is allowed to receive.
@@ -17,5 +17,13 @@ import type { GameState, Threat } from "../types";
  */
 export function playerView(game: GameState): GameState {
   const threats: Threat[] = game.threats.map((t) => ({ id: t.id, name: t.name, band: t.band, conditions: t.conditions, known: t.known }));
-  return { ...game, threats, log: game.log.filter((e) => !e.gm) };
+  const view: GameState = { ...game, threats, log: game.log.filter((e) => !e.gm) };
+  // Left absent rather than set to undefined, so no expedition stays no key and the diff stays quiet.
+  if (view.expedition) view.expedition = publicExpedition(view.expedition);
+  return view;
+}
+
+/** The crew knows where they are, who came, and what time it is. The site's contents are the GM's. */
+function publicExpedition(e: Expedition): Expedition {
+  return { site: e.site, started: e.started, turn: e.turn, crew: e.crew };
 }

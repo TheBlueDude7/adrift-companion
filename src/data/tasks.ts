@@ -110,7 +110,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   t("Morale Night", "Crew", 2, ["entertainer"], 6, "Music, stories, a stolen bottle: every other survivor aboard reduces Pressure by 1.", "routine", "morale", { facility: { modules: ["Crew Quarters", "Crewmate Quarters", "Crewmate Quarters Expanded"], label: "Crew Quarters" } }),
   t("Treat Long-Term Stress", "Crew", 2, ["entertainer"], 3, "Advance a Stress Recovery Project.", "routine", "project"),
   t("Assist", "Crew", 1, [], 0, "Help another character with a task you have a level in. Roll against their task's skill; on a success only one assistant's dice count, the best Skill Level among them, up to +4d6. On a Project, you add 1 Progress if you meet its threshold and take one of its contributor slots.", "routine", "assist"),
-  t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The expedition plays out at the table.", "routine", null, { noStrong: true }),
+  t("Embark Expedition", "Expedition", 0, [], 0, "Away from the ship on an expedition for this segment. The GM starts it from the campaign menu, which tracks the site and its Expedition Turns; the rest plays out at the table.", "routine", null, { noStrong: true }),
   t("Other", "Other", 1, [], 0, "Anything else. Describe it and the GM sets the terms.", "skilled", null, { gmResolves: true }),
 ];
 

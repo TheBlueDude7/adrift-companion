@@ -385,6 +385,31 @@ export type StarMap = {
 /** `createdBy` is the character who made the map; players may delete only their own. */
 export type GameMap = (GridMap | StarMap) & { createdBy?: string };
 
+/**
+ * What the site holds that the crew hasn't found out yet. Absent from a player's copy of the state,
+ * on the same grounds as a threat's numbers: Salvage Capacity is how much useful material is left,
+ * and a crew that could read it would know whether to keep searching without searching.
+ */
+export type ExpeditionSecrets = { capacity: number; notes: string };
+
+/**
+ * One expedition in progress, from entering a site to coming back aboard.
+ *
+ * Zones, clocks and the per-turn task loop join this later. What it records now is who left, when
+ * they left, and how much time has gone by — which is what the return procedure needs to settle up.
+ */
+export type Expedition = {
+  site: string;
+  /** The day and segment the crew entered, so the return can report how long they were gone. */
+  started: { day: number; segment: number };
+  /** Expedition Turns used within the current day segment. Eight of them consume it. */
+  turn: number;
+  /** Characters who went. The rest are aboard and may still take shipboard tasks this segment. */
+  crew: string[];
+  /** Absent in a player's copy. Anything reading it must cope with that. */
+  secrets?: ExpeditionSecrets;
+};
+
 export type GameState = {
   version: 1;
   maps: GameMap[];
@@ -400,6 +425,8 @@ export type GameState = {
   mechs: Mech[];
   /** What the crew is fighting. Only the GM puts anything here. */
   threats: Threat[];
+  /** Where the crew is, when they're not aboard. The GM's to start and to end. */
+  expedition?: Expedition;
   /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
   mechRequests?: { id: string; by: string; mech: Mech }[];
   /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */

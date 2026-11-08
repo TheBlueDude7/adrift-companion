@@ -515,20 +515,6 @@ export function endScene(g: GameState): string[] {
   return out;
 }
 
-/** End an expedition: once-per-expedition abilities are ready again, and anyone who reached Panicked gains 1 Stress. */
-export function endExpedition(g: GameState, panicked: string[] = []): string[] {
-  const out = ["— Expedition ends —"];
-  for (const c of g.characters) {
-    for (const key of Object.keys(c.abilityUsed)) if (key.startsWith("expedition:")) delete c.abilityUsed[key];
-    if (!c.dead && panicked.includes(c.id)) {
-      out.push(`${c.name} reached Panicked during the expedition.`);
-      changeStress(c, 1, out);
-    }
-  }
-  out.push("Once-per-expedition abilities are ready again.");
-  return out;
-}
-
 export function completeAct(g: GameState): string[] {
   g.act += 1;
   for (const c of g.characters) c.willpower = maxWillpower(c);

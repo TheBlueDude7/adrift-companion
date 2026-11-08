@@ -1,6 +1,6 @@
 "use client";
 
-import { ActivityIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, FlagIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
+import { ActivityIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, EllipsisVerticalIcon, FlagIcon, FootprintsIcon, PencilIcon, RotateCcwIcon, SparklesIcon, Undo2Icon, UploadIcon } from "lucide-react";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import {
@@ -18,8 +18,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { advanceSegment, completeAct, endExpedition, previousSegment } from "@/lib/mechanics";
+import { Textarea } from "@/components/ui/textarea";
+import { endExpedition, markExpeditionTurn, startExpedition, TURNS_PER_SEGMENT, type SiteOutcome } from "@/lib/expedition";
+import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
 import { createInitialState } from "@/lib/seed";
 import { useGame } from "@/lib/store";
@@ -50,6 +54,18 @@ function Header() {
   const [shipName, setShipName] = useState("");
   const [ending, setEnding] = useState(false);
   const [panicked, setPanicked] = useState<string[]>([]);
+  const [safe, setSafe] = useState(true);
+  const [outcome, setOutcome] = useState<SiteOutcome>("active");
+  // Held from when the dialog opened: clearing the expedition would otherwise swap the dialog's
+  // contents out from under its own closing animation.
+  const [leaving, setLeaving] = useState<{ site: string; crew: string[] } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [site, setSite] = useState("");
+  const [capacity, setCapacity] = useState("3");
+  const [siteNotes, setSiteNotes] = useState("");
+  const [crew, setCrew] = useState<string[]>([]);
+  const away = game.expedition;
+  const living = game.characters.filter((c) => !c.dead);
 
   function rename() {
     const name = shipName.trim();
@@ -113,6 +129,28 @@ function Header() {
             </Button>
           )}
           {isGM && <EndOfDayDialog />}
+          {away && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs">
+              <FootprintsIcon className="size-3.5 text-amber-500" />
+              <span className="max-w-32 truncate font-medium sm:max-w-none" title={away.site}>{away.site}</span>
+              <span className="text-muted-foreground">Turn {away.turn} of {TURNS_PER_SEGMENT}</span>
+              {isGM && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2"
+                  title="One Expedition Turn: twenty to forty minutes of cautious work. Eight of them use up the segment."
+                  onClick={() => {
+                    const last = away.turn + 1 === TURNS_PER_SEGMENT;
+                    act("Mark Expedition Turn", (g) => markExpeditionTurn(g), "day");
+                    if (last) toast("Eight Expedition Turns gone — the segment is used up");
+                  }}
+                >
+                  Mark turn
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-1">
@@ -130,7 +168,10 @@ function Header() {
                   <DropdownMenuItem onClick={() => fileRef.current?.click()}><UploadIcon /> Import campaign</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => { setShipName(game.ship.name); setRenaming(true); }}><PencilIcon /> Rename ship</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setPanicked([]); setEnding(true); }}><FlagIcon /> End expedition</DropdownMenuItem>
+                  {!away && (
+                    <DropdownMenuItem onClick={() => { setSite(""); setCapacity("3"); setSiteNotes(""); setCrew(living.map((c) => c.id)); setStarting(true); }}><FootprintsIcon /> Start expedition</DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => { setPanicked([]); setSafe(true); setOutcome("active"); setLeaving(away ? { site: away.site, crew: away.crew } : null); setEnding(true); }}><FlagIcon /> End expedition</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { act("Complete Act", (g) => completeAct(g), "day"); toast.success("Act complete — Willpower restored"); }}><SparklesIcon /> Complete Act</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={() => setConfirmReset(true)}><RotateCcwIcon /> New campaign</DropdownMenuItem>
@@ -142,22 +183,88 @@ function Header() {
         </div>
       </div>
 
-      <Dialog open={ending} onOpenChange={setEnding}>
-        <DialogContent className="sm:max-w-sm">
+      <Dialog open={starting} onOpenChange={setStarting}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>End the expedition</DialogTitle>
-            <DialogDescription>Once-per-expedition abilities become ready again. Anyone who reached Panicked during it gains 1 Stress.</DialogDescription>
+            <DialogTitle>Leave the ship</DialogTitle>
+            <DialogDescription>Who goes, where, and how much the site holds. Salvage Capacity stays yours alone — the crew learns it by searching.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2">
-            {game.characters.filter((c) => !c.dead).map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm">
-                <Checkbox checked={panicked.includes(c.id)} onCheckedChange={(v) => setPanicked((p) => (v ? [...p, c.id] : p.filter((x) => x !== c.id)))} />
-                {c.name} reached Panicked
-              </label>
-            ))}
+          <form
+            className="grid gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const cap = Number(capacity);
+              act("Start expedition", (g) => startExpedition(g, { site, crew, capacity: Number.isFinite(cap) ? cap : 0, notes: siteNotes }), "day");
+              setStarting(false);
+              toast.success(`Expedition to ${site.trim() || "an unnamed site"} begins`);
+            }}
+          >
+            <div className="grid gap-1.5">
+              <Label htmlFor="site-name">Site</Label>
+              <Input id="site-name" value={site} maxLength={60} autoFocus placeholder="The Tanager, lower decks" onChange={(e) => setSite(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="site-capacity">Salvage Capacity</Label>
+              <Input id="site-capacity" type="number" min={0} max={20} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+              <p className="text-xs text-muted-foreground">1–2 for a wreckage pocket, 3–4 for a minor derelict, 5–8 for a large derelict or station section.</p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Crew going in</Label>
+              {living.map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={crew.includes(c.id)} onCheckedChange={(v) => setCrew((p) => (v ? [...p, c.id] : p.filter((x) => x !== c.id)))} />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="site-notes">Your notes on the site</Label>
+              <Textarea id="site-notes" value={siteNotes} maxLength={500} rows={2} placeholder="What's really in there" onChange={(e) => setSiteNotes(e.target.value)} />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={crew.length === 0}>Enter the site</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ending} onOpenChange={setEnding}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{leaving ? `Return from ${leaving.site}` : "End the expedition"}</DialogTitle>
+            <DialogDescription>Pressure eases by 1 once the danger has passed, Panicked costs 1 Stress, and once-per-expedition abilities become ready again.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              {living.filter((c) => !leaving || leaving.crew.includes(c.id)).map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={panicked.includes(c.id)} onCheckedChange={(v) => setPanicked((p) => (v ? [...p, c.id] : p.filter((x) => x !== c.id)))} />
+                  {c.name} reached Panicked
+                </label>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={safe} onCheckedChange={(v) => setSafe(!!v)} />
+              The immediate danger has ended
+            </label>
+            {leaving && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="site-outcome">The site is now</Label>
+                <Select value={outcome} onValueChange={(v) => setOutcome(v as SiteOutcome)}>
+                  <SelectTrigger id="site-outcome"><SelectValue>{{ secured: "Secured", abandoned: "Abandoned", active: "Still active" }[outcome]}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="secured">Secured</SelectItem>
+                    <SelectItem value="abandoned">Abandoned</SelectItem>
+                    <SelectItem value="active">Still active</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button onClick={() => { act("End expedition", (g) => endExpedition(g, panicked), "day"); setEnding(false); toast.success("Expedition over"); }}>End expedition</Button>
+            <Button onClick={() => { act("End expedition", (g) => endExpedition(g, { panicked, safe, outcome: leaving ? outcome : undefined }), "day"); setEnding(false); toast.success("Expedition over"); }}>
+              {leaving ? "Come aboard" : "End expedition"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
