@@ -3,7 +3,8 @@ import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
 import { actionBlocker, clearOverwatch, spendAction, type ActionKind } from "./fight";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
-import { borderSprintable, borderWalkable, SEGMENTS, type BorderState } from "./rules";
+import { borderSprintable, borderWalkable, BUNDLE_BY_LABEL, SEGMENTS, type BorderState } from "./rules";
+import { stockItem } from "./stock";
 import type { Border, Expedition, GameState, Line, Zone } from "./types";
 
 /** Eight Expedition Turns consume one day segment. */
@@ -211,6 +212,47 @@ function see(e: Expedition, z: Zone): (string | Line)[] {
   // Only the ways they haven't been through: the door they came in by needs no announcing.
   if (ways) out.push(ways === 1 ? "One more way on, unexplored." : `${ways} more ways on, none of them explored.`);
   if (z.secrets?.note) out.push({ text: `${z.name}: ${z.secrets.note}`, gm: true });
+  return out;
+}
+
+/**
+ * A Search that found something, recorded against the room and against the site.
+ *
+ * `bundles` is what the GM says the crew came away with, one label per bundle, from the rulebook's
+ * list. Each costs the site a point of Salvage Capacity and goes into the searcher's own hands,
+ * where it counts against their inventory slots on the way home. A Search that turned up a hidden
+ * feature, a unique item, or a way into somewhere passes no bundles and costs the site nothing.
+ *
+ * The Capacity itself stays the GM's: a crew that could read how much was left would know whether
+ * to keep searching without searching.
+ */
+export function recordSearch(g: GameState, characterId: string, bundles: string[] = []): (string | Line)[] {
+  const e = g.expedition;
+  const z = e ? zoneOf(e, characterId) : undefined;
+  const out: (string | Line)[] = [];
+  if (!e) return ["There's no expedition for that search to have happened on."];
+  if (z && !z.searched) {
+    z.searched = true;
+    out.push(`The ${z.name} has been searched. Another ordinary Search there turns up nothing: that takes new information, the right equipment, a Thorough Search, or a change in the room.`);
+  }
+  if (!bundles.length) {
+    out.push("What they found isn't ordinary salvage, so the site is no poorer for it.");
+    return out;
+  }
+  // Capacity is absent from a player's copy of the state, and this only ever runs on the GM's.
+  const left = e.secrets?.capacity;
+  const took = left === undefined ? bundles : bundles.slice(0, left);
+  for (const label of took) {
+    for (const item of BUNDLE_BY_LABEL[label]?.items ?? []) stockItem(g, item.name, item.qty, { category: "Material", tier: "Tier I" }, characterId);
+  }
+  const named = took.map((label) => BUNDLE_BY_LABEL[label]?.log ?? label);
+  const who = g.characters.find((c) => c.id === characterId)?.name ?? "They";
+  if (took.length) out.push(`${who} comes away with ${took.length} salvage bundle${took.length === 1 ? "" : "s"}: ${named.join(", ")}.`);
+  if (left !== undefined) {
+    e.secrets!.capacity = left - took.length;
+    if (took.length < bundles.length) out.push({ text: `${e.site} only had ${left} bundle${left === 1 ? "" : "s"} left, so that's all they get.`, gm: true });
+    out.push({ text: e.secrets!.capacity ? `${e.site} holds ${e.secrets!.capacity} salvage bundle${e.secrets!.capacity === 1 ? "" : "s"} now.` : `${e.site} is stripped of ordinary useful material.`, gm: true });
+  }
   return out;
 }
 

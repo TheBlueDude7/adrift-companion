@@ -3,7 +3,7 @@ import type { Attribute, SkillKey } from "@/lib/rules";
 export type TaskMode = "routine" | "skilled" | "crisis";
 
 /** How the tracker resolves the task's normal result. Everything else is narrated by the GM. */
-export type TaskEffect = "rest" | "breath" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | "patch" | null;
+export type TaskEffect = "rest" | "breath" | "project" | "course" | "scan" | "assist" | "craft" | "cook" | "medicine" | "salvage" | "search" | "harvest" | "tend" | "convert" | "purify" | "reclaim" | "yield" | "morale" | "calm" | "bleed" | "tune" | "rations" | "train" | "patch" | null;
 
 /** A module the task needs. Several names mean any of them will do. */
 export type TaskFacility = { modules: string[]; level?: number; label: string };
@@ -43,6 +43,8 @@ export type ShipboardTask = {
   anywhere?: boolean;
 };
 
+/** What a Thorough Search adds for its second Expedition Turn. */
+export const THOROUGH_DICE = 3;
 /** Mastery: levels above a Routine Threshold that cut the task's Energy by 1. */
 export const PRACTICED_MARGIN = 3;
 /** Mastery: levels above a Routine Threshold that earn the Strong Result without rolling. */
@@ -122,7 +124,7 @@ export const SHIPBOARD_TASKS: ShipboardTask[] = [
   // the ones with no threshold roll rather than going Routine. Treating an injury out there is the
   // Medical tasks already in this table, which work anywhere and spend a medkit.
   t("Scout Ahead", "Expedition", 1, ["perception", "stealth"], 0, "Examine the next zone without exposing the whole crew: creatures, traps, hazards, exits, cover, obvious salvage, or signs of recent movement. A failure may expose the scout, miss a danger, or create surprise.", "skilled", null, { gmResolves: true }),
-  t("Search", "Expedition", 1, ["scavenging"], 0, "Search a zone for concealed or valuable supplies, over one Expedition Turn. One success finds one salvage result or hidden feature. A zone normally allows one standard Search; a Thorough Search takes two Turns for +3d6 and always advances the site's Noise or Threat Clock.", "skilled", null, { strong: "Another salvage result, a better material tier, a unique item, a trap or contamination avoided, a quieter search, or where the rest of it is.", gmResolves: true }),
+  t("Search", "Expedition", 1, ["scavenging"], 0, "Search a zone for concealed or valuable supplies, over one Expedition Turn. One success finds one salvage result or hidden feature. A zone normally allows one standard Search; a Thorough Search takes two Turns for +3d6 and always advances the site's Noise or Threat Clock.", "skilled", "search", { strong: "Another salvage result, a better material tier, a unique item, a trap or contamination avoided, a quieter search, or where the rest of it is.", gmResolves: true }),
   t("Analyze", "Expedition", 1, ["biology", "engineering", "navigation"], 0, "Understand an organism, machine, signal, structure, or hazard, learning one fact about it. Unknown alien subjects are normally Skilled or Crisis. Another skill may suit the subject better; the GM says which.", "skilled", null, { strong: "Learn two facts instead of one.", gmResolves: true }),
   t("Breach", "Expedition", 1, ["mechTech", "engineering", "closeCombat", "heavyWeaponry"], 0, "Open a sealed door, cut through wreckage, or force an obstructed route. As a Labor task instead it's Strength against the obstruction's Labor Threshold: normally 2 for something stuck, 3 or more for something meant to stay shut. Breaching is usually loud.", "skilled"),
   t("Secure", "Expedition", 1, ["engineering", "mechTech"], 0, "Seal doors, disable traps, restore atmosphere, anchor equipment, or otherwise make a zone safer. A zone counts as Secured when nothing hostile controls it, its traps and hazards are dealt with, and the crew holds its entrances.", "skilled"),

@@ -1,9 +1,10 @@
-import { EXPERT_MARGIN, FABRICATE_ITEMS, LABOR_ASSIST_THRESHOLD, LABOR_EXPERT_MARGIN, LABOR_PRACTICED_MARGIN, LABOR_PROJECT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, LABOR_ASSIST_THRESHOLD, LABOR_EXPERT_MARGIN, LABOR_PRACTICED_MARGIN, LABOR_PROJECT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN, SHIPBOARD_TASKS, TASK_BY_NAME, THOROUGH_DICE, type ShipboardTask, type TaskFacility, type TaskMode } from "@/data/tasks";
 import { TRAINING, trainingBand } from "@/data/training";
 import { cook, craftBlocker, fabricate, fabricateCost, galleyPenalty, moduleLevel, RECIPE_BY_NAME, recipeSkills, salvageParts, stationLevel, stationLevelName } from "./crafting";
 import { harvestCrops, tendCrops } from "./crops";
 import { attributeValue, maxHp, maxWillpower, skillLevel } from "./derive";
 import { d, rollPool, sixes, uid } from "./dice";
+import { recordSearch } from "./expedition";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { conditionPenalty, type ConditionAsk } from "./conditions";
 import { injuryPenalty } from "./injuries";
@@ -14,9 +15,12 @@ import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, take
 import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { CraftRecipe } from "@/data/crafting";
-import type { ActionStatus, Character, GameState, Project, SegmentAction, SpaceTile, StarMap } from "./types";
+import type { ActionStatus, Character, GameState, Line, Project, SegmentAction, SpaceTile, StarMap } from "./types";
 
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
+
+/** Both costs of a Thorough Search are the GM's to apply: the Turns aren't counted and the clocks aren't built. */
+const THOROUGH_NOTE = "A Thorough Search takes two Expedition Turns, and it's loud either way: advance the site's Noise or Threat Clock.";
 
 /** Players roll and resolve their own planned tasks, except the ones the GM keeps. */
 export const playerResolves = (a: SegmentAction, characterId: string | null) =>
@@ -344,6 +348,13 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
     return { threshold: def.threshold, blocker: `${def.name} needs the ship, and they're away on the expedition` };
   }
   switch (def.name) {
+    // A room stands one ordinary Search. After that it takes new information, the right equipment,
+    // a change in the room, or a Thorough Search — and the app can only check the last of those, so
+    // the GM clears the room's Searched mark on the Site tab when one of the others applies.
+    case "Search": {
+      const zone = g.expedition?.zones.find((z) => z.id === g.expedition?.at[a.characterId]);
+      return { threshold: def.threshold, blocker: zone?.searched && !a.thorough ? `The ${zone.name} has been searched — only a Thorough Search finds more` : null };
+    }
     case "Plot Safe Course":
       return { threshold: byDistance(dist), blocker: null };
     case "Scan Nearby Tile": {
@@ -459,6 +470,9 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   const routine = mode === "routine" && (!best || level >= threshold) && !shaken;
   const attr = best ? (attrOverride ?? SKILL_BY_KEY[best].attr) : null;
   const attrValue = c && attr ? attributeValue(c, attr) : 0;
+  // A Thorough Search is the one task that buys its own dice, by spending a second Expedition Turn.
+  // It belongs here rather than among the situational modifiers so that every pool shown agrees.
+  const thorough = a.thorough && def.effect === "search" ? THOROUGH_DICE : 0;
   return withMastery(
     {
       energy,
@@ -467,8 +481,8 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
       threshold,
       mode,
       routine,
-      dice: attrValue + level,
-      poolLabel: best && attr ? `${attr} ${attrValue} + ${SKILL_BY_KEY[best].name} ${level}` : "No skill",
+      dice: attrValue + level + thorough,
+      poolLabel: `${best && attr ? `${attr} ${attrValue} + ${SKILL_BY_KEY[best].name} ${level}` : "No skill"}${thorough ? ` + Thorough ${thorough}` : ""}`,
       blocker,
     },
     def,
@@ -642,6 +656,11 @@ export type Resolution = {
   scan?: SpaceTile | null;
   /** Per-item result for Fabricate, in the order of `crafts`. Defaults to the task's overall result. */
   crafted?: boolean[];
+  /**
+   * What a Search came away with: one label from `SALVAGE_BUNDLES` per bundle. Each costs the site a
+   * point of Salvage Capacity. An empty list means it found something that isn't ordinary salvage.
+   */
+  bundles?: string[];
 };
 
 const STATUS_WORD: Record<Resolution["status"], string> = { success: "succeeds", strong: "strong success", failed: "fails", cancelled: "called off" };
@@ -657,7 +676,7 @@ function describe(g: GameState, a: SegmentAction) {
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : undefined;
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
   const node = map && a.target ? map.nodes.find((n) => n.x === a.target!.x && n.y === a.target!.y) : undefined;
-  const bits = [a.task];
+  const bits = [a.thorough ? `a Thorough ${a.task}` : a.task];
   if (project) bits.push(`on ${project.name}`);
   if (a.target) bits.push(`toward ${node?.name ?? "a tile"}`);
   if (a.crafts?.length) bits.push(`(${craftList(a.crafts)})`);
@@ -687,7 +706,7 @@ export function masterPilotReady(g: GameState, c: Character, a: SegmentAction) {
 }
 
 /** Resolve a planned task: pay Energy, apply the task's normal result, and log it. */
-export function resolveAction(g: GameState, id: string, r: Resolution): string[] {
+export function resolveAction(g: GameState, id: string, r: Resolution): (string | Line)[] {
   const a = g.actions.find((x) => x.id === id);
   if (!a) return [];
   const c = g.characters.find((x) => x.id === a.characterId);
@@ -696,6 +715,12 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
   a.outcome = r.outcome.trim() || undefined;
   if (r.status === "cancelled") return [`${c?.name ?? "Someone"} calls off ${describe(g, a)}.`];
   const out: string[] = [];
+  /**
+   * Lines only the GM reads, which so far means what a Search leaves of the site's Salvage Capacity.
+   * They're kept apart because `out` is the sink every other effect writes into, and appended last,
+   * which is where the log shows them: after the account of the task they came out of.
+   */
+  const hidden: Line[] = [];
   const ok = r.status === "success" || r.status === "strong";
   const strong = r.status === "strong";
   const terms = taskTerms(g, a);
@@ -749,6 +774,15 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       out.push(`${units} Water Units come out of Life Support's reclamation tanks, all it holds today.`);
     }
   }
+  if (ok && def.effect === "search") {
+    for (const line of recordSearch(g, a.characterId, r.bundles ?? [])) {
+      if (typeof line === "string") out.push(line);
+      else hidden.push(line);
+    }
+    if (a.thorough) out.push(THOROUGH_NOTE);
+  }
+  // A failed Search still takes its two Turns and still makes a noise, but leaves the room searchable.
+  if (!ok && def.effect === "search" && a.thorough) out.push(THOROUGH_NOTE);
   if (ok && def.effect === "salvage") {
     const recipe = a.crafts?.[0] ? RECIPE_BY_NAME[a.crafts[0]] : undefined;
     const allowed = a.approval === "granted";
@@ -869,7 +903,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): string[]
       }
     }
   }
-  return out;
+  return hidden.length ? [...out, ...hidden] : out;
 }
 
 /**

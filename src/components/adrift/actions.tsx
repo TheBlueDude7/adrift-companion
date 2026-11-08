@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, type ShipboardTask } from "@/data/tasks";
+import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
@@ -20,12 +20,12 @@ import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPen
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
-import { ATTRIBUTE_NAMES, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
+import { ATTRIBUTE_NAMES, PRESSURE_STATES, SALVAGE_BUNDLES, SEGMENTS, SKILL_BY_KEY, SKILLS, xpForNextLevel, type SkillKey } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import { resolveOwnTask, type TaskStep } from "@/lib/sync/client";
 import type { CraftRecipe } from "@/data/crafting";
-import type { Character, GameState, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
+import type { Character, GameState, Line, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { Dice, EmptyState, Pill, Stepper } from "./common";
@@ -487,6 +487,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (!needsRecipe) delete d.crafts;
     if (def.effect !== "calm" && def.effect !== "bleed") d.subjectId = null;
     if (def.effect !== "train") delete d.trainSkill;
+    if (def.effect !== "search") delete d.thorough;
     if (pushing) d.extra = true;
     act(existing ? "Edit task" : pushing ? "Push for an extra task" : "Plan task", (g) => {
       const out: string[] = [];
@@ -502,7 +503,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
       else g.actions.push(d);
       const where = targetName(g, d.target);
       const project = g.ship.projects.find((p) => p.id === d.projectId);
-      out.unshift(`${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They ask the GM for permission (${reasons.join("; ").toLowerCase()}).` : ""}`);
+      out.unshift(`${c.name} ${existing ? "changes their plan" : "plans"} for ${SEGMENTS[d.segment]}: ${d.thorough ? `a Thorough ${d.task}` : d.task}${project ? ` on ${project.name}` : ""}${where ? ` toward ${where}` : ""}${d.crafts?.length ? `: ${craftList(d.crafts)}` : ""}${d.detail ? ` (“${d.detail}”)` : ""}.${ask ? ` They ask the GM for permission (${reasons.join("; ").toLowerCase()}).` : ""}`);
       return out;
     }, pushing ? "danger" : "info");
     setOpen(false);
@@ -539,6 +540,15 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
                 </Select>
               )}
             </div>
+          )}
+          {def.effect === "search" && (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox checked={!!draft.thorough} onCheckedChange={(v) => set({ thorough: v ? true : undefined })} aria-label="Thorough Search" />
+              <span className="grid">
+                <span>Thorough Search</span>
+                <span className="text-[11px] text-muted-foreground">Two Expedition Turns instead of one for +{THOROUGH_DICE}d6, and the only Search that finds anything in a room already searched. It always advances the site&apos;s Noise or Threat Clock.</span>
+              </span>
+            </label>
           )}
           {def.effect === "train" && <TrainPicker c={c} value={draft.trainSkill} onChange={(v) => set({ trainSkill: v })} />}
           {def.effect === "craft" && <CraftPicker c={c} value={draft.crafts ?? []} onChange={(v) => set({ crafts: v })} />}
@@ -708,13 +718,19 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   const [scan, setScan] = useState<SpaceTile | "none">("none");
   const crafts = a.crafts ?? [];
   const [made, setMade] = useState<boolean[]>(() => crafts.map(() => true));
+  const [bundles, setBundles] = useState<string[]>([]);
+  const [bundle, setBundle] = useState(SALVAGE_BUNDLES[0].label);
   const c = game.characters.find((x) => x.id === a.characterId);
   const def = taskFor(a);
   const map = a.target ? game.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
+  // What the site would hold once these bundles are taken, counted as they're picked. Negative means
+  // the GM is handing out more than it has, which the resolution would quietly cut short.
+  const capacity = game.expedition?.secrets?.capacity;
+  const left = capacity === undefined ? null : capacity - bundles.length;
 
   function resolve(status: Resolution["status"]) {
     const ok = status === "success" || status === "strong";
-    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined }), status === "failed" ? "danger" : "info");
+    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined, bundles: ok ? bundles : undefined }), status === "failed" ? "danger" : "info");
     setOpen(false);
   }
 
@@ -725,7 +741,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); setBundles([]); } }}>
       <DialogTrigger render={<Button size="xs" variant="outline">Resolve</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -786,6 +802,38 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
                   {SPACE_TILES.map((t) => <SelectItem key={t.key} value={t.key}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+          {def.effect === "search" && isGM && (
+            <div className="grid gap-1.5">
+              <Label>What they found</Label>
+              <div className="flex gap-2">
+                <Select value={bundle} onValueChange={(v) => setBundle(v as string)}>
+                  <SelectTrigger className="w-full"><SelectValue>{bundle}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {SALVAGE_BUNDLES.map((b) => <SelectItem key={b.label} value={b.label}>{b.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" onClick={() => setBundles((xs) => [...xs, bundle])}><PlusIcon /> Add</Button>
+              </div>
+              {bundles.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {bundles.map((label, i) => (
+                    <Button key={i} size="xs" variant="ghost" className="h-6 gap-1 rounded-full border px-2 text-[11px]" onClick={() => setBundles((xs) => xs.filter((_, j) => j !== i))}>
+                      {label} <XIcon className="size-3" />
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <p className={cn("text-[11px]", left !== null && left < 0 ? "text-amber-300" : "text-muted-foreground")}>
+                One bundle per salvage result, into {c?.name.split(" ")[0] ?? "their"}&apos;s own hands, where it takes up inventory slots.{" "}
+                {left === null
+                  ? "Each costs the site a point of Salvage Capacity."
+                  : left < 0
+                    ? `${game.expedition!.site} holds ${game.expedition!.secrets!.capacity}, so ${-left} of these won't be found.`
+                    : `${game.expedition!.site} holds ${left} more after this.`}{" "}
+                A hidden feature or a unique find costs the site nothing: add nothing and say so in the note.
+              </p>
             </div>
           )}
           <div className="flex items-center justify-between">
@@ -948,11 +996,15 @@ function CrewPlanCard({ c }: { c: Character }) {
       <CardContent className="grid gap-2">
         {mine.length === 0 && <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">No task planned yet.</p>}
         {mine.map((a) => <ActionRow key={a.id} a={a} />)}
+        {/*
+          Both triggers are the same component in the same place, so without distinct keys React keeps
+          one instance across the swap — and the dialog submitting a task stays open as the Push one.
+        */}
         {canEditCharacter(c.id) &&
           (busy === 0 ? (
-            <PlanDialog c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a task</Button>} />
+            <PlanDialog key="plan" c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a task</Button>} />
           ) : !noExtra ? (
-            <PlanDialog c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task ({pushCost(c)})</Button>} />
+            <PlanDialog key="push" c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task ({pushCost(c)})</Button>} />
           ) : (
             busy === 1 && <p className="text-[11px] text-muted-foreground">{noExtra}.</p>
           ))}
@@ -975,7 +1027,7 @@ export function ActionsTab() {
 
   function resolveRoutine() {
     act("Resolve Routine tasks", (g) => {
-      const out: string[] = [];
+      const out: (string | Line)[] = [];
       for (const a of actionsNow(g).filter((x) => x.status === "planned")) {
         const t = taskTerms(g, a);
         if (t.routine) out.push(...resolveAction(g, a.id, { status: t.expert ? "strong" : "success", energy: t.energy, outcome: "" }));

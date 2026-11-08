@@ -3,7 +3,7 @@ import { pushLog } from "@/lib/log";
 import { SPACE_TILE_BY_KEY } from "@/lib/maps";
 import { diff } from "@/lib/sync/ops";
 import { actorFor, applyToRoom, getRoom } from "@/lib/sync/rooms";
-import type { LogEntry, SpaceTile } from "@/lib/types";
+import type { Line, LogEntry, SpaceTile } from "@/lib/types";
 
 type Step = "roll" | "push" | "accept" | "routine" | "cancel";
 const STEPS = new Set<Step>(["roll", "push", "accept", "routine", "cancel"]);
@@ -43,7 +43,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campaigns/[
   }
   const terms = taskTerms(room.game, a);
   const draft = structuredClone(room.game);
-  let lines: string[];
+  let lines: (string | Line)[];
   let kind: LogEntry["kind"] = "roll";
   const finish = (status: Resolution["status"]) => {
     const ok = status === "success" || status === "strong";

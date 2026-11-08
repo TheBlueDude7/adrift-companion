@@ -12,8 +12,13 @@ export function addItem(g: GameState, item: Item) {
   else g.items.push(item);
 }
 
-/** Add `qty` of a named item to ship storage, using the campaign catalog for its details. */
-export function stockItem(g: GameState, name: string, qty: number, fallback: Partial<ItemTemplate> = {}) {
+/**
+ * Add `qty` of a named item to ship storage, using the campaign catalog for its details.
+ *
+ * `where` is a character id for something that has to be carried rather than stowed: salvage found
+ * off the ship goes into the finder's own hands, where it counts against their inventory slots.
+ */
+export function stockItem(g: GameState, name: string, qty: number, fallback: Partial<ItemTemplate> = {}, where = "ship") {
   if (qty <= 0) return;
   const t = g.catalog.find((c) => c.name === name);
   const charges = t?.maxCharges ?? fallback.maxCharges;
@@ -28,7 +33,7 @@ export function stockItem(g: GameState, name: string, qty: number, fallback: Par
     weapon: t?.weapon ?? fallback.weapon,
     broken: false,
     notes: t?.notes ?? fallback.notes ?? "",
-    location: "ship",
+    location: where,
   };
   // Items with charges are tracked one per stack.
   if (charges !== undefined) for (let n = 0; n < qty; n++) g.items.push({ ...base, id: uid(), qty: 1 });

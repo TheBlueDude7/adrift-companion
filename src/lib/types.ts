@@ -544,6 +544,11 @@ export type SegmentAction = {
    * segment is the whole allowance — eight Turns fit in one segment and each allows a task.
    */
   turn?: number;
+  /**
+   * A Thorough Search: two Expedition Turns instead of one for +3d6, and the only kind of ordinary
+   * Search a room already searched will stand. It always advances the site's Noise or Threat Clock.
+   */
+  thorough?: boolean;
   /** Name from SHIPBOARD_TASKS, or "Other". */
   task: string;
   /** What the character is doing, in the player's words. */

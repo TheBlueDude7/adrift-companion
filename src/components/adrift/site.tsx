@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CrosshairIcon, DoorOpenIcon, EyeIcon, FootprintsIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
+import { CrosshairIcon, DoorOpenIcon, EyeIcon, EyeOffIcon, FootprintsIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -188,6 +188,16 @@ export function SiteTab() {
       >
         {e.site}
       </SectionTitle>
+      {/* The site's own briefing, which the GM shouldn't have to dig back out of the log. */}
+      {isGM && e.secrets && (
+        <div className="grid gap-1 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5">
+            <EyeOffIcon className="size-3 shrink-0 text-amber-300/80" />
+            {e.secrets.capacity ? `${e.secrets.capacity} salvage bundle${e.secrets.capacity === 1 ? "" : "s"} left to find here.` : "Nothing ordinary left to salvage here."}
+          </p>
+          {e.secrets.notes && <p className="pl-4.5">{e.secrets.notes}</p>}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         {shown.map((z) => <ZoneCard key={z.id} zone={z} mover={mover} />)}
       </div>

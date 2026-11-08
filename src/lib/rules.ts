@@ -438,6 +438,24 @@ export const DEFAULT_ITEM_TEMPLATES: ItemTemplate[] = [
   ),
 ];
 
+/**
+ * What one Salvage bundle normally holds. A higher-tier site may produce better ones, and the last
+ * entry is the GM's own to decide — it still costs the site a point of Salvage Capacity, which is
+ * why it's on this list rather than off it.
+ */
+export const SALVAGE_BUNDLES: { label: string; items: { name: string; qty: number }[]; log?: string }[] = [
+  { label: "2 Scrap Metal", items: [{ name: "Scrap Metal", qty: 2 }] },
+  { label: "2 Scrap Components", items: [{ name: "Scrap Components", qty: 2 }] },
+  { label: "1 Basic Adhesive", items: [{ name: "Basic Adhesive", qty: 1 }] },
+  { label: "1 Chemical Mixture", items: [{ name: "Chemical Mixture", qty: 1 }] },
+  { label: "1 Medical Supply", items: [{ name: "Medical Supply", qty: 1 }] },
+  { label: "1 Food Unit", items: [{ name: "Food Unit", qty: 1 }] },
+  { label: "1 Water Unit", items: [{ name: "Water Unit", qty: 1 }] },
+  { label: "Something else", items: [], log: "something the GM hands over" },
+];
+
+export const BUNDLE_BY_LABEL = Object.fromEntries(SALVAGE_BUNDLES.map((b) => [b.label, b]));
+
 export const PROJECT_TEMPLATES = [
   { name: "Expand Ship", skill: "Engineering", threshold: 4, required: 8, contributorLimit: 3, energy: 3, facility: "Operational Workshop", materials: "Per Progress by hull tier: 3 Scrap Metal (Barely Standing/Patched), 2 Reinforced Steel (Reinforced), 1 Neutronium (Plated); plus 1 Toolkit charge." },
   { name: "Hull Repair", skill: "Mech. Technician 3 / Engineering 4", threshold: 3, required: 1, contributorLimit: 2, energy: 2, facility: "Operational Workshop", materials: "Per Hull HP: 3 Scrap Metal + 1 Basic Adhesive (Patched), 2 Reinforced Steel + 1 Basic Adhesive (Reinforced), 1 Neutronium + 1 Advanced Adhesive (Plated); plus 1 Toolkit charge." },

@@ -1,4 +1,4 @@
-import { newAction, resolveAction, taskTerms } from "../src/lib/actions";
+import { newAction, resolveAction, taskPool, taskTerms } from "../src/lib/actions";
 import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
@@ -24,6 +24,8 @@ const bystander = (g: GameState) => {
   return c;
 };
 const text = (lines: (string | Line)[]) => lines.map((l) => (typeof l === "string" ? l : l.text));
+/** What one survivor is carrying, by name: salvage off a site goes into their own hands. */
+const carried = (g: GameState, id: string) => Object.fromEntries(g.items.filter((i) => i.location === id).map((i) => [i.name, i.qty]));
 const said = (lines: (string | Line)[], re: RegExp) => text(lines).some((t) => re.test(t));
 const secret = (lines: (string | Line)[]) => lines.filter((l): l is Line => typeof l !== "string" && !!l.gm).map((l) => l.text);
 
@@ -226,6 +228,59 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("the far end of the ship is cut off", said(moveTo(g, vale.id, zone("Cargo Hold").id), /no way from the Bridge to the Cargo Hold at all/), true);
   check("two rooms it manages at a run", said(moveTo(g, vale.id, zone("Mess Deck").id), /sprints from the Bridge through the Spinal Corridor into the Mess Deck/), true);
   check("and that's where they end up", zoneOf(e, vale.id)?.name, "Mess Deck");
+}
+
+// Searching a room.
+{
+  const g = world();
+  const [vale] = g.characters;
+  vale.skills.scavenging = 5;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const e = g.expedition!;
+  const here = zoneOf(e, vale.id)!;
+  const a = newAction(g, vale, "Search");
+  g.actions.push(a);
+  const lines = resolveAction(g, a.id, { status: "success", energy: 0, outcome: "", bundles: ["2 Scrap Metal", "1 Medical Supply"] });
+  check("the room is marked searched", here.searched, true);
+  check("the finder carries it out themselves", carried(g, vale.id), { "Scrap Metal": 2, "Medical Supply": 1 });
+  check("and the crew hears what they got", said(lines, /Vale comes away with 2 salvage bundles: 2 Scrap Metal, 1 Medical Supply/), true);
+  check("what the site has left is the GM's", secret(lines), ["The Tanager holds 2 salvage bundles now."]);
+
+  const again = newAction(g, vale, "Search");
+  check("a second ordinary search of the room finds nothing", taskTerms(g, again).blocker, "The Docking Collar has been searched — only a Thorough Search finds more");
+  const thorough = { ...again, thorough: true };
+  check("a thorough one still would", taskTerms(g, thorough).blocker, null);
+  // The dice are counted in the terms rather than among the situational modifiers, so that the pool
+  // shown while planning is the pool that gets rolled.
+  check("and it brings three more dice", [taskTerms(g, thorough).dice, taskPool(g, again).dice, taskPool(g, thorough).dice], [9, 6, 9]);
+  check("which it says in the breakdown", taskPool(g, thorough).parts[0], "WIT 1 + Scavenging 5 + Thorough 3");
+  g.actions.push(thorough);
+  const loud = resolveAction(g, thorough.id, { status: "success", energy: 0, outcome: "", bundles: [] });
+  check("a search that turns up something else costs the site nothing", e.secrets?.capacity, 2);
+  check("and nothing new is carried out of it", carried(g, vale.id), { "Scrap Metal": 2, "Medical Supply": 1 });
+  check("but a thorough search costs two Turns and always makes noise", said(loud, /takes two Expedition Turns, and it's loud either way: advance the site's Noise or Threat Clock/), true);
+}
+{
+  const g = world();
+  const [vale] = g.characters;
+  startExpedition(g, { site: "The Tanager", crew: [vale.id], capacity: 1 });
+  const a = newAction(g, vale, "Search");
+  g.actions.push(a);
+  const lines = resolveAction(g, a.id, { status: "success", energy: 0, outcome: "", bundles: ["1 Food Unit", "1 Water Unit"] });
+  check("a stripped site can't give more than it has", carried(g, vale.id), { "Food Unit": 1 });
+  check("and the GM alone hears that it's empty", secret(lines), ["The Tanager only had 1 bundle left, so that's all they get.", "The Tanager is stripped of ordinary useful material."]);
+}
+{
+  const g = world();
+  const [vale] = g.characters;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const here = zoneOf(g.expedition!, vale.id)!;
+  const a = newAction(g, vale, "Search");
+  g.actions.push(a);
+  resolveAction(g, a.id, { status: "failed", energy: 0, outcome: "" });
+  check("a failed search leaves the room worth searching", here.searched, false);
+  check("and the site no poorer", g.expedition?.secrets?.capacity, 4);
+  check("so it can be searched again", taskTerms(g, newAction(g, vale, "Search")).blocker, null);
 }
 
 // What a player receives of a site.
