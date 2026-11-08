@@ -1,8 +1,8 @@
-// The simulated crew's side of an expedition: what they're offered, what they're told, and the
-// per-Turn task allowance. Run with the react-server condition, since the prompt builders are
+// The simulated crew's side of an expedition: what they're offered, what they're told, and how many
+// tasks they may take. Run with the react-server condition, since the prompt builders are
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
-import { newAction, taskTerms } from "../src/lib/actions";
+import { extraTaskBlocker, newAction, taskTerms } from "../src/lib/actions";
 import { startExpedition, markExpeditionTurn, moveTo, scout } from "../src/lib/expedition";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { legalOptions } from "../src/lib/sim/options";
@@ -69,7 +69,8 @@ function check(label: string, got: unknown, want: unknown) {
   );
 }
 
-// One task per Expedition Turn, where aboard it would be one per segment.
+// Off the ship nobody is rationed: a Turn lasts as long as the GM lets it, and a crew picking
+// through a derelict does several small things in each room. Aboard, it's still one task a segment.
 {
   const g = world();
   const [vale] = ids(g);
@@ -78,12 +79,22 @@ function check(label: string, got: unknown, want: unknown) {
   check("the task is stamped with the Turn", first.turn, 0);
   check("and the first one goes in", attempt(g, first), null);
   g.actions.push(first);
-  check("a second in the same Turn is refused", attempt(g, newAction(g, g.characters[0], "Secure")), "One task per Expedition Turn. Push for an extra task (−1 Energy, +1 Pressure).");
+  const second = newAction(g, g.characters[0], "Secure");
+  check("a second in the same Turn goes in too", attempt(g, second), null);
+  g.actions.push(second);
+  check("and a third", attempt(g, newAction(g, g.characters[0], "Stand Watch")), null);
+  check("there's no extra to Push for out here", extraTaskBlocker(g, g.characters[0]), "Off the ship, tasks aren't rationed");
 
   markExpeditionTurn(g);
-  const next = newAction(g, g.characters[0], "Secure");
-  check("the next Turn is a fresh allowance", [next.turn, attempt(g, next)], [1, null]);
-  check("and the old task doesn't count against it", g.actions.filter((a) => a.characterId === vale).length, 1);
+  const next = newAction(g, g.characters[0], "Field Repair");
+  check("the next Turn is stamped afresh", [next.turn, attempt(g, next)], [1, null]);
+  check("and the old Turn's tasks are done with", g.actions.filter((a) => a.characterId === vale && a.turn === 1).length, 0);
+
+  const ferrier = newCharacter("Ferrier", null, null, "gm");
+  g.characters.push(ferrier);
+  const aboard = newAction(g, ferrier, "Rest");
+  g.actions.push(aboard);
+  check("but the one who stayed aboard still gets the one task", attempt(g, newAction(g, ferrier, "Purify Water")), "One task per segment. Push for an extra task (−1 Energy, +1 Pressure).");
 }
 
 // What the site tells a survivor standing in it.

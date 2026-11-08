@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { payPush } from "@/lib/mechanics";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
@@ -520,7 +520,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               ? `Submitting costs ${c.name.split(" ")[0]} ${c.energy > 0 ? "1 Energy" : "an Affliction (they're Exhausted)"} and 1 Pressure right away, even if the task is withdrawn later.`
               : draft.turn === undefined
                 ? "Each survivor takes one task per segment; Pushing buys one extra."
-                : "Off the ship the allowance is one task per Expedition Turn, and eight Turns use up the segment; Pushing buys one extra."}
+                : "Off the ship, take as many as the scene calls for. Eight Expedition Turns use up the segment, and the GM decides when one has passed."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -981,6 +981,7 @@ function CrewPlanCard({ c }: { c: Character }) {
   const { canEditCharacter } = usePerms();
   const mine = actionsNow(game).filter((a) => a.characterId === c.id);
   const busy = mine.filter((a) => a.status !== "cancelled").length;
+  const rationed = taskAllowance(game, c.id);
   const noExtra = extraTaskBlocker(game, c);
   return (
     <Card size="sm">
@@ -1001,8 +1002,8 @@ function CrewPlanCard({ c }: { c: Character }) {
           one instance across the swap — and the dialog submitting a task stays open as the Push one.
         */}
         {canEditCharacter(c.id) &&
-          (busy === 0 ? (
-            <PlanDialog key="plan" c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a task</Button>} />
+          (busy === 0 || !rationed ? (
+            <PlanDialog key="plan" c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a{busy ? "nother" : ""} task</Button>} />
           ) : !noExtra ? (
             <PlanDialog key="push" c={c} extra trigger={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Push for an extra task ({pushCost(c)})</Button>} />
           ) : (
@@ -1046,7 +1047,7 @@ export function ActionsTab() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ClipboardListIcon className="size-4 text-primary" /> {SEGMENTS[game.segment]}, Day {game.day}: crew tasks</CardTitle>
           <CardDescription>
-            Plan together, then commit one task per survivor. {isGM ? "Resolve Routine tasks automatically, roll for Skilled and Crisis ones, then move to the next segment." : "Roll and resolve your own tasks, Pushing if you dare. The GM resolves Salvage Ship and Other tasks."}
+            {game.expedition ? "Plan together. Off the ship, a survivor takes as many tasks as the scene calls for." : "Plan together, then commit one task per survivor."} {isGM ? "Resolve Routine tasks automatically, roll for Skilled and Crisis ones, then move to the next segment." : "Roll and resolve your own tasks, Pushing if you dare. The GM resolves Salvage Ship and Other tasks."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">

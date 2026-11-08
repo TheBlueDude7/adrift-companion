@@ -1,4 +1,4 @@
-import { needsPermission, permissionReasons, restPushConflict, segmentTasks } from "../actions";
+import { needsPermission, permissionReasons, restPushConflict, tasksInWindow } from "../actions";
 import { poolFor } from "../derive";
 import { coreMapId } from "../maps";
 import { completeModuleWork } from "../modules";
@@ -206,11 +206,10 @@ function actionDenyReason(game: GameState, ops: Op[], own: string | null): strin
     if (a?.roll || b?.roll) return "That task has been rolled. The dice decide it now.";
     if (b?.approval === "granted") return "Only the GM can grant permission. Changing the task clears it.";
     if (b && b.status !== "cancelled") {
-      // Off the ship the allowance is per Expedition Turn, which is what `turn` on the task records.
-      const same = segmentTasks(after, b.characterId, b.day, b.segment, b.turn);
-      const when = b.turn === undefined ? "segment" : "Expedition Turn";
-      if (same.length > 2) return `Only one extra task per ${when}.`;
-      if (same.length === 2 && !same.some((x) => x.extra)) return `One task per ${when}. Push for an extra task (−1 Energy, +1 Pressure).`;
+      // The allowance is a shipboard rule, and a task taken off the ship records its Turn instead.
+      const same = b.turn === undefined ? tasksInWindow(after, b.characterId, b.day, b.segment, undefined) : [];
+      if (same.length > 2) return "Only one extra task per segment.";
+      if (same.length === 2 && !same.some((x) => x.extra)) return "One task per segment. Push for an extra task (−1 Energy, +1 Pressure).";
       if (b.extra && !a?.extra) {
         const before = game.characters.find((c) => c.id === b.characterId);
         const now = after.characters.find((c) => c.id === b.characterId);

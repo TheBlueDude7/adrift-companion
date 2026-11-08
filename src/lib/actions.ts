@@ -231,14 +231,33 @@ export const needsPermission = (g: GameState, a: SegmentAction) => a.approval !=
  */
 export const actionsNow = (g: GameState) => g.actions.filter((a) => a.day === g.day && a.segment === g.segment && a.turn === g.expedition?.turn);
 
-/** A survivor's tasks in one segment — or in one Expedition Turn of it, which is the same rule. */
-export const segmentTasks = (g: GameState, characterId: string, day = g.day, segment = g.segment, turn = g.expedition?.turn) =>
+/**
+ * A survivor's tasks in one window: a segment aboard, or one Expedition Turn of it off the ship.
+ *
+ * `turn` has to be passed, because `undefined` is a window of its own — the ship's — and a defaulted
+ * argument can't tell "aboard" from "not said". `segmentTasks` is the same question about now.
+ */
+export const tasksInWindow = (g: GameState, characterId: string, day: number, segment: number, turn: number | undefined) =>
   g.actions.filter((a) => a.characterId === characterId && a.day === day && a.segment === segment && a.turn === turn && a.status !== "cancelled");
+
+/** A survivor's tasks in the window they're acting in right now. */
+export const segmentTasks = (g: GameState, characterId: string) => tasksInWindow(g, characterId, g.day, g.segment, g.expedition?.turn);
 
 const REST_PUSH_CONFLICT = "Resting and Pushing for an extra task can't share a segment";
 
+/**
+ * The one-task allowance is a shipboard rule: a segment is one commitment, and Pushing buys the
+ * only extra.
+ *
+ * Off the ship it doesn't bind. An Expedition Turn runs as long as the GM lets it run, and a crew
+ * picking its way through a derelict room by room is doing a dozen small things in each one — so
+ * out there tasks are counted and shown rather than rationed.
+ */
+export const taskAllowance = (g: GameState, characterId: string) => !g.expedition?.crew.includes(characterId);
+
 /** Each survivor takes one task per segment. Pushing (1 Energy, 1 Pressure) buys one extra. */
 export function extraTaskBlocker(g: GameState, c: Character): string | null {
+  if (!taskAllowance(g, c.id)) return "Off the ship, tasks aren't rationed";
   const tasks = segmentTasks(g, c.id);
   if (tasks.length === 0) return "No task planned yet";
   if (tasks.length > 1 || tasks.some((a) => a.extra)) return "Already took the extra task this segment";
@@ -248,7 +267,7 @@ export function extraTaskBlocker(g: GameState, c: Character): string | null {
 
 /** You either take the segment off or you grind an extra task out of it. Never both, in either order. */
 export function restPushConflict(g: GameState, a: SegmentAction): string | null {
-  const others = segmentTasks(g, a.characterId, a.day, a.segment, a.turn).filter((x) => x.id !== a.id);
+  const others = tasksInWindow(g, a.characterId, a.day, a.segment, a.turn).filter((x) => x.id !== a.id);
   const pushed = a.extra || others.some((x) => x.extra);
   const resting = taskFor(a).effect === "rest" || others.some((x) => taskFor(x).effect === "rest");
   return pushed && resting ? REST_PUSH_CONFLICT : null;

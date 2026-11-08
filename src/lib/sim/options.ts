@@ -1,5 +1,5 @@
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
-import { actionsNow, extraTaskBlocker, newAction, permissionReasons, restPushConflict, taskFor, taskTerms } from "../actions";
+import { actionsNow, extraTaskBlocker, newAction, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms } from "../actions";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import type { Character, GameState, SegmentAction } from "../types";
 
@@ -133,7 +133,8 @@ export function legalOptions(g: GameState, c: Character): SimMenu {
     }
     if (blocked && !offered) skipped.push(blocked);
   }
-  const extra = extraTaskBlocker(g, c);
+  // Only worth saying aboard the ship, where a second task has to be Pushed for.
+  const extra = taskAllowance(g, c.id) ? extraTaskBlocker(g, c) : null;
   if (extra) skipped.push(`A second task this segment: ${extra}`);
   return { options, skipped };
 }
