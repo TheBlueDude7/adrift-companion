@@ -1,5 +1,6 @@
 import { BORDER_STATES, COVER_POINTS, type BorderState, type Cover } from "@/lib/rules";
 import type { FindBy } from "@/lib/types";
+import perihelion from "../../content/sites/perihelion.json";
 import tanager from "../../content/sites/tanager.json";
 
 /**
@@ -51,7 +52,7 @@ export type SiteDefinition = {
   borders: SiteBorder[];
 };
 
-export const SITES: SiteDefinition[] = [tanager as SiteDefinition];
+export const SITES: SiteDefinition[] = [tanager as SiteDefinition, perihelion as SiteDefinition];
 
 export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s])) as Record<string, SiteDefinition>;
 

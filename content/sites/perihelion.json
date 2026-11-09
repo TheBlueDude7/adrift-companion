@@ -1,0 +1,161 @@
+{
+  "id": "perihelion",
+  "name": "The Perihelion",
+  "capacity": 7,
+  "notes": "A deep-survey vessel whose atmospherics failed. The crew sealed themselves forward, section by section, and set the maintenance drone to weld each bulkhead behind them. The drone is still working. It is not hostile and it will not stop. The story runs aft: the forward rooms give up the lottery, the aft rooms give up who lost it. Don't explain the weld on the Survey Lab — let them open it.",
+  "entrance": "dock",
+  "zones": [
+    {
+      "id": "dock",
+      "name": "Docking Clamp",
+      "look": "A short collar, frost standing on every surface in flat white blades. The inner hatch is open.",
+      "cover": "partial",
+      "note": "Free room. Let them get their bearings and feel the cold before anything happens.",
+      "finds": [
+        { "text": "The frost is undisturbed except for one track, going in. Something narrow and heavy came through here, more than once.", "by": "look" },
+        "A sealed crate of emergency rations, frozen solid but intact."
+      ]
+    },
+    {
+      "id": "fore",
+      "name": "Forward Passage",
+      "look": "A short run of corridor with doors off both sides and a ladder trunk aft. Handprints on the walls at shoulder height, all heading forward.",
+      "cover": "none",
+      "note": "The junction. Everything forward is a story room; everything aft is where it went wrong.",
+      "finds": [
+        { "text": "The handprints are in frost-rime, not grease. They were made after the heat failed.", "by": "look" },
+        { "text": "A tally scratched into the bulkhead beside the ladder: eleven marks, the last four struck through.", "by": "task" }
+      ]
+    },
+    {
+      "id": "bridge",
+      "name": "Bridge",
+      "look": "Four stations, three of them dark. The fourth holds a single amber telltale and a chair turned to face the door.",
+      "cover": "partial",
+      "note": "The captain's room. The order to weld came from here, and the log will say so if they work for it.",
+      "finds": [
+        { "text": "Every console is powered down deliberately, in sequence. Nothing here failed; it was switched off to save air.", "by": "look" },
+        { "text": "The command log, final entry: scrubbers are gone and we cannot make the gas. Eleven of us, air for four. We will draw for it and the drone will seal each section as we leave it. Nobody opens anything.", "by": "task" },
+        "A functioning datacore, cold but undamaged."
+      ]
+    },
+    {
+      "id": "comms",
+      "name": "Comms Blister",
+      "look": "A bubble of a room, barely two paces across, with the array controls and a window full of stars.",
+      "cover": "none",
+      "note": "Nothing dangerous. It exists so the crew can learn that nobody was ever coming.",
+      "finds": [
+        { "text": "The distress array is still transmitting, and has been for a very long time.", "by": "look" },
+        { "text": "The transmission log: the beacon was answered once, by a hauler eleven days out, which turned back.", "by": "task" },
+        "A spool of undamaged signal cable and a hand transmitter."
+      ]
+    },
+    {
+      "id": "quarters",
+      "name": "Crew Quarters",
+      "look": "Eleven bunks in two tiers. Seven are stripped to the frame; four are made up, with personal effects squared away on top.",
+      "cover": "partial",
+      "note": "The four made-up bunks belong to the ones who won the draw. Let them count.",
+      "finds": [
+        { "text": "The four made-up bunks have their effects laid out neatly on the blankets, as though for someone else to collect.", "by": "look" },
+        { "text": "Eleven slips of folded paper in a mug on a footlocker. Seven have a mark on them. Four are blank.", "by": "search" },
+        "Two sets of cold-weather gear and a working handlamp."
+      ]
+    },
+    {
+      "id": "galley",
+      "name": "Galley",
+      "look": "A long table bolted to the deck, benches either side, and a hatch aft standing open onto a ladder trunk.",
+      "cover": "partial",
+      "note": "The room the crew will want to regroup in. Let them. The chairs matter more than anything in the lockers.",
+      "finds": [
+        { "text": "Eleven places set, seven of them eaten from. The last four trays are untouched and the chairs are pushed in.", "by": "look" },
+        "A working water reclaimer, two Food Units and a sealed chemical canister."
+      ]
+    },
+    {
+      "id": "shaft",
+      "name": "Access Shaft",
+      "look": "A vertical trunk running down through the deck, rungs on one side, and a drop at the bottom where the lower deck should be.",
+      "cover": "none",
+      "note": "The way aft, and the way the drone travels. If you want to put the drone in front of them, do it here.",
+      "finds": [
+        { "text": "The ice on the rungs has been worn smooth in a narrow strip down the centre. Something uses this regularly.", "by": "look" },
+        { "text": "A maintenance drone's charging cradle, empty, with its work order still displayed: SEAL AFT SECTIONS, AUTHORITY MASTER, NO RECALL.", "by": "task" }
+      ]
+    },
+    {
+      "id": "spine",
+      "name": "Spinal Trunk",
+      "look": "The lower corridor, running the length of the ship. Three doors off it, and every one of them is shut in a different way.",
+      "cover": "none",
+      "note": "The hub of the aft half. The three shut doors are the expedition's real choices: welded, buckled, locked.",
+      "finds": [
+        { "text": "Weld spatter on the deck outside the aftmost door, still bright. Whatever laid that bead did it from this side, and not long ago.", "by": "look" },
+        "A cutting torch with one charge left in it."
+      ]
+    },
+    {
+      "id": "lab",
+      "name": "Survey Lab",
+      "look": "A long bench down one side, specimen presses along the other, and two cold-weather suits folded on the deck with their helmets set beside them.",
+      "cover": "partial",
+      "note": "The last room. Two of the four are here, and the door was welded from the corridor. Do not explain it; let the suits and the weld do the work. If they ask who welded it, the drone did, on an order nobody rescinded.",
+      "finds": [
+        { "text": "The two suits are empty, folded, and laid out side by side. Their air is gone and their helmets are set down neatly beside them.", "by": "look" },
+        { "text": "A specimen log in a careful hand, continuing for six days after the final bridge entry, describing the dark outside the window and nothing else.", "by": "task" },
+        "An intact sample case: two Chemical Mixtures and a Medical Supply."
+      ]
+    },
+    {
+      "id": "scrubbers",
+      "name": "Atmospherics Bay",
+      "look": "Behind a frame that dropped out of true, four scrubber towers, one of them split open along a seam.",
+      "cover": "strong",
+      "note": "Where it all started. Nothing lives here, but it's loud to get into — advance the Noise Clock on the Breach.",
+      "finds": [
+        { "text": "The split tower failed from the inside, and the other three were cannibalised for parts in a hurry to save it.", "by": "look" },
+        { "text": "A repair attempt abandoned halfway, with the replacement element still in its wrapper. It is the wrong part number.", "by": "search" },
+        "Two Scrap Components and a usable filter element."
+      ]
+    },
+    {
+      "id": "engine",
+      "name": "Engine Room",
+      "look": "A cold reactor behind a lockout cage, and gangways running fore and aft around it.",
+      "cover": "partial",
+      "note": "Pure salvage room, and the only way through to the hold if the shaft drop is refused.",
+      "finds": [
+        { "text": "The reactor was shut down by hand, properly, with every step of the procedure signed off.", "by": "look" },
+        "A Durasteel Alloy plate and a working power cell."
+      ]
+    },
+    {
+      "id": "hold",
+      "name": "Cargo Hold",
+      "look": "A tall bay, half empty, with survey crates lashed down along one wall and daylight-coloured frost where the deck above has gone.",
+      "cover": "strong",
+      "note": "The far end of the loop. The drop from the Access Shaft lands here, which is how they'll leave if they don't want the ladder twice.",
+      "finds": [
+        { "text": "Six survey crates are lashed down and sealed. A seventh has been opened and repacked badly, by someone in a hurry or in gloves.", "by": "look" },
+        "A cargo sled, two Scrap Metal and a Basic Adhesive."
+      ]
+    }
+  ],
+  "borders": [
+    { "from": "dock", "to": "fore", "state": "open", "note": "The clamp collar. Open, and cold coming through it." },
+    { "from": "fore", "to": "bridge", "state": "closed", "note": "A pressure door, shut but not locked." },
+    { "from": "bridge", "to": "comms", "state": "open" },
+    { "from": "fore", "to": "quarters", "state": "open" },
+    { "from": "quarters", "to": "galley", "state": "open" },
+    { "from": "galley", "to": "shaft", "state": "open", "note": "The galley's aft hatch, standing open." },
+    { "from": "fore", "to": "shaft", "state": "closed", "note": "A second way aft, shut. Nobody welded this one." },
+    { "from": "shaft", "to": "spine", "state": "hazardous", "note": "The rungs are sheathed in ice. Call for Acrobatics if they hurry." },
+    { "from": "spine", "to": "lab", "state": "sealed", "note": "Welded from the corridor side. The bead is still bright." },
+    { "from": "spine", "to": "scrubbers", "state": "blocked", "note": "The frame dropped when the bay overpressured." },
+    { "from": "spine", "to": "engine", "state": "locked", "note": "Reactor lockout, still powered after all this time." },
+    { "from": "engine", "to": "hold", "state": "open" },
+    { "from": "hold", "to": "shaft", "state": "destroyed", "note": "The deck between them is gone. Four metres down into the hold, and no way back up it." }
+  ]
+}
