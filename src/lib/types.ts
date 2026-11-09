@@ -546,8 +546,31 @@ export type GameState = {
    * `cooldown` counts the ration-free days still needed (of 3 in a row) before it covers another.
    */
   rationDiscipline?: { covered: boolean; cooldown: number };
+  /** What the crew worked out the hard way, and carries into the next one. */
+  doctrine?: Lesson[];
   /** Tasks the crew has committed to, by day and segment. */
   actions: SegmentAction[];
+};
+
+/**
+ * One thing the crew learned, in the words of whoever learned it.
+ *
+ * A lesson is the only memory the crew has. Every other kind of continuity is state — a wound, a
+ * depleted hold, a room they've already searched — and none of it carries an inference. This does:
+ * it's written after the fact, read by everyone from then on, and so a doctrine with a hole in it
+ * can be mended rather than repeated.
+ *
+ * Kept short on purpose. A standing order the whole crew can recite is worth more than a diary.
+ */
+export type Lesson = {
+  id: string;
+  /** What they'd tell the next boarding party, in one or two sentences. */
+  text: string;
+  /** The character who learned it. Lessons are signed, because who says it is half of whether it sticks. */
+  by: string;
+  /** What it was learned from: a site, a fight, a day that went badly. */
+  from: string;
+  day: number;
 };
 
 /**

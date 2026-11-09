@@ -35,7 +35,7 @@ const commands = [
     description: "GM only: play a segment with the simulated crew",
     default_member_permissions: GM_ONLY,
     options: [
-      { type: STRING, name: "situation", description: "What the crew is facing right now", required: true, max_length: 1500 },
+      { type: STRING, name: "situation", description: "What the crew is facing, if anything. Leave it out and they plan from the state", max_length: 1500 },
       { type: BOOLEAN, name: "ask", description: "Hear their plans and questions without submitting anything" },
       { type: STRING, name: "answers", description: "Your answers to the questions they asked last time", max_length: 1500 },
       { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
@@ -49,6 +49,16 @@ const commands = [
       { type: STRING, name: "situation", description: "What they can see from where they're standing", required: true, max_length: 1500 },
       { type: BOOLEAN, name: "ask", description: "Hear their plans and questions without submitting anything" },
       { type: STRING, name: "answers", description: "Your answers to the questions they asked last time", max_length: 1500 },
+      { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
+    ],
+  },
+  {
+    name: "debrief",
+    description: "GM only: the crew talks over a finished job and writes down what to do differently",
+    default_member_permissions: GM_ONLY,
+    options: [
+      { type: STRING, name: "about", description: "The job they're talking through (default: the site they just left, or the day)", max_length: 200 },
+      { type: STRING, name: "who", description: "Character ids, comma separated, if not everyone who was there", max_length: 500 },
       { type: STRING, name: "code", description: "Campaign code, if not the one in ADRIFT_CAMPAIGN", min_length: 6, max_length: 6 },
     ],
   },

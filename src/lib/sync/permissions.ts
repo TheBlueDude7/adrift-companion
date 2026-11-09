@@ -49,6 +49,9 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       case "items":
       case "actions":
         continue;
+      case "doctrine":
+        // Signing a lesson is a player's to do. Checked properly below, like tasks and offers.
+        continue;
       case "ship": {
         if (second === "projects") return "Only the GM changes projects. Add Progress with a Work on a project task instead.";
         if (second === "rooms") continue;
@@ -92,6 +95,10 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
   }
   if (ops.some((o) => o.path[0] === "firstAidOffers")) {
     const reason = firstAidOfferDenyReason(game, ops, own);
+    if (reason) return reason;
+  }
+  if (ops.some((o) => o.path[0] === "doctrine")) {
+    const reason = doctrineDenyReason(game, ops, own);
     if (reason) return reason;
   }
   if (ops.some((o) => o.path[0] === "maps")) {
@@ -171,6 +178,30 @@ function firstAidOfferDenyReason(game: GameState, ops: Op[], own: string | null)
   if (after.some((o) => !before.has(o.id) && o.healerId !== own)) return "Offer First Aid as your own character.";
   const kept = new Set(after.map((o) => o.id));
   if ([...before.values()].some((o) => !kept.has(o.id) && o.healerId !== own && o.patientId !== own)) return "Only the healer or the patient can answer a First Aid offer.";
+  return null;
+}
+
+/**
+ * A player adds lessons in their own character's name, and touches nobody else's.
+ *
+ * Nothing already written can be edited or taken back, by them or by any other player: a crew that
+ * can revise what it learned has learned nothing. Striking one out stays the GM's.
+ */
+function doctrineDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
+  if (own === null) return "Pick your character in Play together to write down what you learned.";
+  const name = game.characters.find((c) => c.id === own)?.name;
+  const before = new Map((game.doctrine ?? []).map((l) => [l.id, l]));
+  const after = applyOps(structuredClone(game), ops).doctrine ?? [];
+  if (after.length < before.size) return "Only the GM can strike out something the crew learned.";
+  for (const l of after) {
+    const was = before.get(l.id);
+    if (was) {
+      if (JSON.stringify(was) !== JSON.stringify(l)) return "What the crew learned stands as it was written.";
+      continue;
+    }
+    if (l.by !== name) return "Sign what you learned in your own character's name.";
+    if (!l.text.trim()) return "A lesson with nothing in it teaches nobody.";
+  }
   return null;
 }
 

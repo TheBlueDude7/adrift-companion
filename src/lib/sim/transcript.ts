@@ -1,3 +1,4 @@
+import type { DebriefReport } from "./debrief";
 import type { RosterReport } from "./roster";
 import type { SimReport } from "./table";
 
@@ -37,6 +38,27 @@ export function rosterTranscript(report: RosterReport): string {
       .filter(Boolean)
       .join("\n"),
   );
+  return parts.join("\n\n");
+}
+
+/** The debrief: what each of them says, and which standing orders the crew now carries. */
+export function debriefTranscript(report: DebriefReport): string {
+  const parts = [`**Debrief — ${report.from}**`];
+  for (const r of report.remarks) {
+    parts.push(
+      [
+        `**${r.character}** — ${r.player.provider}, ${r.player.style}`,
+        `> ${r.said.replace(/\n/g, "\n> ")}`,
+        r.lesson ? `**Standing order:** ${r.lesson}` : "-# Had nothing to add this time.",
+        r.unclear ? `⚠️ **Unclear to them:** ${r.unclear}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  if (report.failed.length) parts.push(`**Couldn't be debriefed:**\n${report.failed.map((x) => `- ${x}`).join("\n")}`);
+  const kept = report.remarks.filter((r) => r.lesson).length;
+  parts.push([`-# ${kept} standing order${kept === 1 ? "" : "s"} added. Every survivor reads them from now on.`, tokens(report.usage)].join("\n"));
   return parts.join("\n\n");
 }
 

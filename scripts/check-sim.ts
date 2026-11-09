@@ -3,10 +3,13 @@
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
 import { extraTaskBlocker, newAction, taskTerms } from "../src/lib/actions";
+import { uid } from "../src/lib/dice";
 import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
+import { hullTier } from "../src/lib/derive";
+import { PANICKED } from "../src/lib/rules";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { legalOptions } from "../src/lib/sim/options";
-import { site } from "../src/lib/sim/world";
+import { doctrine, pressing, site } from "../src/lib/sim/world";
 import { diff } from "../src/lib/sync/ops";
 import { denyReason } from "../src/lib/sync/permissions";
 import { playerView } from "../src/lib/sync/redact";
@@ -178,6 +181,62 @@ function check(label: string, got: unknown, want: unknown) {
   check("and that none of them has been handed over", medbay.finds.every((f) => !f.found), true);
   check("the ways out, by name and state", report.zones.find((z) => z.name === "Spinal Corridor")!.ways.find((w) => w.to === "Bridge")?.state, "locked");
   check("and nothing at all when nobody is off the ship", siteReport(world()), null);
+}
+
+// The crew's memory: lessons they signed, which is the only thing they carry that isn't state.
+{
+  const g = world();
+  const [vale, okonkwo] = ids(g);
+  const lesson = (by: string, text = "Scout the shaft before anyone goes down it.") => ({ id: uid(), text, by, from: "The Perihelion", day: 1 });
+  const submit = (fn: (x: GameState) => void, who: string) => {
+    const after: GameState = structuredClone(g);
+    fn(after);
+    return denyReason(g, diff(g, after), { role: "player", characterId: who });
+  };
+
+  check("nothing is written down to begin with", g.doctrine, undefined);
+  check("a survivor signs their own lesson", submit((x) => { x.doctrine = [lesson("Vale")]; }, vale), null);
+  check("but not in someone else's name", submit((x) => { x.doctrine = [lesson("Okonkwo")]; }, vale), "Sign what you learned in your own character's name.");
+  check("and not an empty one", submit((x) => { x.doctrine = [lesson("Vale", "   ")]; }, vale), "A lesson with nothing in it teaches nobody.");
+
+  g.doctrine = [lesson("Vale")];
+  check("what's written stands", submit((x) => { x.doctrine = [{ ...x.doctrine![0], text: "Actually, don't bother." }]; }, vale), "What the crew learned stands as it was written.");
+  check("even for the one who wrote it", submit((x) => { x.doctrine = []; }, vale), "Only the GM can strike out something the crew learned.");
+  check("nor can a crewmate take it back", submit((x) => { x.doctrine = []; }, okonkwo), "Only the GM can strike out something the crew learned.");
+  check("the GM can do either", denyReason(g, diff(g, { ...structuredClone(g), doctrine: [] }), { role: "gm", characterId: null }), null);
+  check("adding another alongside is fine", submit((x) => { x.doctrine = [...x.doctrine!, lesson("Okonkwo", "Carry the torch, not the sled.")]; }, okonkwo), null);
+
+  // It's the crew's own knowledge, so unlike the site's secrets it goes over whole.
+  check("and a player is sent it", playerView(g).doctrine?.map((l) => l.by), ["Vale"]);
+
+  // What a quiet segment hands them instead of a GM's description: arithmetic off their own books.
+  {
+    const q = world();
+    // The ship is seeded in trouble — a power deficit, a holed hull, a dark Medical Bay — so a
+    // segment with nothing pressing in it has to be built by putting all of that right.
+    const sound = structuredClone(q);
+    sound.ship.hullHp = hullTier(sound.ship).maxHp;
+    for (const r of sound.ship.rooms) r.active = true;
+    sound.ship.rooms[0].powerOutput += 4;
+    check("a ship in good order has nothing pressing", pressing(sound).includes("Nothing is on fire"), true);
+
+    q.items = q.items.filter((i) => i.name !== "Food Unit" && i.name !== "Water Unit");
+    q.ship.hullHp = 1;
+    q.characters[0].pressure = 3;
+    q.characters[1].pressure = PANICKED;
+    const now = pressing(q);
+    check("an empty larder is counted, not described", now.includes("- Food: 0 rations for 2 of you — 0 days"), true);
+    check("so is the water", now.includes("- Water: 0 units"), true);
+    check("and the hull, against its own tier", now.includes(`- Hull: 1 of ${hullTier(q.ship).maxHp}`), true);
+    check("Pressure short of breaking still gets said", now.includes("- Vale: Overtaxed, and it won't come down"), true);
+    check("and breaking point by the name the rules give it", now.includes("- Okonkwo: Panicked."), true);
+    check("nobody is told it's fine", now.includes("Nothing is on fire"), false);
+    check("and none of it is the GM's side of the table", JSON.stringify(playerView(q)).includes("WHAT'S PRESSING"), false);
+  }
+
+  const brief = doctrine(g);
+  check("they're told what they learned, and who said it", [brief.includes("Scout the shaft"), brief.includes("Vale, after The Perihelion")], [true, true]);
+  check("and told plainly when there's nothing yet", doctrine(world()).includes("the first of it"), true);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

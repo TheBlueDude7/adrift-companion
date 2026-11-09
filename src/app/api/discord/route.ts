@@ -5,9 +5,10 @@ import { addRuling, allRulings, approvedRulings, decideRuling, type Ruling } fro
 import { TURNS_PER_SEGMENT } from "@/lib/expedition";
 import { SEGMENTS } from "@/lib/rules";
 import { selfBase } from "@/lib/sim/client";
+import { runDebrief } from "@/lib/sim/debrief";
 import { runRoster, seatRecruiters } from "@/lib/sim/roster";
 import { runCrew, seatCrew, simRunning } from "@/lib/sim/table";
-import { rosterTranscript, transcript } from "@/lib/sim/transcript";
+import { debriefTranscript, rosterTranscript, transcript } from "@/lib/sim/transcript";
 import { getRoom } from "@/lib/sync/rooms";
 
 type Option = { name: string; value: string };
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
         return sim(i, isGM, new URL(request.url).origin);
       case "expedition":
         return sim(i, isGM, new URL(request.url).origin, true);
+      case "debrief":
+        return debrief(i, isGM, new URL(request.url).origin);
       case "roster":
         return roster(i, isGM, new URL(request.url).origin);
     }
@@ -143,7 +146,9 @@ function sim(i: Interaction, isGM: boolean, origin: string, offship = false) {
   const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
   if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
   const situation = option(i, "situation");
-  if (!situation) return message(offship ? "Describe the room they're standing in." : "Describe the situation the crew is facing.", EPHEMERAL);
+  // Off the ship the room is the GM's to describe and the crew genuinely can't see it. Aboard, they
+  // can see everything that matters, so a quiet segment needs no prompt: they plan from the state.
+  if (offship && !situation) return message("Describe the room they're standing in.", EPHEMERAL);
   const commit = !i.data?.options?.some((o) => o.name === "ask" && String(o.value) === "true");
   const answers = option(i, "answers");
   if (simRunning(code)) return message("A segment is already running for that campaign. Give it a moment.", EPHEMERAL);
@@ -161,11 +166,50 @@ function sim(i: Interaction, isGM: boolean, origin: string, offship = false) {
       const report = await runCrew(base, room.code, seated.table, situation, { answers, commit });
       const header = offship
         ? `**${away!.site} — Expedition Turn ${away!.turn + 1} of ${TURNS_PER_SEGMENT}**, ${SEGMENTS[room.game.segment]} of Day ${room.game.day} — ${situation}`
-        : `**${SEGMENTS[room.game.segment]}, Day ${room.game.day}** — ${situation}`;
+        : `**${SEGMENTS[room.game.segment]}, Day ${room.game.day}** — ${situation || "a quiet segment, and they plan it themselves"}`;
       await replyToInteraction(i.token, `${header}\n\n${transcript(report, { committed: commit })}`);
     } catch (e) {
       console.error("[adrift] simulated segment failed", e);
       await replyToInteraction(i.token, `The segment failed: ${e instanceof Error ? e.message : "something went wrong"}`, { ephemeral: true }).catch(() => undefined);
+    }
+  });
+  return json({ type: 5 });
+}
+
+/**
+ * The crew talks over a finished job and writes down what to do differently, which is the only way
+ * anything they work out survives the segment it happened in.
+ *
+ * Who gets debriefed defaults to whoever was there: the away team while an expedition is still
+ * recorded, and the whole living crew once they're aboard. `about` names the job, because the state
+ * can't say whether the thing worth learning from was the derelict, the fight in it, or the day.
+ */
+function debrief(i: Interaction, isGM: boolean, origin: string) {
+  if (!isGM) return message("Only the GM can run simulated survivors.", EPHEMERAL);
+  const code = (option(i, "code") || process.env.ADRIFT_CAMPAIGN || "").toUpperCase();
+  if (!code) return message("Which campaign? Pass `code:` or set ADRIFT_CAMPAIGN.", EPHEMERAL);
+  const about = option(i, "about");
+  const who = option(i, "who")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (simRunning(code)) return message("A simulated run is already going for that campaign. Give it a moment.", EPHEMERAL);
+
+  after(async () => {
+    try {
+      const room = await getRoom(code);
+      if (!room) return void (await replyToInteraction(i.token, `No campaign with the code ${code}.`, { ephemeral: true }));
+      const away = room.game.expedition;
+      const seats = who.length ? who.map((id) => ({ characterId: id })) : away ? away.crew.map((id) => ({ characterId: id })) : undefined;
+      const seated = seatCrew(room.game, seats);
+      if ("error" in seated) return void (await replyToInteraction(i.token, seated.error, { ephemeral: true }));
+      const base = await selfBase(origin);
+      const from = about || away?.site || `Day ${room.game.day}`;
+      const report = await runDebrief(base, room.code, seated.table, from);
+      await replyToInteraction(i.token, debriefTranscript(report));
+    } catch (e) {
+      console.error("[adrift] the debrief failed", e);
+      await replyToInteraction(i.token, `The debrief failed: ${e instanceof Error ? e.message : "something went wrong"}`, { ephemeral: true }).catch(() => undefined);
     }
   });
   return json({ type: 5 });

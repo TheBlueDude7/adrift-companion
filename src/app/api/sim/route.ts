@@ -31,7 +31,9 @@ export async function POST(request: Request) {
   }
   const { code, situation, players, answers, commit } = body;
   if (typeof code !== "string") return Response.json({ error: "Which campaign?" }, { status: 400 });
-  if (typeof situation !== "string" || !situation.trim() || situation.length > 8000) return Response.json({ error: "Describe the situation in under 8,000 characters." }, { status: 400 });
+  // Left out, the crew plans from the state they can see, which aboard the ship is all of it. Off
+  // the ship it isn't — the room is the GM's — so that case is turned away once we have the state.
+  if (situation !== undefined && (typeof situation !== "string" || situation.length > 8000)) return Response.json({ error: "Keep the situation under 8,000 characters." }, { status: 400 });
   if (answers !== undefined && (typeof answers !== "string" || answers.length > 8000)) return Response.json({ error: "Keep the answers under 8,000 characters." }, { status: 400 });
   if (commit !== undefined && typeof commit !== "boolean") return Response.json({ error: "Invalid commit flag." }, { status: 400 });
   if (players !== undefined && !(Array.isArray(players) && players.every((x) => typeof x === "object" && x !== null))) {
@@ -41,13 +43,15 @@ export async function POST(request: Request) {
   const room = await getRoom(code.toUpperCase());
   if (!room) return Response.json({ error: "No campaign with that code." }, { status: 404 });
   if (!isGm(room, key)) return Response.json({ error: "Only the GM can run simulated survivors." }, { status: 403 });
+  const told = typeof situation === "string" && !!situation.trim();
+  if (room.game.expedition && !told) return Response.json({ error: "They're inside a wreck and can't see it. Describe the room they're standing in." }, { status: 400 });
 
   const seated = seatCrew(room.game, players as Seat[] | undefined);
   if ("error" in seated) return Response.json({ error: seated.error }, { status: seated.status });
 
   try {
     const base = await selfBase(new URL(request.url).origin);
-    const report = await runCrew(base, room.code, seated.table, situation, { answers: answers as string | undefined, commit: commit as boolean | undefined });
+    const report = await runCrew(base, room.code, seated.table, told ? (situation as string) : "", { answers: answers as string | undefined, commit: commit as boolean | undefined });
     return Response.json(report);
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "The segment failed." }, { status: 409 });

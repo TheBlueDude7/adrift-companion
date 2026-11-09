@@ -3,12 +3,13 @@ import "server-only";
 import { allAttributes, hullTier, maxEnergy, maxHp, maxWillpower, power, skillLevel } from "../derive";
 import { ATTRIBUTES, PRESSURE_STATES, SKILLS } from "../rules";
 import type { Character, GameState } from "../types";
+import { approvedRulings } from "../discord/rulings";
 import { playerBrief } from "./brief";
 import { creationMenu, crewContext, type SimBuildPick } from "./create";
 import { asLines, asText, structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
 import { away, menuText, type SimMenu } from "./options";
 import { styleText } from "./styles";
-import { charts, hold, site, upgrades } from "./world";
+import { charts, doctrine, hold, pressing, site, upgrades } from "./world";
 
 /** Which model plays this survivor, and how they lean. */
 export type Agent = { provider: Provider; style: string };
@@ -211,9 +212,13 @@ const recent = (g: GameState, n = 12) =>
  * Energy and take Pressure, and one mutable line early in the prompt would void everything after it.
  */
 async function persona(agent: Agent): Promise<SystemBlock[]> {
+  const [brief, rulings] = await Promise.all([playerBrief(), approvedRulings()]);
   return [
     { text: INSTRUCTIONS },
-    { text: `THE WORLD YOU LIVE IN\n\n${await playerBrief()}`, cache: true },
+    { text: `THE WORLD YOU LIVE IN\n\n${brief}`, cache: true },
+    // A ruling that changed how something works has to reach the crew playing, not just the crew
+    // asking. It's cached with the brief because it's identical for everyone and changes rarely.
+    ...(rulings.length ? [{ text: `HOW THE GM HAS RULED\n\nThese override the rulebook.\n\n${rulings.map((r) => `- ${r.text}`).join("\n")}`, cache: true }] : []),
     { text: `HOW YOU PLAY\n\n${styleText(agent.style)}`, cache: true },
   ];
 }
@@ -233,19 +238,36 @@ function world(g: GameState, c: Character, situation: string): string[] {
       `The GM describes what you can see:\n\n${situation}`,
       `Where you are:\n\n${site(g, c.id)}`,
       `What you have to hand:\n\n${hold(g, c.id)}`,
+      doctrine(g),
       `What has happened recently:\n${recent(g) || "- (nothing logged yet)"}`,
     ];
   }
   return [
     `YOU ARE\n\n${sheet(c)}`,
-    `The GM describes the situation:\n\n${situation}`,
+    situation ? `The GM describes the situation:\n\n${situation}` : UNPROMPTED,
     `Where you are:\n\n${aboard(g, c)}`,
     `What you have to hand:\n\n${hold(g, c.id)}`,
+    pressing(g),
     `What the compartments could become:\n\n${upgrades(g)}`,
     `The chart:\n\n${charts(g)}`,
+    doctrine(g),
     `What has happened recently aboard:\n${recent(g) || "- (nothing logged yet)"}`,
   ];
 }
+
+/**
+ * What stands in for the GM's description when there isn't one.
+ *
+ * Most segments aboard have no event in them: the ship is as they left it, and the only question is
+ * what the crew does about that. They don't need telling — the sheets, the hold, the ladders and the
+ * arithmetic below are the whole situation, and a GM inventing a prompt every segment just to get a
+ * decision out of them is doing work the state already did.
+ */
+const UNPROMPTED = `NOBODY IS TELLING YOU WHAT TO DO THIS SEGMENT.
+
+No alarm, no visitor, nothing new through the hull. The ship is as you left it, and the situation is just everything below: what you're carrying, what's in the hold, what's broken, what the crew has learned, and how many days of food that really is.
+
+So decide for yourselves. Read what's pressing, weigh it against where you want the ship to be in a week rather than tonight, and take the task you'd defend to the others. Quiet segments are what the crew has instead of luck — the stores, the repairs and the half-built module all come out of them.`;
 
 /**
  * What changes off the ship. The map is the GM's: they can see the room and the crew can't, and the
@@ -355,6 +377,64 @@ export async function decideCreate(agent: Agent, crew: Character[], directive: s
     pitch: asText(value.pitch, "(came aboard without a word)"),
     reason: asText(value.reason, "(gave no reason)"),
     unclear: asText(value.unclear) || undefined,
+  };
+}
+
+const DEBRIEF = `THE JOB IS OVER AND YOU ARE TALKING IT THROUGH. You are not choosing a task, so rule 2 above does not apply.
+
+Say one thing the crew should do differently next time, and say it as a standing order rather than a story. Not what happened — they were all there — but the rule you would make of it: what to check before opening something, what to carry, what not to split up for, when to walk away. One or two sentences, in your own voice, specific enough that someone could follow it under pressure.
+
+Make it from what actually went wrong or nearly did, including to other people. If the honest lesson is that the approach was sound and the dice were bad, say that instead of inventing a flaw — a crew that rewrites its doctrine after every scratch ends up with no doctrine at all. If what you learned is already written below in what the crew knows, sharpen it or pass; don't repeat it.
+
+"lesson" is the standing order itself, which the whole crew will carry into the next one. "keep" is false when you have nothing worth adding this time, and then "lesson" is ignored.`;
+
+const DEBRIEF_TOOL: Tool = {
+  name: "debrief",
+  description: "Say what the crew should do differently next time.",
+  schema: {
+    type: "object",
+    properties: {
+      keep: { type: "boolean", description: "True when this is worth the whole crew carrying. False when you have nothing to add." },
+      lesson: { type: "string", description: "The standing order, in your own voice, under 300 characters. Specific enough to follow under pressure." },
+      said: { type: "string", description: "What your character says at the debrief, in character, under 300 characters." },
+      unclear: { type: "string", description: "Only when a rule or the situation was genuinely ambiguous." },
+    },
+    required: ["keep", "lesson", "said"],
+  },
+};
+
+/**
+ * What one survivor takes away from a job that's over.
+ *
+ * This is the only pass that writes anything the crew keeps. It reads the same world the segment
+ * does — their sheet, what happened, what's already been learned — because a lesson is only worth
+ * having if it's drawn from the state they were actually in, and because an identical prefix is a
+ * cache hit. `keep` exists so a survivor with nothing to say can say nothing.
+ */
+export async function decideDebrief(
+  g: GameState,
+  c: Character,
+  agent: Agent,
+  from: string,
+): Promise<{ keep: boolean; lesson: string; said: string; unclear?: string; model: string; usage: Usage }> {
+  const { value, model, usage } = await structured<{ keep: boolean; lesson: string; said: string; unclear?: string }>(
+    agent.provider,
+    [...(await persona(agent)), { text: DEBRIEF }],
+    DEBRIEF_TOOL,
+    [
+      `YOU ARE\n\n${sheet(c)}`,
+      `What you're talking through: ${from}`,
+      doctrine(g),
+      `What happened:\n${recent(g, 30) || "- (nothing logged yet)"}`,
+    ].join("\n\n"),
+  );
+  return {
+    keep: value.keep === true,
+    lesson: asText(value.lesson),
+    said: asText(value.said, "(says nothing)"),
+    unclear: asText(value.unclear) || undefined,
+    model,
+    usage,
   };
 }
 

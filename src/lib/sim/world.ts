@@ -1,7 +1,8 @@
 import "server-only";
 
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
-import { ITEM_CATEGORIES } from "../rules";
+import { characterAlerts, foodCount, hullTier, power, roomWorks, supplyCount } from "../derive";
+import { ITEM_CATEGORIES, PANICKED, PRESSURE_STATES } from "../rules";
 import type { GameState, Item, Zone } from "../types";
 
 /** What sits in ship storage, by name, so an upgrade can be priced against it. */
@@ -161,4 +162,69 @@ export function upgrades(g: GameState): string {
     ];
   });
   return lines.length ? lines.join("\n") : "Nothing aboard has an upgrade path.";
+}
+
+/**
+ * What is going wrong right now, counted off the state rather than described by the GM.
+ *
+ * The point is that nobody has to be told. Food and water are days of it, a hull at half is a number,
+ * an untreated wound is on a sheet — so the crew can be handed the arithmetic and left to decide
+ * what it means, instead of waiting for a GM to say "you're running low". Every line here is
+ * something a player could work out from their own screen; none of it is the GM's side of the table.
+ */
+export function pressing(g: GameState): string {
+  const lines: string[] = [];
+  const alive = g.characters.filter((c) => !c.dead);
+  const mouths = Math.max(1, alive.length);
+
+  const food = foodCount(g, "*");
+  const water = supplyCount(g, "Water Unit", "*");
+  const days = (n: number) => `${Math.floor(n / mouths)} day${Math.floor(n / mouths) === 1 ? "" : "s"}`;
+  if (food < mouths * 3) lines.push(`- Food: ${food} ration${food === 1 ? "" : "s"} for ${mouths} of you — ${days(food)} at full rations.`);
+  if (water < mouths * 3) lines.push(`- Water: ${water} unit${water === 1 ? "" : "s"} for ${mouths} of you — ${days(water)}.`);
+
+  const { surplus, generated, draw } = power(g.ship);
+  if (surplus < 0) lines.push(`- Power: drawing ${draw} against ${generated} generated. Something has to come off the bus or be fixed.`);
+  else if (surplus === 0) lines.push("- Power: no margin. Anything else you switch on browns out the ship.");
+
+  const tier = hullTier(g.ship);
+  if (g.ship.hullHp < tier.maxHp) lines.push(`- Hull: ${g.ship.hullHp} of ${tier.maxHp} ("${tier.name}"). Repairs want Hull Plating and someone on them.`);
+  if (g.ship.overloaded) lines.push("- The reactor is overloaded. More power now, a worse failure later.");
+
+  for (const c of alive) {
+    // The danger alerts are the ones that kill or end a day. Pressure short of Panicked isn't on
+    // that list and is still worth saying, because it's dice against every roll they make.
+    const urgent = characterAlerts(g, c).filter((a) => a.tone === "danger").map((a) => a.text);
+    if (c.pressure >= 2 && c.pressure < PANICKED) urgent.push(`${PRESSURE_STATES[c.pressure].name}, and it won't come down on its own`);
+    if (urgent.length) lines.push(`- ${c.name}: ${urgent.join("; ")}.`);
+  }
+
+  const broken = g.ship.rooms.filter((r) => r.module && !roomWorks(r));
+  if (broken.length) lines.push(`- Out of action: ${broken.map((r) => `${r.name} (${r.active ? r.condition.toLowerCase() : "switched off"})`).join(", ")}.`);
+
+  const stalled = g.ship.projects.filter((p) => !p.done && p.progress > 0);
+  if (stalled.length) lines.push(`- Started and unfinished: ${stalled.map((p) => `${p.name} (${p.progress} of ${p.required})`).join(", ")}.`);
+
+  if (!lines.length) return "WHAT'S PRESSING\n\nNothing is on fire. This is when you get ahead: stores, repairs, a module, a course.";
+  return `WHAT'S PRESSING\n\nCounted off the ship's own books, not anybody's opinion:\n\n${lines.join("\n")}`;
+}
+
+/**
+ * What the crew learned the hard way, signed by whoever learned it.
+ *
+ * This is their only memory. Everything else they're shown is the state they're standing in, and
+ * state carries no inference — a depleted hold doesn't say why, and a room they've searched doesn't
+ * say what it cost. So without this, a doctrine with a hole in it gets used again next boarding.
+ *
+ * It sits in the changing part of the prompt rather than the cached prefix, because a lesson written
+ * tonight has to be read tomorrow morning and a cached prefix would still be yesterday's.
+ */
+export function doctrine(g: GameState): string {
+  const lessons = g.doctrine ?? [];
+  if (!lessons.length) return "WHAT THE CREW HAS LEARNED\n\nNothing written down yet. Whatever you work out here is the first of it.";
+  return [
+    "WHAT THE CREW HAS LEARNED",
+    "Standing orders, written after jobs that went badly. Follow them unless you have a reason not to, and say the reason.",
+    lessons.map((l) => `- ${l.text} — ${l.by}, after ${l.from}`).join("\n"),
+  ].join("\n\n");
 }
