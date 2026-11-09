@@ -3,7 +3,7 @@
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
 import { extraTaskBlocker, newAction, taskTerms } from "../src/lib/actions";
-import { startExpedition, markExpeditionTurn, moveTo, scout } from "../src/lib/expedition";
+import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { legalOptions } from "../src/lib/sim/options";
 import { site } from "../src/lib/sim/world";
@@ -129,6 +129,55 @@ function check(label: string, got: unknown, want: unknown) {
   check("what the site still holds is the GM's", g.expedition!.secrets?.capacity, 4);
   check("which a player's copy has no sight of", playerView(g).expedition!.secrets, undefined);
   check("nor is Okonkwo hidden from their own crewmate", theirs.includes("Okonkwo is in the Docking Collar"), true);
+}
+
+// What the crew has been told about the site, which is how a derelict is explored: by accumulating it.
+{
+  const g = world();
+  startExpedition(g, { site: "", crew: ids(g), siteId: "tanager" });
+  const [vale] = ids(g);
+  const e = g.expedition!;
+  const collar = e.zones.find((z) => z.name === "Docking Collar")!;
+  const corridor = e.zones.find((z) => z.name === "Spinal Corridor")!;
+  const axe = collar.finds.find((f) => f.by === "look")!;
+
+  check("an unfound clue reaches nobody, the GM included", site(g, vale).includes("wedged with a fire axe"), false);
+  revealFind(g, collar.id, axe.id);
+  check("one they've been handed is in front of them", site(g, vale).includes("What you've worked out about this room"), true);
+  check("in the words the GM read out", site(g, vale).includes("wedged with a fire axe"), true);
+
+  // Two rooms on, the axe matters more rather than less: it's why the hatch behind them is open.
+  moveTo(g, vale, corridor.id);
+  const brief = site(playerView(g), vale);
+  check("and it stays with them when they move on", brief.includes("What you've learned elsewhere on this site"), true);
+  check("named by the room it came from", brief.includes("in the Docking Collar: The hatch is wedged"), true);
+  check("while this room has given up nothing yet", brief.includes("What you've worked out about this room"), false);
+
+  const ceiling = corridor.finds.find((f) => f.by === "look")!;
+  revealFind(g, corridor.id, ceiling.id);
+  const both = site(playerView(g), vale);
+  check("now it has", both.includes("pushed out from inside the ceiling void"), true);
+  // This room's finds come first and unlabelled; the rooms behind them are named and come last.
+  check("and the two aren't confused for each other", [both.indexOf("ceiling void") < both.indexOf("fire axe"), both.includes("- in the Spinal Corridor:")], [true, false]);
+}
+
+// The site as something outside the app reads it, which is the GM's whole view and nothing less.
+{
+  const g = world();
+  startExpedition(g, { site: "", crew: ids(g), siteId: "tanager", capacity: 4, notes: "Wyre is in the hold." });
+  const [vale] = ids(g);
+  const report = siteReport(g)!;
+  const medbay = report.zones.find((z) => z.name === "Medical Bay")!;
+
+  check("it carries the site and the Turn", [report.site, report.turn, report.turnsPerSegment], ["The Tanager", 1, 8]);
+  check("what the site has left, and the GM's own note", [report.capacity, report.notes], [4, "Wyre is in the hold."]);
+  check("where each of the crew is standing", report.crew.find((c) => c.id === vale)?.zone, "Docking Collar");
+  check("every room, entered or not", report.zones.length, 8);
+  check("the GM's note on a room nobody has entered", medbay.note.startsWith("The room that explains the hold"), true);
+  check("its finds, with how each would come to light", medbay.finds.map((f) => f.by), ["look", "task", "search"]);
+  check("and that none of them has been handed over", medbay.finds.every((f) => !f.found), true);
+  check("the ways out, by name and state", report.zones.find((z) => z.name === "Spinal Corridor")!.ways.find((w) => w.to === "Bridge")?.state, "locked");
+  check("and nothing at all when nobody is off the ship", siteReport(world()), null);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

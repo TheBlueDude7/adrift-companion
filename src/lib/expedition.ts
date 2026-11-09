@@ -217,6 +217,47 @@ function see(e: Expedition, z: Zone): (string | Line)[] {
   return out;
 }
 
+/**
+ * The whole site as the GM knows it, in one readable object: the layout, where everyone is standing,
+ * what each room still has to give up, and what it costs to take it.
+ *
+ * This is the GM's side of the screen, so it carries the notes, the Salvage Capacity and the finds
+ * nobody has been handed yet. It exists to be served to something running the site from outside the
+ * app, which is why the names are spelled out and the ids are kept: the names are for reading and
+ * the ids are what every other endpoint takes.
+ */
+export function siteReport(g: GameState) {
+  const e = g.expedition;
+  if (!e) return null;
+  const nameOf = (id: string) => e.zones.find((z) => z.id === id)?.name ?? null;
+  return {
+    site: e.site,
+    turn: e.turn + 1,
+    turnsPerSegment: TURNS_PER_SEGMENT,
+    capacity: e.secrets?.capacity ?? null,
+    notes: e.secrets?.notes ?? "",
+    crew: e.crew.map((id) => ({
+      id,
+      name: g.characters.find((c) => c.id === id)?.name ?? "someone",
+      zoneId: e.at[id] ?? null,
+      zone: nameOf(e.at[id] ?? ""),
+    })),
+    zones: e.zones.map((z) => ({
+      id: z.id,
+      name: z.name,
+      look: z.look,
+      cover: z.cover,
+      seen: z.seen,
+      secured: z.secured,
+      searched: z.searched,
+      note: z.secrets?.note ?? "",
+      threats: g.threats.filter((t) => t.zone === z.id).map((t) => ({ id: t.id, name: t.name, band: t.band })),
+      finds: z.finds.map((f) => ({ id: f.id, text: f.text, by: f.by, found: !!f.found })),
+      ways: neighbours(e, z.id).map((n) => ({ toId: n.border.a === z.id ? n.border.b : n.border.a, to: n.zone?.name ?? null, seen: !!n.zone?.seen, state: n.border.state, note: n.border.note })),
+    })),
+  };
+}
+
 /** What's waiting in a zone, in the order the GM authored it. */
 export const findsWaiting = (z: Zone) => z.finds.filter((f) => !f.found);
 

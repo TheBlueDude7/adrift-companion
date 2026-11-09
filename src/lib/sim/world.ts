@@ -2,7 +2,7 @@ import "server-only";
 
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
 import { ITEM_CATEGORIES } from "../rules";
-import type { GameState, Item } from "../types";
+import type { GameState, Item, Zone } from "../types";
 
 /** What sits in ship storage, by name, so an upgrade can be priced against it. */
 function stock(g: GameState): Map<string, number> {
@@ -69,16 +69,26 @@ export function site(g: GameState, characterId: string): string {
     : [];
   const seen = e.zones.filter((z) => z.seen && z.id !== here?.id);
   const threats = g.threats.filter((t) => t.zone && t.zone === here?.id).map((t) => `${t.name} (${t.band})`);
+  // Only what the GM has handed over. A find they haven't been given isn't in a player's copy at
+  // all, and the filter is here for the GM's own state, which the probes and the table talk read.
+  const told = (z: Zone) => z.finds.filter((f) => f.found).map((f) => f.text);
+  const learned = e.zones
+    .filter((z) => z.id !== here?.id && told(z).length)
+    .map((z) => `- in the ${z.name}: ${told(z).join(" ")}`);
   return [
     `You are inside ${e.site}, on Expedition Turn ${e.turn + 1} of 8 in this day segment.`,
     here
       ? `You are standing in the ${here.name}: ${here.look || "nothing you can make much of."}${here.cover === "none" ? " No cover here." : ` Cover here: ${here.cover}.`}${here.secured ? " It's been Secured." : ""}${here.searched ? " It's already been searched." : ""}`
       : "You aren't on the site's map yet.",
     threats.length ? `In this room with you: ${threats.join(", ")}.` : "",
+    here && told(here).length ? `What you've worked out about this room:\n${told(here).map((t) => `- ${t}`).join("\n")}` : "",
     withYou.length ? `With you: ${withYou.join(", ")}.` : "You are alone in this room.",
     elsewhere.length ? `The rest of the crew:\n${elsewhere.map((x) => `- ${x}`).join("\n")}` : "",
     ways.length ? `Ways out of this room:\n${ways.join("\n")}` : "",
     seen.length ? `Rooms you've already been in: ${seen.map((z) => `${z.name}${z.searched ? " (searched)" : ""}${z.secured ? " (secured)" : ""}`).join(", ")}.` : "",
+    // A crew explores a derelict by accumulating these, so what they learned two rooms back has to
+    // still be in front of them when they decide what to do next.
+    learned.length ? `What you've learned elsewhere on this site:\n${learned.join("\n")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
