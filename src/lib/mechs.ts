@@ -10,8 +10,12 @@ export function mechModules(m: Mech) {
   return m.modules.flatMap((x) => (MODULE_BY_KEY[x.key] ? [{ inst: x, def: MODULE_BY_KEY[x.key] }] : []));
 }
 
-/** Armor Points the mech's working plating provides when it's intact. Damaged modules protect nothing. */
-export const maxMechArmor = (m: Mech) => mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0);
+/**
+ * Armor Points the mech's plating provides when it's intact: the frame's own, which no damage can take
+ * away for good, plus every working Defensive module. Damaged modules protect nothing.
+ */
+export const maxMechArmor = (m: Mech) =>
+  MECH_TIERS[m.tier].armor + mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0);
 
 export function mechStats(g: GameState, m: Mech) {
   const chassis = CHASSIS[m.chassis];
@@ -84,5 +88,7 @@ export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: M
 
 export function newMech(name: string, chassis: MechChassis, tier: 1 | 2 | 3, tierResist: MechDamageType[]): Mech {
   const hp = CHASSIS[chassis].hp + MECH_TIERS[tier].hpBonus;
-  return { id: uid(), name, chassis, tier, hp, armor: 0, tierResist, modules: [], pilotId: null, deployed: false, external: false, upgrading: false, conditions: [], notes: "" };
+  // A frame rolls out of the bay fully plated.
+  const armor = MECH_TIERS[tier].armor;
+  return { id: uid(), name, chassis, tier, hp, armor, plated: true, tierResist, modules: [], pilotId: null, deployed: false, external: false, upgrading: false, conditions: [], notes: "" };
 }

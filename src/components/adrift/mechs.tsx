@@ -170,6 +170,7 @@ function NewMechDialog() {
           </div>
           <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-3 text-center text-xs">
             <div><p className="font-mono text-lg">{c.hp + t.hpBonus}</p><p className="text-muted-foreground">Mech HP</p></div>
+            <div><p className="font-mono text-lg">{t.armor}</p><p className="text-muted-foreground">Frame Armor</p></div>
             <div><p className="font-mono text-lg">{t.slots}</p><p className="text-muted-foreground">Module Slots</p></div>
             <div><p className="font-mono text-lg">{c.hardpoints}</p><p className="text-muted-foreground">Hardpoints</p></div>
             <div><p className="font-mono text-lg">{t.frame}</p><p className="text-muted-foreground">Frame STR/CON</p></div>
@@ -457,11 +458,15 @@ function TierUpgradeDialog({ mech }: { mech: Mech }) {
                   return `${m.name} is taken Offline for a ${tierName(next)} upgrade.`;
                 }
                 const before = mechStats(g, m).maxHp;
+                const beforeArmor = mechStats(g, m).maxArmor;
                 m.upgrading = false;
                 m.tier = next;
                 m.tierResist = picks;
-                m.hp = Math.min(mechStats(g, m).maxHp, m.hp + (mechStats(g, m).maxHp - before));
-                return `⬆ ${m.name} is now a ${tierName(next)} ${CHASSIS[m.chassis].name}: ${MECH_TIERS[next].slots} Module Slots, Frame ${MECH_TIERS[next].frame}, Resistance ${picks.join(" + ")}.`;
+                const after = mechStats(g, m);
+                m.hp = Math.min(after.maxHp, m.hp + (after.maxHp - before));
+                // The heavier frame arrives plated, so the upgrade hands over the points it adds.
+                m.armor = Math.min(after.maxArmor, m.armor + (after.maxArmor - beforeArmor));
+                return `⬆ ${m.name} is now a ${tierName(next)} ${CHASSIS[m.chassis].name}: ${MECH_TIERS[next].slots} Module Slots, Frame ${MECH_TIERS[next].frame}, ${MECH_TIERS[next].armor} frame Armor, Resistance ${picks.join(" + ")}.`;
               });
               setOpen(false);
             }}

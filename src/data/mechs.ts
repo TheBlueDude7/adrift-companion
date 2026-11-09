@@ -18,10 +18,11 @@ export const CHASSIS: Record<MechChassis, { name: string; hp: number; inventory:
   },
 };
 
-export const MECH_TIERS: Record<1 | 2 | 3, { slots: number; frame: number; hpBonus: number; resistPicks: number; cells: number }> = {
-  1: { slots: 4, frame: 4, hpBonus: 0, resistPicks: 0, cells: 1 },
-  2: { slots: 5, frame: 5, hpBonus: 2, resistPicks: 1, cells: 1 },
-  3: { slots: 6, frame: 6, hpBonus: 4, resistPicks: 2, cells: 2 },
+/** `armor` is the frame's own plating, before any Defensive module adds to it. */
+export const MECH_TIERS: Record<1 | 2 | 3, { slots: number; frame: number; hpBonus: number; armor: number; resistPicks: number; cells: number }> = {
+  1: { slots: 4, frame: 4, hpBonus: 0, armor: 4, resistPicks: 0, cells: 1 },
+  2: { slots: 5, frame: 5, hpBonus: 2, armor: 6, resistPicks: 1, cells: 1 },
+  3: { slots: 6, frame: 6, hpBonus: 4, armor: 8, resistPicks: 2, cells: 2 },
 };
 
 export const MECH_CONDITIONS = ["Breached", "Conductive", "Corroded", "Disrupted", "Immobilized", "Jammed", "Overheated", "Power-Starved", "Sensor-Blind", "Servo-Locked", "Anchored"];

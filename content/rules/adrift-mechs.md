@@ -66,6 +66,7 @@ Module Slots
 Frame Strength
 Frame Constitution
 Maximum HP bonus
+Frame Armor
 Built-in damage Resistance
 Deployment Fuel cost
 When the Project is completed, the frame becomes an assembled mech and counts against the ship’s Mech Capacity.
@@ -76,6 +77,7 @@ A completed Tier I mech has:
 4 Module Slots
 Frame Strength 4
 Frame Constitution 4
+4 Frame Armor
 No built-in damage Resistance
 Deployment cost of 1 Fuel
 The statistics and special ability of its chosen chassis
@@ -89,6 +91,7 @@ A completed Tier II mech has:
 Frame Strength 5
 Frame Constitution 5
 +2 Maximum Mech HP
+6 Frame Armor
 Resistance 1 to one chosen damage type
 Deployment cost of 1 Fuel
 The statistics and special ability of its chosen chassis
@@ -106,6 +109,7 @@ A completed Tier III mech has:
 Frame Strength 6
 Frame Constitution 6
 +4 Maximum Mech HP
+8 Frame Armor
 Resistance 2 to one chosen damage type, or Resistance 1 to two chosen damage types
 Deployment cost of 2 Fuel
 The statistics and special ability of its chosen chassis
@@ -169,9 +173,15 @@ Calculate its Maximum Mech HP.
 Record its Frame Strength and Frame Constitution.
 Choose any built-in Tier Resistance.
 Record its Module Slots and Hardpoints.
+Record its Frame Armor.
 Add the mech to the ship’s Mech Capacity.
 Install completed modules using normal installation Tasks.
-A newly completed mech begins at full HP and with no optional modules installed.
+A newly completed mech begins at full HP, with its frame plating intact, and with no optional modules installed.
+
+Frame Armor
+Every frame is plated, and the heavier the Tier the thicker it is: 4 Armor Points at Tier I, 6 at Tier II, and 8 at Tier III. Defensive modules add their own Armor on top of this.
+Frame Armor is ablative, exactly like a survivor’s. Each hit it absorbs stops 1 Damage and costs the plating 1 Point. At 0 Points the plating is spent and stops nothing until it is replaced, though the frame’s maximum never drops: replating restores it in full.
+Upgrading a Tier hands the mech the Points its new frame adds, so a Tier I mech with full plating that becomes Tier II has 6.
 Using Frame Attributes
 While operating a powered mech, the pilot may use the mech’s Frame Strength instead of their own Strength for:
 Lifting.
@@ -306,6 +316,7 @@ Determine the attack’s base Damage.
 Apply the mech’s Vulnerabilities.
 Apply the mech’s damage Resistances.
 Apply Cover.
+Apply the mech’s Armor: if any Damage is left and the plating has Points, it stops 1 and loses 1 Point.
 Deal the remaining Damage to the mech’s HP.
 If the mech is reduced to 0 HP, apply any excess Damage to the pilot.
 The pilot’s personal Armor and Resistances may reduce excess Damage normally.
@@ -864,6 +875,7 @@ Maximum HP.
 Module Slots.
 Frame Strength.
 Frame Constitution.
+Frame Armor.
 Built-in Resistances.
 Fuel cost.
 The exact Project requirements and material costs are listed with each mech frame.

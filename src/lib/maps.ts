@@ -1,5 +1,6 @@
 import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
+import { MECH_TIERS } from "@/data/mechs";
 import { maxMechArmor } from "./mechs";
 import { DEFAULT_ITEM_TEMPLATES, threatBand } from "./rules";
 import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, ThreatStats, TilePos, TokenKind, ZoneSecrets } from "./types";
@@ -156,8 +157,13 @@ export function normalizeGame(g: GameState): GameState {
     if (t.stats) t.band = threatBand(t.stats.hp, t.stats.maxHp);
     else if (!t.band) t.band = "unhurt";
   }
-  // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
-  for (const m of g.mechs) if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
+  for (const m of g.mechs) {
+    // Mech Armor used to be a permanent module bonus. Saves from then start with their plating intact.
+    if (typeof m.armor !== "number") m.armor = maxMechArmor(m);
+    // Plating used to come only from modules. Frames carry their own now, fitted once to older mechs.
+    else if (!m.plated) m.armor += MECH_TIERS[m.tier].armor;
+    m.plated = true;
+  }
   if (!Array.isArray(g.actions)) g.actions = [];
   // An expedition that began before sites had zones is one unmapped room the crew is standing in.
   if (g.expedition) {
