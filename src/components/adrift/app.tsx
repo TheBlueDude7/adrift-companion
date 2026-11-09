@@ -32,7 +32,6 @@ import { leaveCampaign } from "@/lib/sync/client";
 import type { GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionsTab } from "./actions";
-import { CombatTab } from "./combat";
 import { ApplyConditionDialog } from "./conditions";
 import { CrewTab } from "./crew";
 import { usePerms } from "@/lib/use-perms";
@@ -44,7 +43,6 @@ import { MechsTab } from "./mechs";
 import { OverviewTab } from "./overview";
 import { RulesTab } from "./rules";
 import { ShipTab } from "./ship";
-import { SiteTab } from "./site";
 import { StorageTab } from "./storage";
 
 function Header() {
@@ -336,11 +334,16 @@ function Header() {
   );
 }
 
+/**
+ * Combat and the site map aren't here.
+ *
+ * Both are run elsewhere — the fight at the table, the derelict by the AI — and the state behind
+ * them is still kept, written to and refereed by the server. What's gone is the companion's own
+ * screens for them, which nobody was reading.
+ */
 const TABS = [
   { value: "overview", label: "Overview" },
   { value: "actions", label: "Actions" },
-  { value: "site", label: "Site", expedition: true },
-  { value: "combat", label: "Combat" },
   { value: "crew", label: "Crew" },
   { value: "ship", label: "Ship" },
   { value: "mechs", label: "Mechs" },
@@ -354,7 +357,6 @@ const subscribeNoop = () => () => {};
 
 export function AdriftApp() {
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
-  const away = useGame((s) => !!s.game.expedition);
   const [tab, setTab] = useState("overview");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -372,15 +374,13 @@ export function AdriftApp() {
         <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
           <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
             <TabsList className="h-9!">
-              {TABS.filter((t) => away || !t.expedition).map((t) => (
+              {TABS.map((t) => (
                 <TabsTrigger key={t.value} value={t.value} className="px-3">{t.label}</TabsTrigger>
               ))}
             </TabsList>
           </div>
           <TabsContent value="overview" className="pt-3"><OverviewTab onOpenCharacter={(id) => { setSelected(id); setTab("crew"); }} onGo={setTab} /></TabsContent>
           <TabsContent value="actions" className="pt-3"><ActionsTab /></TabsContent>
-          {away && <TabsContent value="site" className="pt-3"><SiteTab /></TabsContent>}
-          <TabsContent value="combat" className="pt-3"><CombatTab /></TabsContent>
           <TabsContent value="crew" className="pt-3"><CrewTab selectedId={selected} onSelect={setSelected} /></TabsContent>
           <TabsContent value="ship" className="pt-3"><ShipTab /></TabsContent>
           <TabsContent value="mechs" className="pt-3"><MechsTab /></TabsContent>
