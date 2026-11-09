@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { CrosshairIcon, DoorOpenIcon, EyeIcon, EyeOffIcon, FootprintsIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
+import { CrosshairIcon, DoorOpenIcon, EyeIcon, EyeOffIcon, FootprintsIcon, LightbulbIcon, PlusIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { movePlan, moveTo, neighbours, scout, setBorderState, zoneOf } from "@/lib/expedition";
+import { Textarea } from "@/components/ui/textarea";
+import { FIND_BY } from "@/data/sites";
+import { addFind, findByLabel, findsWaiting, movePlan, moveTo, neighbours, revealFind, scout, setBorderState, zoneOf } from "@/lib/expedition";
 import { BORDER_STATES, type BorderState } from "@/lib/rules";
 import { useGame } from "@/lib/store";
-import type { Border, Expedition, GameState, Zone } from "@/lib/types";
+import type { Border, Expedition, FindBy, GameState, Zone } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { EmptyState, Pill, SectionTitle } from "./common";
 
@@ -68,12 +71,7 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
           </p>
         )}
         {isGM && zone.secrets?.note && <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">{zone.secrets.note}</p>}
-        {isGM && zone.secrets?.search && (
-          <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-            <SearchIcon className="mt-0.5 size-3.5 shrink-0" />
-            {zone.searched ? <span className="line-through">{zone.secrets.search}</span> : zone.secrets.search}
-          </p>
-        )}
+        {(zone.finds.length > 0 || (isGM && zone.seen)) && <Finds zone={zone} />}
 
         {zone.seen && (
           <div className="grid gap-1.5">
@@ -124,6 +122,71 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * What the crew has learned in a room, and — for the GM — what it still has to give up.
+ *
+ * Everyone reads the same list. The difference is that the GM sees the unfound entries too, marked
+ * with how each would normally come to light, and hands them over when the crew earns them.
+ */
+function Finds({ zone }: { zone: Zone }) {
+  const { act } = useGame();
+  const { isGM } = usePerms();
+  const found = zone.finds.filter((f) => f.found);
+  const waiting = isGM ? findsWaiting(zone) : [];
+  return (
+    <div className="grid gap-1.5">
+      <Label className="text-xs">What they know{isGM && waiting.length > 0 && <span className="ml-1 font-normal text-muted-foreground">· {waiting.length} still here</span>}</Label>
+      {found.length === 0 && waiting.length === 0 && <p className="text-xs text-muted-foreground">Nothing here they haven&apos;t already seen.</p>}
+      {found.map((f) => (
+        <p key={f.id} className="flex items-start gap-1.5 text-sm">
+          <LightbulbIcon className="mt-0.5 size-3.5 shrink-0 text-amber-400/80" />
+          {f.text}
+        </p>
+      ))}
+      {waiting.map((f) => (
+        <div key={f.id} className="flex flex-wrap items-start gap-1.5 rounded-md border border-dashed p-1.5 text-sm text-muted-foreground">
+          <EyeOffIcon className="mt-0.5 size-3.5 shrink-0 text-amber-300/80" />
+          <span className="min-w-40 flex-1">{f.text}</span>
+          <Button size="xs" variant="ghost" className="ml-auto" title={`Normally found by ${findByLabel(f.by)}`} onClick={() => act("Hand over a find", (g) => revealFind(g, zone.id, f.id), "day")}>
+            Tell them
+          </Button>
+        </div>
+      ))}
+      {isGM && zone.seen && <AddFindDialog zone={zone} />}
+    </div>
+  );
+}
+
+/** Something the crew turned up that nobody wrote in advance, which is most of what a site gives up. */
+function AddFindDialog({ zone }: { zone: Zone }) {
+  const { act } = useGame();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [by, setBy] = useState<FindBy>("look");
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setText(""); setBy("look"); } }}>
+      <DialogTrigger render={<Button size="xs" variant="ghost" className="justify-self-start"><PlusIcon /> Something else they found</Button>} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{zone.name}: what they found</DialogTitle>
+          <DialogDescription>Told to the crew as soon as you add it, and it stays on the room for them to read again.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <Textarea autoFocus placeholder="A handprint on the inside of the locker door, too large to be a hand." value={text} onChange={(ev) => setText(ev.target.value)} />
+          <div className="flex flex-wrap gap-1.5">
+            {FIND_BY.map((k) => (
+              <Button key={k} size="xs" variant={by === k ? "default" : "outline"} onClick={() => setBy(k)}>{findByLabel(k)}</Button>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button disabled={!text.trim()} onClick={() => { act("A find", (g) => addFind(g, zone.id, text, by), "day"); setOpen(false); }}>Tell them</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

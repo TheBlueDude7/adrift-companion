@@ -2,7 +2,7 @@ import { newAction, resolveAction, taskPool, taskTerms } from "../src/lib/action
 import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
-import { endExpedition, markExpeditionTurn, moveTo, scout, setBorderState, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { addFind, endExpedition, findsWaiting, markExpeditionTurn, moveTo, recordSearch, revealFind, scout, setBorderState, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES } from "../src/lib/rules";
@@ -230,6 +230,33 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("and that's where they end up", zoneOf(e, vale.id)?.name, "Mess Deck");
 }
 
+// Clues and lore, handed over one at a time.
+{
+  const g = world();
+  const [vale] = g.characters;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const e = g.expedition!;
+  const here = zoneOf(e, vale.id)!;
+  check("a room comes with things to learn", findsWaiting(here).length, 2);
+  check("and the crew knows none of them yet", here.finds.filter((f) => f.found).length, 0);
+  check("nor can they read one", playerView(g).expedition!.zones.find((z) => z.id === here.id)!.finds, []);
+
+  const axe = here.finds.find((f) => f.by === "look")!;
+  check("handing one over says where they are and what they found", text(revealFind(g, here.id, axe.id)), ["Docking Collar: The hatch is wedged with a fire axe, from this side. Somebody wanted it to stay open behind them."]);
+  check("it's theirs now, and it's public", [axe.found, playerView(g).expedition!.zones.find((z) => z.id === here.id)!.finds.length], [true, 1]);
+  check("while the one they haven't found stays out of their copy", JSON.stringify(playerView(g).expedition).includes("crew manifest"), false);
+  check("handing it over twice doesn't", said(revealFind(g, here.id, axe.id), /already knows/), true);
+  check("and there's one thing left in the room", findsWaiting(here).length, 1);
+
+  // Most of what a site gives up was never written down in advance.
+  const made = addFind(g, here.id, "  A handprint inside the locker door, too large to be a hand.  ", "look");
+  check("the GM can write one on the spot", text(made), ["Docking Collar: A handprint inside the locker door, too large to be a hand."]);
+  check("and it goes straight to the crew", playerView(g).expedition!.zones.find((z) => z.id === here.id)!.finds.length, 2);
+  check("an empty one isn't a find", text(addFind(g, here.id, "   ")), ["There's nothing written to find."]);
+  check("and neither is one in no room", text(addFind(g, "nowhere", "something")), ["That's no zone of this site."]);
+  check("a find that isn't there can't be handed over", text(revealFind(g, here.id, "nope")), ["That's nothing this site holds."]);
+}
+
 // Searching a room.
 {
   const g = world();
@@ -245,6 +272,12 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("the finder carries it out themselves", carried(g, vale.id), { "Scrap Metal": 2, "Medical Supply": 1 });
   check("and the crew hears what they got", said(lines, /Vale comes away with 2 salvage bundles: 2 Scrap Metal, 1 Medical Supply/), true);
   check("what the site has left is the GM's", secret(lines), ["The Tanager holds 2 salvage bundles now."]);
+
+  // A clue the search turned up is told to the crew and costs the site nothing: it isn't salvage.
+  const manifest = here.finds.find((f) => f.by === "search")!;
+  const told = recordSearch(g, vale.id, [], [manifest.id]);
+  check("a search can bring the room's own finds to light", said(told, /Docking Collar: A crew manifest/), true);
+  check("which costs the site nothing", e.secrets?.capacity, 2);
 
   const again = newAction(g, vale, "Search");
   check("a second ordinary search of the room finds nothing", taskTerms(g, again).blocker, "The Docking Collar has been searched — only a Thorough Search finds more");

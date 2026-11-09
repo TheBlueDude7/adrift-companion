@@ -11,7 +11,10 @@
       "look": "A short umbilical, frost on every surface. The inner hatch stands open on a dark corridor.",
       "cover": "none",
       "note": "Safe. Nothing comes this far forward.",
-      "search": "A crew manifest: eleven names, four struck through in pen."
+      "finds": [
+        { "text": "The hatch is wedged with a fire axe, from this side. Somebody wanted it to stay open behind them.", "by": "look" },
+        "A crew manifest: eleven names, four struck through in pen."
+      ]
     },
     {
       "id": "corridor",
@@ -19,38 +22,57 @@
       "look": "The ship's length in one straight run, handrails on both sides, half the ceiling panels hanging.",
       "cover": "partial",
       "note": "Noise here carries to the hold. Advance the Threat Clock on anything loud.",
-      "search": "A dropped toolkit, one charge left."
+      "finds": [
+        { "text": "The panels didn't fall. They were pushed out from inside the ceiling void, one after another, heading aft.", "by": "look" },
+        "A dropped toolkit, one charge left."
+      ]
     },
     {
       "id": "mess",
       "name": "Mess Deck",
       "look": "Tables bolted down, trays still on them. Someone ate here in a hurry and did not clear up.",
       "cover": "partial",
-      "search": "Three Food Units in a sealed locker, and a bottle of something strong."
+      "note": "Nothing lives here, but it's the room the crew will want to regroup in. Let them.",
+      "finds": [
+        { "text": "Eleven places laid, seven eaten. The last four trays are untouched and the chairs are still pushed in.", "by": "look" },
+        "Three Food Units in a sealed locker, and a bottle of something strong."
+      ]
     },
     {
       "id": "medbay",
       "name": "Medical Bay",
       "look": "Two berths, one with the restraints cut through from the inside.",
       "cover": "partial",
-      "note": "The cut restraints are the clue: whatever is in the hold was treated here first.",
-      "search": "A Medkit and two doses of something unlabelled."
+      "note": "The room that explains the hold. Hand over the restraints freely; make them work for the chart.",
+      "finds": [
+        { "text": "The restraints were cut from the inside, and not with a blade. The edges are melted.", "by": "look" },
+        { "text": "A patient chart: Wyre, J. Surveyor. Admitted with a puncture wound taken in the hold. Treated, sedated, and then the entries stop mid-sentence.", "by": "task" },
+        "A Medkit and two doses of something unlabelled."
+      ]
     },
     {
       "id": "annex",
       "name": "Reactor Annex",
       "look": "A pressure door with a handwritten sign taped to it, and behind that, warmth.",
       "cover": "strong",
-      "note": "Four bodies, sat down, no injuries. They suffocated politely. The log on the console explains why.",
-      "search": "Two Power Cells and the reactor log."
+      "note": "Four bodies, sat down, no injuries. They suffocated politely. Only reachable by breaching the weld.",
+      "finds": [
+        { "text": "Four bodies, sat down against the bulkhead, no injuries on any of them. They arranged themselves.", "by": "look" },
+        { "text": "The reactor log, last entry: we have sealed ourselves in and vented the rest of the ship. If you are reading this, do not open the hold. It is not Wyre any more.", "by": "task" },
+        "Two Power Cells and the reactor log."
+      ]
     },
     {
       "id": "bridge",
       "name": "Bridge",
       "look": "Consoles dark but for one amber telltale, and a chair turned to face the door.",
       "cover": "strong",
-      "note": "The telltale is a distress beacon, still transmitting on a dead channel.",
-      "search": "Navigational charts for three systems, and a sidearm in the captain's locker."
+      "note": "The beacon is the hook for whatever brought the crew here. Let them switch it off if they want.",
+      "finds": [
+        { "text": "The amber telltale is a distress beacon, still transmitting on a channel nobody has monitored in decades.", "by": "look" },
+        { "text": "The command chair is turned away from the consoles to face the door, and the lockout was set from this seat.", "by": "look" },
+        "Navigational charts for three systems, and a sidearm in the captain's locker."
+      ]
     },
     {
       "id": "hold",
@@ -58,7 +80,10 @@
       "look": "Two decks of open space, netting torn down, containers moved into a rough wall at the far end.",
       "cover": "partial",
       "note": "Start the creature here, behind the container wall. It knows the crawlway and the crew do not.",
-      "search": "Scrap Metal and Scrap Components in quantity, if there's time to cut it free."
+      "finds": [
+        { "text": "The containers were dragged into a wall from this side, and the netting came down to make the gap behind it soft. Something built that.", "by": "look" },
+        "Scrap Metal and Scrap Components in quantity, if there's time to cut it free."
+      ]
     },
     {
       "id": "crawl",
@@ -66,7 +91,10 @@
       "look": "A duct a person fits through on their elbows, running the length of the ship.",
       "cover": "none",
       "note": "The creature's road. Anyone in here alone when it uses the crawl has a very bad turn.",
-      "search": "Nothing worth the bruises."
+      "finds": [
+        { "text": "The dust is disturbed the whole length of the duct, in both directions, more times than one passage would account for.", "by": "look" },
+        "Nothing worth the bruises."
+      ]
     }
   ],
   "borders": [

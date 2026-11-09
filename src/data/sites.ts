@@ -1,4 +1,5 @@
 import { BORDER_STATES, COVER_POINTS, type BorderState, type Cover } from "@/lib/rules";
+import type { FindBy } from "@/lib/types";
 import tanager from "../../content/sites/tanager.json";
 
 /**
@@ -17,10 +18,16 @@ export type SiteZone = {
   /** What anyone standing in it can see. */
   look?: string;
   cover?: Cover;
-  /** The GM's note on the zone. Never sent to a player. */
+  /** The GM's note on the zone: threat placement, pacing, anything never read out. */
   note?: string;
-  /** What a successful Search turns up here. Never sent to a player. */
-  search?: string;
+  /**
+   * What there is to learn here, handed to the crew one piece at a time.
+   *
+   * A bare string is something they come by with a Search, since that's most of them. `by` says how
+   * it normally comes to light: `look` for what a careful look round gives up, `search` for a
+   * Search, `task` for anything that takes a Breach, an Analyze, or the GM's own ruling.
+   */
+  finds?: (string | { text: string; by?: FindBy })[];
 };
 
 export type SiteBorder = {
@@ -50,6 +57,8 @@ export const SITE_BY_ID = Object.fromEntries(SITES.map((s) => [s.id, s])) as Rec
 
 export const entranceOf = (s: SiteDefinition) => s.entrance ?? s.zones[0]?.id;
 
+export const FIND_BY: readonly FindBy[] = ["look", "search", "task"];
+
 /**
  * Everything wrong with an authored site, in words its author can act on.
  *
@@ -72,6 +81,11 @@ export function siteProblems(s: SiteDefinition): string[] {
     else seen.add(z.id);
     if (!z.name?.trim()) out.push(`Zone "${z.id}" needs a name.`);
     if (z.cover !== undefined && !(z.cover in COVER_POINTS)) out.push(`Zone "${z.id}" has cover "${z.cover}", which isn't none, partial, or strong.`);
+    for (const f of z.finds ?? []) {
+      const { text, by } = typeof f === "string" ? { text: f, by: undefined } : f;
+      if (!text?.trim()) out.push(`Zone "${z.id}" has a find with nothing in it.`);
+      if (by !== undefined && !FIND_BY.includes(by)) out.push(`Zone "${z.id}" has a find found by "${by}", which isn't a look, a search, or a task.`);
+    }
   }
   const borders = Array.isArray(s.borders) ? s.borders : [];
   for (const b of borders) {

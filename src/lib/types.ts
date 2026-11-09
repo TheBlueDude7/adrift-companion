@@ -390,7 +390,27 @@ export type StarMap = {
 export type GameMap = (GridMap | StarMap) & { createdBy?: string };
 
 /** What a zone is hiding. Absent from a player's copy, like everything else a Search is for. */
-export type ZoneSecrets = { note: string; search: string };
+export type ZoneSecrets = { note: string };
+
+/** How a find normally comes to light, which is a hint to the GM rather than a rule the app applies. */
+export type FindBy = "look" | "search" | "task";
+
+/**
+ * One thing there is to learn in a zone: a clue, a piece of lore, a detail of the room, or what a
+ * Search turns up.
+ *
+ * Finds are the GM's to hand over. An unfound one never reaches a player; once found it stays on the
+ * zone so the crew can read it again, which is the point — a site is explored by accumulating these,
+ * not by running out of Turns.
+ */
+export type Find = {
+  id: string;
+  /** What the crew is told, in words that can be read out.  */
+  text: string;
+  by: FindBy;
+  /** The crew has it. Until then only the GM sees it. */
+  found?: boolean;
+};
 
 /**
  * A distinct area the crew can move and fight in. The rules measure no distance inside one, so a
@@ -409,6 +429,8 @@ export type Zone = {
   secured: boolean;
   /** A zone normally allows one standard Search. */
   searched: boolean;
+  /** Clues, lore and salvage waiting here. A player's copy carries only the ones they've found. */
+  finds: Find[];
   /** Absent in a player's copy. */
   secrets?: ZoneSecrets;
 };

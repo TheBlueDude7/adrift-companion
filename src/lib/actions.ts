@@ -680,6 +680,8 @@ export type Resolution = {
    * point of Salvage Capacity. An empty list means it found something that isn't ordinary salvage.
    */
   bundles?: string[];
+  /** Ids of the room's waiting finds this Search brought to light. They cost the site nothing. */
+  finds?: string[];
 };
 
 const STATUS_WORD: Record<Resolution["status"], string> = { success: "succeeds", strong: "strong success", failed: "fails", cancelled: "called off" };
@@ -794,7 +796,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     }
   }
   if (ok && def.effect === "search") {
-    for (const line of recordSearch(g, a.characterId, r.bundles ?? [])) {
+    for (const line of recordSearch(g, a.characterId, r.bundles ?? [], r.finds ?? [])) {
       if (typeof line === "string") out.push(line);
       else hidden.push(line);
     }

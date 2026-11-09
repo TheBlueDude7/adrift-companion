@@ -5,7 +5,7 @@ import { actionBlocker, clearOverwatch, spendAction, type ActionKind } from "./f
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
 import { borderSprintable, borderWalkable, BUNDLE_BY_LABEL, SEGMENTS, type BorderState } from "./rules";
 import { stockItem } from "./stock";
-import type { Border, Expedition, GameState, Line, Zone } from "./types";
+import type { Border, Expedition, FindBy, GameState, Line, Zone } from "./types";
 
 /** Eight Expedition Turns consume one day segment. */
 export const TURNS_PER_SEGMENT = 8;
@@ -51,7 +51,9 @@ export function instantiate(def: SiteDefinition): { zones: Zone[]; borders: Bord
     seen: false,
     secured: false,
     searched: false,
-    secrets: { note: z.note ?? "", search: z.search ?? "" },
+    // A bare string is a Search result, since most authored finds are.
+    finds: (z.finds ?? []).map((f) => (typeof f === "string" ? { id: uid(), text: f, by: "search" as const } : { id: uid(), text: f.text, by: f.by ?? "search" })),
+    secrets: { note: z.note ?? "" },
   }));
   const borders: Border[] = (def.borders ?? [])
     .filter((b) => ids.has(b.from) && ids.has(b.to))
@@ -215,6 +217,38 @@ function see(e: Expedition, z: Zone): (string | Line)[] {
   return out;
 }
 
+/** What's waiting in a zone, in the order the GM authored it. */
+export const findsWaiting = (z: Zone) => z.finds.filter((f) => !f.found);
+
+const FIND_BY_LABEL: Record<FindBy, string> = { look: "a look round", search: "a Search", task: "a task or a ruling" };
+export const findByLabel = (by: FindBy) => FIND_BY_LABEL[by];
+
+/**
+ * Hand one of a zone's finds to the crew.
+ *
+ * The text is logged for everyone and the find stays on the zone, so a clue learned three rooms ago
+ * can be read again without anyone having written it down. Which finds a room gives up, and in what
+ * order, is the GM's: the app holds the material and says how it would normally come to light.
+ */
+export function revealFind(g: GameState, zoneId: string, findId: string): (string | Line)[] {
+  const z = g.expedition?.zones.find((x) => x.id === zoneId);
+  const f = z?.finds.find((x) => x.id === findId);
+  if (!z || !f) return ["That's nothing this site holds."];
+  if (f.found) return [`The crew already knows: ${f.text}`];
+  f.found = true;
+  // Naming the room matters: the crew learns things in several at once and the log is read later.
+  return [`${z.name}: ${f.text}`];
+}
+
+/** Something the crew found that nobody wrote up in advance, which is most of what a site gives up. */
+export function addFind(g: GameState, zoneId: string, text: string, by: FindBy = "look"): (string | Line)[] {
+  const z = g.expedition?.zones.find((x) => x.id === zoneId);
+  if (!z) return ["That's no zone of this site."];
+  if (!text.trim()) return ["There's nothing written to find."];
+  z.finds.push({ id: uid(), text: text.trim(), by });
+  return revealFind(g, zoneId, z.finds.at(-1)!.id);
+}
+
 /**
  * A Search that found something, recorded against the room and against the site.
  *
@@ -223,14 +257,18 @@ function see(e: Expedition, z: Zone): (string | Line)[] {
  * where it counts against their inventory slots on the way home. A Search that turned up a hidden
  * feature, a unique item, or a way into somewhere passes no bundles and costs the site nothing.
  *
+ * `finds` are the room's own waiting discoveries the search brought to light, which cost it nothing
+ * either: a clue is not salvage.
+ *
  * The Capacity itself stays the GM's: a crew that could read how much was left would know whether
  * to keep searching without searching.
  */
-export function recordSearch(g: GameState, characterId: string, bundles: string[] = []): (string | Line)[] {
+export function recordSearch(g: GameState, characterId: string, bundles: string[] = [], finds: string[] = []): (string | Line)[] {
   const e = g.expedition;
   const z = e ? zoneOf(e, characterId) : undefined;
   const out: (string | Line)[] = [];
   if (!e) return ["There's no expedition for that search to have happened on."];
+  if (z) for (const id of finds) out.push(...revealFind(g, z.id, id));
   if (z && !z.searched) {
     z.searched = true;
     out.push(`The ${z.name} has been searched. Another ordinary Search there turns up nothing: that takes new information, the right equipment, a Thorough Search, or a change in the room.`);

@@ -15,6 +15,7 @@ import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
+import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
@@ -720,6 +721,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   const [made, setMade] = useState<boolean[]>(() => crafts.map(() => true));
   const [bundles, setBundles] = useState<string[]>([]);
   const [bundle, setBundle] = useState(SALVAGE_BUNDLES[0].label);
+  const [finds, setFinds] = useState<string[]>([]);
   const c = game.characters.find((x) => x.id === a.characterId);
   const def = taskFor(a);
   const map = a.target ? game.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
@@ -727,10 +729,13 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   // the GM is handing out more than it has, which the resolution would quietly cut short.
   const capacity = game.expedition?.secrets?.capacity;
   const left = capacity === undefined ? null : capacity - bundles.length;
+  // The room the searcher is standing in is the one whose finds a Search could turn up.
+  const searching = game.expedition && def.effect === "search" ? zoneOf(game.expedition, a.characterId) : undefined;
+  const waiting = searching ? findsWaiting(searching) : [];
 
   function resolve(status: Resolution["status"]) {
     const ok = status === "success" || status === "strong";
-    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined, bundles: ok ? bundles : undefined }), status === "failed" ? "danger" : "info");
+    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined, bundles: ok ? bundles : undefined, finds: ok ? finds : undefined }), status === "failed" ? "danger" : "info");
     setOpen(false);
   }
 
@@ -741,7 +746,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); setBundles([]); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); setBundles([]); setFinds([]); } }}>
       <DialogTrigger render={<Button size="xs" variant="outline">Resolve</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -804,9 +809,24 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
               </Select>
             </div>
           )}
+          {def.effect === "search" && isGM && waiting.length > 0 && (
+            <div className="grid gap-1.5">
+              <Label>What this room still has to give up</Label>
+              {waiting.map((f) => (
+                <label key={f.id} className="flex items-start gap-2 text-sm">
+                  <Checkbox checked={finds.includes(f.id)} onCheckedChange={(v) => setFinds((xs) => (v ? [...xs, f.id] : xs.filter((x) => x !== f.id)))} aria-label={f.text} />
+                  <span className="grid">
+                    <span>{f.text}</span>
+                    <span className="text-[11px] text-muted-foreground">Normally found by {findByLabel(f.by)}</span>
+                  </span>
+                </label>
+              ))}
+              <p className="text-[11px] text-muted-foreground">Tick what the search turned up. The crew is told it, and it stays on the room for them to read again.</p>
+            </div>
+          )}
           {def.effect === "search" && isGM && (
             <div className="grid gap-1.5">
-              <Label>What they found</Label>
+              <Label>Salvage they carried off</Label>
               <div className="flex gap-2">
                 <Select value={bundle} onValueChange={(v) => setBundle(v as string)}>
                   <SelectTrigger className="w-full"><SelectValue>{bundle}</SelectValue></SelectTrigger>

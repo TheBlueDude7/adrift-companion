@@ -2,7 +2,7 @@ import { INJURY_BY_CODE } from "@/data/injuries";
 import { uid } from "./dice";
 import { maxMechArmor } from "./mechs";
 import { DEFAULT_ITEM_TEMPLATES, threatBand } from "./rules";
-import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, ThreatStats, TilePos, TokenKind } from "./types";
+import type { Crop, GameMap, GameState, GridMap, SpaceTile, StarMap, StarNode, StarNodeStatus, StarNodeType, Terrain, ThreatStats, TilePos, TokenKind, ZoneSecrets } from "./types";
 
 export const TERRAIN: { key: Terrain; name: string; fill: string; hint: string }[] = [
   { key: "floor", name: "Floor", fill: "#334155", hint: "Walkable deck" },
@@ -164,6 +164,13 @@ export function normalizeGame(g: GameState): GameState {
     if (!Array.isArray(g.expedition.zones)) g.expedition.zones = [];
     if (!Array.isArray(g.expedition.borders)) g.expedition.borders = [];
     if (!g.expedition.at) g.expedition.at = {};
+    // What a Search would turn up used to be one line of the GM's note. It's a find now, waiting in
+    // the room like any other — and a player's copy has no secrets, so there's nothing to carry.
+    for (const z of g.expedition.zones) {
+      const old = z.secrets as (ZoneSecrets & { search?: string }) | undefined;
+      if (!Array.isArray(z.finds)) z.finds = old?.search?.trim() ? [{ id: uid(), text: old.search, by: "search" }] : [];
+      if (old) delete old.search;
+    }
   }
   delete (g.ship as { powerDays?: number }).powerDays;
   if (!g.research || !Array.isArray(g.research.cybernetics)) g.research = { cybernetics: [] };
