@@ -252,7 +252,10 @@ function Header() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{leaving ? `Return from ${leaving.site}` : "End the expedition"}</DialogTitle>
-            <DialogDescription>Pressure eases by 1 once the danger has passed, Panicked costs 1 Stress, and once-per-expedition abilities become ready again.</DialogDescription>
+            <DialogDescription>
+              Pressure eases by 1 once the danger has passed, Panicked costs 1 Stress, and once-per-expedition abilities become ready again.
+              {!leaving && " Nobody is recorded as away, so this covers the whole crew — which is what you want for a trip you ran off the app."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-2">

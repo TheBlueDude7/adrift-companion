@@ -36,13 +36,31 @@ const RANGE_LABEL: Record<keyof typeof WEAPON_RANGES, string> = {
 
 const BAND_TONE = { unhurt: "muted", hurt: "warn", "badly hurt": "danger", down: "muted" } as const;
 
-/** Everything a shot could be aimed at: the GM's threats first, then survivors still standing. */
+/**
+ * Everything a shot could be aimed at: the GM's threats first, then survivors still standing.
+ *
+ * While a fight is running, whoever holds an Initiative card comes first and the rest say they're
+ * out of it. Something can be shot before the GM deals it a card — a threat that walks in mid-round
+ * is still there to be shot at — so the ones outside the fight are listed rather than withheld.
+ */
 function targets(g: GameState) {
-  return [
+  const out = [
     ...g.threats.filter((t) => t.band !== "down").map((t) => ({ id: t.id, label: `${t.name} — ${t.stats ? `${t.stats.hp}/${t.stats.maxHp} HP` : t.band}`, threat: true })),
     ...g.characters.filter((c) => !c.dead).map((c) => ({ id: c.id, label: `${c.name} — ${c.hp}/${maxHp(c)} HP`, threat: false })),
-  ];
+  ].map((t) => ({ ...t, inFight: !g.fight || g.fight.order.some((o) => o.id === t.id) }));
+  return out
+    .map((t) => ({ ...t, label: t.inFight ? t.label : `${t.label} · not in the fight` }))
+    .sort((a, b) => Number(b.inFight) - Number(a.inFight));
 }
+
+/**
+ * Who the attack dialog offers before anyone chooses.
+ *
+ * An enemy in the fight, then any enemy, and otherwise nobody. Shooting a fellow survivor happens,
+ * but it's never what the dialog assumes you meant — and the roll button stays dead until a target
+ * is picked, so offering nobody refuses the shot rather than aiming it somewhere wrong.
+ */
+const firstTarget = (list: ReturnType<typeof targets>) => (list.find((t) => t.threat && t.inFight) ?? list.find((t) => t.threat))?.id ?? "";
 
 /**
  * What a threat shrugs off. The GM sees its real defenses; a player sees only the ones the crew
@@ -386,7 +404,7 @@ function AttackDialog({ attacker }: { attacker: Character }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setItemId(options[options.length - 1]?.item?.id ?? "unarmed"); setTargetId(list[0]?.id ?? ""); setZones(0); setCover("none"); setAim(false); setBurst(false); setAnswers({}); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setItemId(options[options.length - 1]?.item?.id ?? "unarmed"); setTargetId(firstTarget(list)); setZones(0); setCover("none"); setAim(false); setBurst(false); setAnswers({}); } }}>
       <DialogTrigger render={<Button size="xs" variant="outline"><CrosshairIcon /> Attack</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -425,6 +443,9 @@ function AttackDialog({ attacker }: { attacker: Character }) {
                   {list.map((t) => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            )}
+            {list.length > 0 && !list.some((t) => t.threat) && (
+              <p className="text-[11px] text-muted-foreground">No enemy to shoot at, so nobody is picked for you. The GM adds threats above.</p>
             )}
           </div>
           {/* Where the two of them are standing answers both questions, so neither is asked. When
