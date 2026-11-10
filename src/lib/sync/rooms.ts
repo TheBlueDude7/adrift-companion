@@ -110,7 +110,9 @@ function announce(room: Room) {
 }
 
 export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId: string }, claimNewCharacter?: string) {
-  const was = room.game;
+  // `applyOps` works in place, so the redacted "before" has to be taken now or it would come out
+  // identical to the "after" and every player would be sent an empty patch.
+  const was = playerView(structuredClone(room.game));
   const before = new Set(room.game.characters.map((c) => c.id));
   room.game = applyOps(room.game, ops);
   room.version += 1;
@@ -124,7 +126,7 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
   // A player's client tracks the redacted state, so their patch has to be the change between two
   // redacted states — not the GM's, which would carry the numbers it exists to withhold. Both go
   // out under the same version, including when the redacted change is empty, so clients stay in step.
-  const forPlayers = diff(playerView(was), playerView(room.game));
+  const forPlayers = diff(was, playerView(room.game));
   for (const c of room.conns) {
     const gm = room.members[c.memberId]?.role === "gm";
     c.send("ops", { version: room.version, ops: gm ? ops : forPlayers, ...meta });
