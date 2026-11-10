@@ -404,6 +404,12 @@ function bench(components: number) {
   check("and clear to go", permissionReasons(g, fit(panels.name, room.id)), []);
   check("Routine for a trained engineer", taskTerms(g, fit(panels.name, room.id)).routine, true);
 
+  // The seed ship's Makeshift Bench is enough. A Workshop room with nothing in it is not.
+  const bare: GameState = structuredClone(g);
+  bare.ship.rooms.find((r) => r.module === "Workshop / Fabrication Bay")!.level = 0;
+  check("but a bench is the least it takes", taskTerms(bare, fit(panels.name, room.id)).blocker, "Needs a working Workshop");
+  check("so it isn't offered without one", tasks(bare).includes("Install Panels or Defenses"), false);
+
   /** Plan the task, then settle it the way the server does. */
   const run = (x: GameState, a: SegmentAction, status: "success" | "strong" | "failed") => {
     x.actions.push(a);

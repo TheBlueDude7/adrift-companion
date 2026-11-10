@@ -678,6 +678,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes for the listed Energy. At 6+ levels above every threshold, make a third item in the same segment, also covered. |
 | Deconstruct Common Item | 1 | Scavenging 2 for T1, 4 for T2, 6 for T3 | Take an item in the hold apart for half the materials it was made from, rounded down; three quarters on a Strong Result. |
 | Upgrade Module | 2 | Engineering 4 | Advance an eligible module upgrade Project. |
+| Install Panels or Defenses | 2 | Engineering 3 or Mechanical Technician 3 | Bolt Makeshift Solar Panels, Traps, or a Defensive Gun into a room’s spare slot, from a Workshop. One fitting per room. A failure wastes half the materials, rounded up. |
 | Salvage Ship | 2 | Scavenging 4 | Scavenge a ship using the scavenge rules |
 | Plot Safe Course | 1 | Piloting 4 | Move through scanned, stable space. |
 | Scan Nearby Tile | 1 | Navigation 4 | Reveal Basic information about an adjacent tile. |
@@ -1545,6 +1546,10 @@ A room normally supports one module.
 Small equipment, personal storage, furniture, access panels, and ordinary controls do not count as additional modules.
 
 A module occupying several rooms states this in its construction requirements.
+
+<!-- updated: room-fittings -->
+
+Alongside its module, a room has one spare slot for a fitting: Makeshift Solar Panels, Traps, or a Defensive Gun. A room holds one of the three and no more, so panels and defenses compete for the same space. Fitting one is the Install Panels or Defenses Task rather than a Project: one Task, the materials the upgrade sheet lists, and a Workshop to work from.
 
 #### Module Requirements
 
