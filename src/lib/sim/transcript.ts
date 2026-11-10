@@ -87,6 +87,8 @@ export function transcript(report: SimReport, { committed = true }: { committed?
       // Movement is the GM's to apply, so it's called out rather than buried in the approach.
       t.move ? `**Wants to move to:** ${t.move}` : "",
       t.questions.length ? `**Asks the GM:**\n${t.questions.map((q) => `- ${q}`).join("\n")}` : "",
+      // Opening a project is the GM's, so an ask has to be visible rather than left in the app.
+      t.asked ? `🔨 **Asks you to open a project:** ${t.asked.template}${t.asked.note ? ` — “${t.asked.note}”` : ""}` : "",
       t.outcome.length ? `**Result:**\n${t.outcome.map((x) => `- ${x}`).join("\n")}` : "",
       t.unclear ? `⚠️ **Unclear to them:** ${t.unclear}` : "",
     ];
@@ -100,6 +102,7 @@ export function transcript(report: SimReport, { committed = true }: { committed?
     [
       committed ? "" : "-# Nothing was submitted. Answer their questions and run it again with `answers:` to commit.",
       report.turns.some((t) => t.move) ? "-# Moves are yours to make on the Site tab. Nobody has been moved." : "",
+      report.turns.some((t) => t.asked) ? "-# Project requests are waiting on the Ship tab. Start one or turn it down." : "",
       tokens(report.usage),
       gaps.length ? `-# ${gaps.length} tasks weren't offered (facilities, materials, or a map target).` : "",
     ]

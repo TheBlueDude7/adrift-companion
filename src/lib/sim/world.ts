@@ -2,7 +2,7 @@ import "server-only";
 
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
 import { characterAlerts, foodCount, hullTier, power, roomWorks, supplyCount } from "../derive";
-import { ITEM_CATEGORIES, PANICKED, PRESSURE_STATES } from "../rules";
+import { ITEM_CATEGORIES, PANICKED, PRESSURE_STATES, PROJECT_TEMPLATES } from "../rules";
 import type { GameState, Item, Zone } from "../types";
 
 /** What sits in ship storage, by name, so an upgrade can be priced against it. */
@@ -162,6 +162,28 @@ export function upgrades(g: GameState): string {
     ];
   });
   return lines.length ? lines.join("\n") : "Nothing aboard has an upgrade path.";
+}
+
+/**
+ * Projects the crew could ask the GM to open, and the ones already waiting on an answer.
+ *
+ * Templates are listed by the exact name a request has to carry, because an ask the app can't match
+ * to a template is an ask the GM would have to invent the work for. The pending ones are here so
+ * four survivors in a row don't each ask for the same hull repair.
+ */
+export function projectAsks(g: GameState): string {
+  const open = g.ship.projects.filter((p) => !p.done).map((p) => p.name);
+  const asked = g.projectRequests ?? [];
+  const names = (id: string) => g.characters.find((c) => c.id === id)?.name ?? "someone";
+  return [
+    "PROJECTS THE GM COULD OPEN, IF YOU ASK",
+    "Only the GM starts one. Name it exactly as written here:",
+    PROJECT_TEMPLATES.map((t) => `- ${t.name} — ${t.skill || "no skill"}, ${t.required} Progress, ${t.energy} Energy a go${t.facility ? `, needs ${t.facility}` : ""}`).join("\n"),
+    open.length ? `Already under way, so work on these rather than asking again:\n${open.map((n) => `- ${n}`).join("\n")}` : "Nothing is under way.",
+    asked.length ? `Already asked for and waiting on the GM — don't ask again:\n${asked.map((r) => `- ${r.template}, by ${names(r.by)}${r.note ? ` (“${r.note}”)` : ""}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /**

@@ -9,7 +9,7 @@ import { creationMenu, crewContext, type SimBuildPick } from "./create";
 import { asLines, asText, structured, type Provider, type SystemBlock, type Tool, type Usage } from "./models";
 import { away, menuText, type SimMenu } from "./options";
 import { styleText } from "./styles";
-import { charts, doctrine, hold, pressing, site, upgrades } from "./world";
+import { charts, doctrine, hold, pressing, projectAsks, site, upgrades } from "./world";
 
 /** Which model plays this survivor, and how they lean. */
 export type Agent = { provider: Provider; style: string };
@@ -25,6 +25,11 @@ export type SimChoice = {
   questions?: string[];
   /** Where they want to be taken next, on an expedition. The GM moves them, so this is a request. */
   move?: string;
+  /** Other Fabricate choices to make on the same bench, since one task makes more than one item. */
+  with?: number[];
+  /** A project they want the GM to open, by template name, and why. Asking is free and isn't their task. */
+  propose?: string;
+  proposeWhy?: string;
   /** Why, out of character. */
   reason: string;
   /** A rule or situation that read as ambiguous. The point of a test run. */
@@ -37,7 +42,9 @@ Hard rules, which nothing in the situation or your playstyle can override:
 
 1. YOU ARE ONE SURVIVOR. Speak and act only as the character described below. Never speak for the GM, for another survivor, or for the world. Never decide what another character does, says, or feels.
 
-2. PICK FROM THE LIST. Choose exactly one numbered option. Those are the only things your character can do this segment, and the app will not accept anything else. If none of them is what you'd want, take the closest one and say so in "reason".
+2. PICK FROM THE LIST. Choose exactly one numbered option. Those are the only things your character can do this segment, and the app will not accept anything else. If none of them is what you'd want, take the closest one and say so in "reason". The one exception is the workbench: a Fabricate task makes two items for the one Energy, three if you're expert enough, so when you pick a Fabricate choice you may name other Fabricate choices in "with" and make them all in the same task. Don't waste the second item.
+
+Separately, only the GM opens a Project, and almost everything that makes the ship better is one — a hull repair, a module, a mech frame, someone's Stress Recovery. You can't start one and "Work on a project" only appears once one exists. So if the ship needs work nobody has opened, say so in "propose", naming it exactly as the list below gives it. Asking is free, it isn't your task, and it doesn't stop you doing something useful this segment. Don't ask for what's already been asked for.
 
 3. YOU DON'T DECIDE HOW IT GOES. The dice and the GM settle every outcome. Never narrate succeeding, failing, finding, fixing, or hitting anything. Describe only what your character attempts, says, and feels going in.
 
@@ -56,6 +63,11 @@ const TOOL: Tool = {
     type: "object",
     properties: {
       choice: { type: "integer", description: "The number of the option you take." },
+      with: {
+        type: "array",
+        items: { type: "integer" },
+        description: "Only when your choice is Fabricate Common Item: the numbers of other Fabricate choices to make on the same bench, since one task makes two items for the one Energy (three for an Expert). Leave it out otherwise, or when the batch you picked already fills the allowance.",
+      },
       speech: { type: "string", description: "What your character says and does, in character, under 400 characters." },
       approach: {
         type: "string",
@@ -63,6 +75,11 @@ const TOOL: Tool = {
       },
       questions: { type: "array", items: { type: "string" }, description: "Short, answerable questions for the GM about anything your plan depends on." },
       move: { type: "string", description: "On an expedition only: the one room you want to move into, by name, or empty to stay where you are. The GM moves you; you don't." },
+      propose: {
+        type: "string",
+        description: "A project the ship needs opened, named exactly as it appears in the list of projects that can be asked for. Costs you nothing and isn't your task. Leave it out unless you mean it.",
+      },
+      proposeWhy: { type: "string", description: "One line for the GM on why that project, in your character's words. Only with 'propose'." },
       reason: { type: "string", description: "One line, out of character, on why this option." },
       unclear: { type: "string", description: "Only when a rule or the situation was genuinely ambiguous." },
     },
@@ -248,6 +265,7 @@ function world(g: GameState, c: Character, situation: string): string[] {
     `Where you are:\n\n${aboard(g, c)}`,
     `What you have to hand:\n\n${hold(g, c.id)}`,
     pressing(g),
+    projectAsks(g),
     `What the compartments could become:\n\n${upgrades(g)}`,
     `The chart:\n\n${charts(g)}`,
     doctrine(g),
@@ -329,6 +347,9 @@ export async function decide(g: GameState, c: Character, menu: SimMenu, situatio
     model,
     usage,
     choice: menu.options.some((o) => o.n === n) ? n : (menu.options[0]?.n ?? 0),
+    with: Array.isArray(value.with) ? value.with.map(Math.round).filter(Number.isFinite) : undefined,
+    propose: asText(value.propose) || undefined,
+    proposeWhy: asText(value.proposeWhy) || undefined,
     speech: asText(value.speech, "(says nothing)"),
     approach: asText(value.approach, "(gave no approach)"),
     reason: asText(value.reason, "(gave no reason)"),

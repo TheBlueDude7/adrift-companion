@@ -10,12 +10,13 @@ import { conditionPenalty, type ConditionAsk } from "./conditions";
 import { injuryPenalty } from "./injuries";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
-import { moveShip } from "./power";
+import { moveShip, shipMap } from "./power";
+import { FACILITY_BY_NAME, ROOM_FITTINGS } from "@/data/ship-upgrades";
 import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, takeOne } from "./stock";
 import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { CraftRecipe } from "@/data/crafting";
-import type { ActionStatus, Character, GameState, Line, Project, SegmentAction, SpaceTile, StarMap } from "./types";
+import type { ActionStatus, Character, GameState, Line, Project, SegmentAction, SpaceTile, StarMap, StarNodeType } from "./types";
 
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
 
@@ -48,6 +49,10 @@ export function energyShort(g: GameState, a: SegmentAction) {
 export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const effect = taskFor(a).effect;
   if ((effect !== "craft" && effect !== "cook") || !a.crafts?.length) return [];
+  // A name nothing recognises used to cost nothing and pass as Routine, because every step that
+  // reads a recipe skipped it quietly. Say so instead: the hold, the check and the station all
+  // depend on knowing what's being made.
+  const unknown = a.crafts.filter((n) => !RECIPE_BY_NAME[n]).map((n) => `No recipe called ${n}`);
   const blockers = a.crafts.map((n) => RECIPE_BY_NAME[n] && craftBlocker(g, RECIPE_BY_NAME[n])).filter((b): b is string => !!b);
   const cost = fabricateCost(a.crafts);
   const short = shortfalls(g, cost.inputs, cost.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
@@ -57,7 +62,7 @@ export function craftProblems(g: GameState, a: SegmentAction): string[] {
     a.crafts.length > limit
       ? [effect === "cook" ? "More than one recipe in a cook" : `More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`]
       : [];
-  return [...new Set([...over, ...blockers, ...short])];
+  return [...new Set([...unknown, ...over, ...blockers, ...short])];
 }
 
 /** Water filters in the hold, best first. One charge purifies the units its own notes promise. */
@@ -100,6 +105,10 @@ export function supplyProblems(g: GameState, a: SegmentAction): string[] {
     case "medicine": {
       const r = name ? RECIPE_BY_NAME[name] : undefined;
       return r ? shortfalls(g, r.inputs, r.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`) : [];
+    }
+    case "fit": {
+      const f = a.fit?.name ? FACILITY_BY_NAME[a.fit.name] : undefined;
+      return f ? shortfalls(g, f.cost, f.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`) : [];
     }
     default:
       return [];
@@ -352,6 +361,45 @@ export function scanRadius(g: GameState) {
 
 const byDistance = (dist: number) => (dist <= 1 ? 4 : dist === 2 ? 6 : 8);
 
+/**
+ * Every fitting that could go into a room, and where.
+ *
+ * One source of truth for the Actions tab's pickers and the simulated crew's menu, so the two can't
+ * offer different things. A room is a candidate only while its one spare slot is empty.
+ */
+export function fitOptions(g: GameState) {
+  const free = g.ship.rooms.filter((r) => !r.fitting);
+  return ROOM_FITTINGS.flatMap((f) => free.map((r) => ({ name: f.name, roomId: r.id, label: `${f.name} in ${r.name}` })));
+}
+
+/** Hulks worth stripping: somebody else's ship or station, still holding something. */
+const SALVAGEABLE = new Set<StarNodeType>(["derelict", "station"]);
+
+/**
+ * The wreck the ship is currently tied up to, or null.
+ *
+ * Salvage Ship means scrapping a derelict for what's in it, and the only thing that says which
+ * derelict is the chart: the crew has to have flown to it. Their own hull is never a candidate,
+ * which is the whole point — a crew can't strip the ship it's standing in for parts.
+ */
+export function salvageTarget(g: GameState) {
+  const map = shipMap(g);
+  const here = map?.shipAt;
+  if (!map || !here) return null;
+  return map.nodes.find((n) => n.x === here.x && n.y === here.y && SALVAGEABLE.has(n.type) && n.status !== "looted") ?? null;
+}
+
+/** Why there's nothing to strip, in the terms the crew would think in. */
+function salvageBlocker(g: GameState): string {
+  const map = shipMap(g);
+  const here = map?.shipAt;
+  if (!map || !here) return "The ship isn't on the chart, so there's nothing alongside to strip";
+  const node = map.nodes.find((n) => n.x === here.x && n.y === here.y);
+  if (!node) return "Nothing alongside but open space. Fly to a derelict first — their own ship isn't salvage";
+  if (!SALVAGEABLE.has(node.type)) return `${node.name} is a ${node.type}, not a hulk to strip`;
+  return `${node.name} has already been picked over`;
+}
+
 /** Thresholds that rise with the job: distance for courses and scans, module level for crops and the reactor. */
 function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { threshold: number; blocker: string | null } {
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
@@ -373,6 +421,22 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
     case "Search": {
       const zone = g.expedition?.zones.find((z) => z.id === g.expedition?.at[a.characterId]);
       return { threshold: def.threshold, blocker: zone?.searched && !a.thorough ? `The ${zone.name} has been searched — only a Thorough Search finds more` : null };
+    }
+    // You scrap somebody else's ship, never your own. The target is whatever the chart says the
+    // ship is parked at, so it needs a wreck on this tile that hasn't already been stripped.
+    case "Salvage Ship": {
+      const wreck = salvageTarget(g);
+      return { threshold: def.threshold, blocker: wreck ? null : salvageBlocker(g) };
+    }
+    // A fitting takes a room's one spare slot, so the room has to have it free and the sheet has to
+    // know what's being bolted in. Both are chosen before the task is taken, so both can be wrong.
+    case "Install Panels or Defenses": {
+      const fitting = a.fit?.name ? FACILITY_BY_NAME[a.fit.name] : undefined;
+      const room = a.fit?.roomId ? g.ship.rooms.find((r) => r.id === a.fit!.roomId) : undefined;
+      if (!fitting?.fitting) return { threshold: def.threshold, blocker: "Pick solar panels, traps, or a defensive gun" };
+      if (!room) return { threshold: def.threshold, blocker: "Pick the room it goes in" };
+      if (room.fitting) return { threshold: def.threshold, blocker: `${room.name}'s spare slot already holds ${room.fitting}` };
+      return { threshold: def.threshold, blocker: null };
     }
     case "Plot Safe Course":
       return { threshold: byDistance(dist), blocker: null };
@@ -526,7 +590,7 @@ function expertCrafter(c: Character, crafts: string[]) {
 }
 
 /** Items one Fabricate task normally makes: two, or three for an Expert. */
-function normalFabricateLimit(c: Character, crafts: string[]) {
+export function normalFabricateLimit(c: Character, crafts: string[]) {
   return FABRICATE_ITEMS + (expertCrafter(c, crafts) ? 1 : 0);
 }
 
@@ -572,7 +636,10 @@ function craftCheck(c: Character, crafts: string[], energy: number, def: Shipboa
       .reduce((b, s) => (s.margin > b.margin ? s : b));
     if (!worst || pick.margin < worst.margin) worst = pick;
   }
-  if (!worst) return withMastery({ energy, skill: null, attr: null, threshold: 0, mode: "routine", routine: true, dice: 0, poolLabel: "No skill", blocker }, def, null, false);
+  // Nothing named here is a recipe, so there's no threshold to measure and nothing to roll. It is
+  // emphatically not Routine: `craftProblems` names the recipe, and this keeps the terms honest
+  // in the meantime rather than advertising a free success.
+  if (!worst) return withMastery({ energy, skill: null, attr: null, threshold: 0, mode: "skilled", routine: false, dice: 0, poolLabel: "No recognised recipe", blocker }, def, null, false);
   const level = skillLevel(c, worst.skill);
   const attr = SKILL_BY_KEY[worst.skill].attr;
   const attrValue = attributeValue(c, attr);
@@ -851,6 +918,30 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     const lifted = g.characters.filter((x) => !x.dead && x.id !== c?.id && x.pressure > pressureFloor(x.stress));
     for (const x of lifted) x.pressure -= 1;
     out.push(lifted.length ? `Pressure eases for ${lifted.map((x) => x.name).join(", ")}.` : "Nobody was under Pressure, but spirits lift anyway.");
+  }
+  if (def.effect === "fit") {
+    const fitting = a.fit?.name ? FACILITY_BY_NAME[a.fit.name] : undefined;
+    const room = a.fit?.roomId ? g.ship.rooms.find((r) => r.id === a.fit!.roomId) : undefined;
+    const allowed = a.approval === "granted";
+    const short = fitting ? shortfalls(g, fitting.cost, fitting.toolkit) : [];
+    if (!fitting || !room) out.push("⚠ Nothing was fitted: the task didn't say what, or where.");
+    else if (room.fitting) out.push(`⚠ ${room.name}'s spare slot already holds ${room.fitting}.`);
+    else if (short.length && !allowed) out.push(`⚠ ${fitting.name} wasn't fitted: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`);
+    else if (ok) {
+      spend(g, fitting.cost, fitting.toolkit);
+      room.fitting = fitting.name;
+      // A fitting draws power of its own, on top of whatever the room's module already takes.
+      room.powerDraw += fitting.powerDraw;
+      const back = strong ? fitting.cost.flatMap((p) => (Math.floor(p.qty / 4) > 0 ? [{ name: p.name, qty: Math.floor(p.qty / 4) }] : [])) : [];
+      for (const p of back) stockItem(g, p.name, p.qty, { category: "Material" });
+      out.push(`🏗 ${fitting.name} fitted in ${room.name}, from ${recipeText(fitting.cost, fitting.toolkit)}${fitting.powerDraw ? `, drawing ${fitting.powerDraw} more Power` : ""}.`);
+      if (back.length) out.push(`The work goes cleanly: ${recipeText(back)} goes back to the hold.`);
+    } else {
+      // Half the materials are gone whether or not the panels went up, as a botched craft loses half.
+      const lost = fitting.cost.map((p) => ({ ...p, qty: Math.ceil(p.qty / 2) }));
+      spend(g, lost, fitting.toolkit);
+      out.push(`${fitting.name} isn't fitted: ${recipeText(lost, fitting.toolkit)} is wasted, and the rest goes back to the hold.`);
+    }
   }
   if (ok && def.effect === "tune") {
     g.ship.tuned = true;

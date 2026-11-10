@@ -31,7 +31,7 @@ import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } fr
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
 import { useGame } from "@/lib/store";
-import type { Crop, GameState, Project, Room } from "@/lib/types";
+import type { Crop, GameState, Project, ProjectRequest, Room } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Dice, EmptyState, Meter, Pill, SectionTitle, Stepper } from "./common";
@@ -643,17 +643,27 @@ function RoomCard({ room }: { room: Room }) {
   );
 }
 
-function AddProjectDialog() {
+/** Projects that can be started. Xenoflora Cultivation is off the list until the GM says there's something to cultivate. */
+export const projectTemplates = (game: GameState) =>
+  PROJECT_TEMPLATES.filter((p) => p.name !== "Xenoflora Cultivation" || (game.research.xenofloraAllowed && !game.research.xenoflora));
+
+/**
+ * Starting a project, whether the GM thought of it or the crew asked for it.
+ *
+ * An accepted request opens this same dialog with the template and room already chosen, so the
+ * materials, the patient and the module ladder are all settled the way they always were — the ask
+ * decides what the crew wanted, never what the ship gets. The request is cleared by starting it.
+ */
+function AddProjectDialog({ request }: { request?: ProjectRequest }) {
   const { game, act } = useGame();
   const [open, setOpen] = useState(false);
-  const [tpl, setTpl] = useState(0);
-  const [roomId, setRoomId] = useState("none");
+  const [tpl, setTpl] = useState(() => Math.max(0, projectTemplates(game).findIndex((p) => p.name === request?.template)));
+  const [roomId, setRoomId] = useState(request?.roomId ?? "none");
   const [patientId, setPatientId] = useState<string | null>(null);
   const [moduleName, setModuleName] = useState<string | null>(null);
   const [startLevel, setStartLevel] = useState(0);
   const { isGM } = usePerms();
-  // Xenoflora Cultivation is off the list until the GM says the crew has something worth cultivating.
-  const templates = PROJECT_TEMPLATES.filter((p) => p.name !== "Xenoflora Cultivation" || (game.research.xenofloraAllowed && !game.research.xenoflora));
+  const templates = projectTemplates(game);
   const t = templates[tpl] ?? templates[0];
   const needsPatient = t.name === "Stress Recovery";
   const patient = game.characters.find((c) => c.id === patientId);
@@ -716,7 +726,9 @@ function AddProjectDialog() {
         done: false,
       };
       g.ship.projects.push(p);
-      return `Project started: ${p.name} (0/${p.required})${plan && pay && paid ? `, using ${recipeText(cost, toolkit)}` : ""}.`;
+      if (request) g.projectRequests = (g.projectRequests ?? []).filter((x) => x.id !== request.id);
+      const asked = request ? g.characters.find((c) => c.id === request.by)?.name : null;
+      return `Project started: ${p.name} (0/${p.required})${plan && pay && paid ? `, using ${recipeText(cost, toolkit)}` : ""}${asked ? `, as ${asked} asked` : ""}.`;
     });
     setOpen(false);
     setPatientId(null);
@@ -726,7 +738,7 @@ function AddProjectDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm"><HammerIcon /> New project</Button>} />
+      <DialogTrigger render={request ? <Button size="xs" variant="outline">Start it</Button> : <Button size="sm"><HammerIcon /> New project</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Start a Project</DialogTitle>
@@ -827,6 +839,44 @@ function AddProjectDialog() {
   );
 }
 
+/**
+ * What the crew has asked for and nobody has opened yet.
+ *
+ * Shown to everyone, because the crew knows what it asked: a player who can see their own request
+ * sitting there doesn't ask twice. Only the GM can answer one, and the answer is either the ordinary
+ * New Project dialog or a refusal — the ask itself never becomes work on its own.
+ */
+function ProjectRequests() {
+  const { game, act } = useGame();
+  const { isGM } = usePerms();
+  const requests = game.projectRequests ?? [];
+  if (!requests.length) return null;
+  return (
+    <div className="mb-3 grid gap-2">
+      {requests.map((r) => {
+        const who = game.characters.find((c) => c.id === r.by)?.name ?? "Someone";
+        const room = r.roomId ? game.ship.rooms.find((x) => x.id === r.roomId)?.name : null;
+        return (
+          <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-xs">
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground/90"><span className="text-amber-200/90">{who} asks for</span> {r.template}{room ? ` · ${room}` : ""}</p>
+              {r.note && <p className="mt-0.5 text-muted-foreground">“{r.note}”</p>}
+            </div>
+            {isGM && <AddProjectDialog request={r} />}
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => act("Answer project request", (g) => { g.projectRequests = (g.projectRequests ?? []).filter((x) => x.id !== r.id); return `${isGM ? "Turned down" : "Withdrew"} the request for ${r.template}.`; })}
+            >
+              {isGM ? "Turn it down" : "Withdraw"}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ProjectRow({ p }: { p: Project }) {
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
@@ -918,6 +968,7 @@ export function ShipTab() {
 
       <section>
         <SectionTitle action={isGM && <AddProjectDialog />}>Projects · {projects.filter((p) => !p.done).length} active</SectionTitle>
+        <ProjectRequests />
         {projects.length === 0 ? (
           <EmptyState title="No projects underway" body="Track room construction, module installs, hull repairs, and Stress Recovery here." />
         ) : (

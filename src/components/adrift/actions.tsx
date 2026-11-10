@@ -12,8 +12,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
+import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
@@ -331,6 +332,40 @@ function RecipePicker({ label, recipes, value, onChange, stocked, note }: { labe
   );
 }
 
+/**
+ * What goes in a room's spare slot, and which room.
+ *
+ * Both are one choice rather than two, because a fitting without a room is nothing and every pairing
+ * the ship can take is enumerable. Rooms whose slot is already full never appear, so the only way to
+ * pick an illegal pairing is to have had the slot filled under you — which the task's blocker catches.
+ */
+function FitPicker({ value, onChange }: { value: SegmentAction["fit"]; onChange: (v: { name: string; roomId: string }) => void }) {
+  const game = useGame((s) => s.game);
+  const options = fitOptions(game);
+  const chosen = options.find((o) => o.name === value?.name && o.roomId === value?.roomId);
+  const f = value?.name ? FACILITY_BY_NAME[value.name] : undefined;
+  const short = f ? shortfalls(game, f.cost, f.toolkit) : [];
+  return (
+    <div className="grid gap-1.5">
+      <Label>What to fit, and where</Label>
+      <Select value={chosen ? `${chosen.name}|${chosen.roomId}` : "none"} onValueChange={(v) => { if (v !== "none") { const [name, roomId] = (v as string).split("|"); onChange({ name, roomId }); } }}>
+        <SelectTrigger className="w-full" aria-label="What to fit, and where"><SelectValue>{chosen ? chosen.label : options.length ? "Pick a fitting and a room" : "Every spare slot aboard is taken"}</SelectValue></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none" disabled={!options.length}>{options.length ? "Pick a fitting and a room" : "Every spare slot aboard is taken"}</SelectItem>
+          {options.map((o) => <SelectItem key={`${o.name}|${o.roomId}`} value={`${o.name}|${o.roomId}`}>{o.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {f && (
+        <p className={cn("text-[11px]", short.length ? "text-rose-300" : "text-muted-foreground")}>
+          {recipeText(f.cost, f.toolkit)}{f.powerDraw ? ` · draws ${f.powerDraw} Power` : " · needs no power"}
+          {short.length ? ` · short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}` : ""}
+        </p>
+      )}
+      {f && <p className="text-[11px] text-muted-foreground">{f.effect}</p>}
+    </div>
+  );
+}
+
 function TrainPicker({ c, value, onChange }: { c: Character; value: SkillKey | undefined; onChange: (v: SkillKey) => void }) {
   const game = useGame((s) => s.game);
   const cost = value ? trainingCost(c, value) : null;
@@ -475,6 +510,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     (def.effect === "assist" && !draft.assists) ||
     (needsRecipe && !draft.crafts?.length) ||
     ((def.effect === "calm" || def.effect === "bleed") && !draft.subjectId) ||
+    (def.effect === "fit" && !draft.fit) ||
     (def.effect === "train" && !draft.trainSkill);
 
   function save(ask = false) {
@@ -487,6 +523,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (def.effect !== "assist") d.assists = null;
     if (!needsRecipe) delete d.crafts;
     if (def.effect !== "calm" && def.effect !== "bleed") d.subjectId = null;
+    if (def.effect !== "fit") d.fit = null;
     if (def.effect !== "train") delete d.trainSkill;
     if (def.effect !== "search") delete d.thorough;
     if (pushing) d.extra = true;
@@ -551,6 +588,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               </span>
             </label>
           )}
+          {def.effect === "fit" && <FitPicker value={draft.fit} onChange={(v) => set({ fit: v })} />}
           {def.effect === "train" && <TrainPicker c={c} value={draft.trainSkill} onChange={(v) => set({ trainSkill: v })} />}
           {def.effect === "craft" && <CraftPicker c={c} value={draft.crafts ?? []} onChange={(v) => set({ crafts: v })} />}
           {def.effect === "cook" && <CookPicker c={c} value={draft.crafts ?? []} onChange={(v) => set({ crafts: v })} />}
@@ -944,9 +982,10 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
           </span>
         )}
       </div>
-      {(project || where || assisted || subject || a.crafts?.length || a.trainSkill) && (
+      {(project || where || assisted || subject || a.crafts?.length || a.trainSkill || a.fit) && (
         <p className="text-xs text-muted-foreground">
           {a.crafts?.length ? `${taskFor(a).effect === "cook" ? "Cooking" : "Making"} ${craftList(a.crafts)}` : null}
+          {a.fit && `Fitting ${a.fit.name} in ${game.ship.rooms.find((r) => r.id === a.fit!.roomId)?.name ?? "a room"}`}
           {a.trainSkill && c && (() => { const cost = trainingCost(c, a.trainSkill); return `Training ${SKILL_BY_KEY[a.trainSkill].name}${cost ? ` · uses 1 ${cost.name} (${haveInStorage(game, cost.name)} in hold)` : ""}`; })()}
           {project && `${project.name} · ${project.progress}/${project.required}`}
           {where && `Toward ${where}`}

@@ -1,7 +1,10 @@
+import type { CraftRecipe } from "@/data/crafting";
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
-import { actionsNow, extraTaskBlocker, newAction, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms } from "../actions";
+import { actionsNow, extraTaskBlocker, fitOptions, newAction, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
-import type { Character, GameState, SegmentAction } from "../types";
+import { uid } from "../dice";
+import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
+import type { Character, GameState, ProjectRequest, SegmentAction } from "../types";
 
 /** One thing this survivor could actually do right now, already filled in enough to submit. */
 export type SimOption = {
@@ -41,6 +44,22 @@ const recipesFor = (effect: TaskEffect) =>
   effect === "craft" ? FABRICATE_RECIPES : effect === "cook" ? COOK_RECIPES : effect === "medicine" ? MEDICINE_RECIPES : effect === "salvage" ? SALVAGE_RECIPES : [];
 
 /**
+ * Which skill makes a task Routine, and at what threshold.
+ *
+ * Saying only "Routine" reads as a contradiction whenever the task's own description names a
+ * different skill: a recipe that takes Mechanical Technician 3 *or* First Aid 3 is Routine for a
+ * medic with no mechanical training at all, and without this that looks like a bug worth reporting.
+ * Several tasks let the best of two trades stand in, so the one that actually qualified is the
+ * thing worth printing.
+ */
+function qualifies(terms: TaskTerms): string {
+  const name = terms.skill ? SKILL_BY_KEY[terms.skill].name : terms.attr ? ATTRIBUTE_NAMES[terms.attr] : null;
+  if (!name) return "nothing to roll";
+  const level = terms.margin === null ? null : terms.threshold + terms.margin;
+  return `your ${name}${level === null ? "" : ` ${level}`} meets its threshold of ${terms.threshold}`;
+}
+
+/**
  * Every legal way to fill in one task, as separate choices. Enumerating the variants rather than
  * letting the model name a project or a recipe is what keeps it from picking something that isn't there.
  */
@@ -57,7 +76,18 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
     case "bleed":
       // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
       return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));
-    case "craft":
+    case "craft": {
+      // One Fabricate task makes two items for the one Energy — three for an Expert — and offering
+      // only a single recipe at a time quietly threw that away, so a crew that needed two power
+      // cells spent two segments on them. Each recipe is offered singly and by the batch; the hold
+      // decides which of those survive, since an unaffordable batch is blocked like anything else.
+      const batches = (r: CraftRecipe) => Array.from({ length: normalFabricateLimit(c, [r.name]) }, (_, i) => make({ crafts: Array(i + 1).fill(r.name) }));
+      return recipesFor("craft")
+        .filter((r) => !craftBlocker(g, r))
+        .flatMap(batches);
+    }
+    case "fit":
+      return fitOptions(g).map((f) => make({ fit: { name: f.name, roomId: f.roomId } }));
     case "cook":
     case "medicine":
     case "salvage":
@@ -73,7 +103,12 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
 function subject(g: GameState, a: SegmentAction): string {
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : null;
   if (project) return `${project.name} (${project.progress}/${project.required} Progress)`;
-  if (a.crafts?.length) return a.crafts.join(", ");
+  if (a.crafts?.length) {
+    const counts = new Map<string, number>();
+    for (const n of a.crafts) counts.set(n, (counts.get(n) ?? 0) + 1);
+    return [...counts].map(([n, qty]) => (qty > 1 ? `${qty}× ${n}` : n)).join(", ");
+  }
+  if (a.fit) return `${a.fit.name} in ${g.ship.rooms.find((r) => r.id === a.fit!.roomId)?.name ?? "a room"}`;
   const treated = a.subjectId ? g.characters.find((x) => x.id === a.subjectId)?.name : null;
   if (treated) return treated;
   const helping = a.assists ? g.actions.find((x) => x.id === a.assists) : null;
@@ -125,7 +160,7 @@ export function legalOptions(g: GameState, c: Character): SimMenu {
         action,
         task: def.name,
         subject: subject(g, action),
-        terms: `${terms.energy === 0 ? "free" : `${terms.energy} Energy`}, ${terms.routine ? "Routine, so it succeeds without a roll" : `${terms.poolLabel} against threshold ${terms.threshold}, rolling ${terms.dice}d6`}`,
+        terms: `${terms.energy === 0 ? "free" : `${terms.energy} Energy`}, ${terms.routine ? `Routine (${qualifies(terms)}), so it succeeds without a roll` : `${terms.poolLabel} against threshold ${terms.threshold}, rolling ${terms.dice}d6`}`,
         result: def.result,
         strong: def.noStrong ? null : (def.strong ?? null),
         routine: terms.routine,
@@ -137,6 +172,66 @@ export function legalOptions(g: GameState, c: Character): SimMenu {
   const extra = taskAllowance(g, c.id) ? extraTaskBlocker(g, c) : null;
   if (extra) skipped.push(`A second task this segment: ${extra}`);
   return { options, skipped };
+}
+
+/** Whether this choice is a trip to the workbench, which is the one task that makes more than one thing. */
+const isCraft = (o: SimOption) => taskFor(o.action).effect === "craft";
+
+/**
+ * One Fabricate task, with the other items the crafter wants off the same bench.
+ *
+ * The allowance is two items for the one Energy, or three for an Expert, and they needn't be the
+ * same thing. Enumerating every pair would mean hundreds of menu lines, so the menu lists each
+ * recipe once (and by the batch) and a crafter who wants a medkit *and* a toolkit names the second
+ * choice here instead. Each addition is checked the way a submitted task would be — the hold has to
+ * cover both, and the allowance has to stretch — so anything that wouldn't be accepted is dropped
+ * with a reason rather than sent and refused.
+ */
+export function combineCrafts(g: GameState, c: Character, menu: SimMenu, chosen: SimOption, extras: number[]): { action: SegmentAction; added: string[]; refused: string[] } {
+  const wanted = [...new Set(extras)].filter((n) => n !== chosen.n);
+  if (!wanted.length) return { action: chosen.action, added: [], refused: [] };
+  if (!isCraft(chosen)) return { action: chosen.action, added: [], refused: [`only a Fabricate task makes more than one thing, and they chose ${chosen.task}`] };
+
+  let action = chosen.action;
+  const added: string[] = [];
+  const refused: string[] = [];
+  for (const n of wanted) {
+    const extra = menu.options.find((o) => o.n === n);
+    if (!extra || !isCraft(extra)) {
+      refused.push(`${n} isn't another Fabricate choice`);
+      continue;
+    }
+    const crafts = [...(action.crafts ?? []), ...(extra.action.crafts ?? [])];
+    if (crafts.length > normalFabricateLimit(c, crafts)) {
+      refused.push(`${extra.subject} is past what one task makes`);
+      continue;
+    }
+    const merged = { ...action, crafts };
+    const problems = permissionReasons(g, merged);
+    if (problems.length) {
+      refused.push(`${extra.subject}: ${problems.join("; ")}`);
+      continue;
+    }
+    action = merged;
+    added.push(extra.subject);
+  }
+  return { action, added, refused };
+}
+
+/**
+ * A survivor's ask for a project, if they named one the app recognises.
+ *
+ * The template name is matched rather than trusted, because the server checks the same thing and a
+ * request it would refuse should never be sent. Asking twice for what's already pending is dropped
+ * too: the point of an ask is to tell the GM something they don't know.
+ */
+export function projectAsk(g: GameState, c: Character, propose: string | undefined, why: string | undefined): ProjectRequest | null {
+  const wanted = propose?.trim();
+  if (!wanted) return null;
+  const template = PROJECT_TEMPLATES.find((t) => t.name.toLowerCase() === wanted.toLowerCase());
+  if (!template) return null;
+  if ((g.projectRequests ?? []).some((r) => r.template === template.name)) return null;
+  return { id: uid(), by: c.id, template: template.name, note: (why ?? "").trim().slice(0, 300) };
 }
 
 /**

@@ -5,7 +5,7 @@ import { pushLog } from "../log";
 import type { GameState, LogEntry, SegmentAction } from "../types";
 import { createSimClient } from "./client";
 import { addUsage, PROVIDERS, type Usage } from "./models";
-import { legalOptions, optionLabel } from "./options";
+import { combineCrafts, legalOptions, optionLabel, projectAsk } from "./options";
 import { decide, decidePush, type Agent } from "./player";
 
 export type SimTurn = {
@@ -27,6 +27,8 @@ export type SimTurn = {
   task: string;
   /** Rules or framing the simulated player couldn't read cleanly. The real output of a test run. */
   unclear?: string;
+  /** A project they've asked the GM to open. Free, and separate from their task. */
+  asked?: { template: string; note: string };
   /** The log the server wrote while the task resolved: the rolls and their consequences. */
   outcome: string[];
   /** Tasks the sim couldn't offer, so the GM can see where it falls short of a real player. */
@@ -71,6 +73,9 @@ export async function runSegment(base: string, code: string, characterId: string
   if (!menu.options.length) throw new Error(`${c.name} has nothing they can legally do this segment.`);
   const choice = await decide(game, c, menu, situation, agent, opts.answers, opts.briefing);
   const option = menu.options.find((o) => o.n === choice.choice)!;
+  // A Fabricate task makes more than one item, so the crafter may have named others off the same
+  // bench. Anything the hold or the allowance won't cover is dropped here and reported, not sent.
+  const bench = combineCrafts(game, c, menu, option, choice.with ?? []);
 
   const turn: SimTurn = {
     character: c.name,
@@ -81,10 +86,10 @@ export async function runSegment(base: string, code: string, characterId: string
     questions: choice.questions ?? [],
     move: choice.move,
     reason: choice.reason,
-    task: optionLabel(option),
+    task: `${optionLabel(option)}${bench.added.length ? `, and on the same bench: ${bench.added.join(", ")}` : ""}`,
     unclear: choice.unclear,
     outcome: [],
-    skipped: menu.skipped,
+    skipped: [...menu.skipped, ...bench.refused.map((r) => `Not made alongside: ${r}`)],
   };
   if (opts.commit === false) {
     turn.outcome.push("Not submitted: answer the questions and run it again to commit.");
@@ -92,11 +97,16 @@ export async function runSegment(base: string, code: string, characterId: string
   }
 
   // The plan goes on the task where a player's own words go, so the GM reads it in the app.
-  const planned: SegmentAction = { ...option.action, detail: `${choice.speech}\n\n${choice.approach}`.slice(0, 500) };
+  const planned: SegmentAction = { ...bench.action, detail: `${choice.speech}\n\n${choice.approach}`.slice(0, 500) };
+  const ask = projectAsk(game, c, choice.propose, choice.proposeWhy);
   await client.change((g) => {
     g.actions.push(planned);
+    if (ask) g.projectRequests = [...(g.projectRequests ?? []), ask];
     pushLog(g, `${c.name} plans for ${whenLabel(planned)}: ${planned.task} (“${choice.speech}”).`, "info", PROVIDERS[agent.provider].label);
+    if (ask) pushLog(g, `${c.name} asks the GM to open a project: ${ask.template}${ask.note ? ` — “${ask.note}”` : ""}.`, "info", PROVIDERS[agent.provider].label);
   });
+  if (ask) turn.asked = { template: ask.template, note: ask.note };
+  else if (choice.propose) turn.skipped.push(`Not asked for: no project template called ${choice.propose}`);
 
   if (taskFor(planned).gmResolves) {
     turn.outcome.push("Planned, and waiting on the GM to resolve it.");

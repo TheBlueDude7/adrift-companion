@@ -2,14 +2,16 @@
 // tasks they may take. Run with the react-server condition, since the prompt builders are
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
-import { extraTaskBlocker, newAction, taskTerms } from "../src/lib/actions";
+import { extraTaskBlocker, fitOptions, newAction, permissionReasons, resolveAction, taskTerms } from "../src/lib/actions";
+import { FACILITY_BY_NAME } from "../src/data/ship-upgrades";
 import { uid } from "../src/lib/dice";
 import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
-import { hullTier } from "../src/lib/derive";
+import { hullTier, supplyCount } from "../src/lib/derive";
 import { PANICKED } from "../src/lib/rules";
 import { createInitialState, newCharacter } from "../src/lib/seed";
-import { legalOptions } from "../src/lib/sim/options";
-import { doctrine, pressing, site } from "../src/lib/sim/world";
+import { combineCrafts, legalOptions, projectAsk } from "../src/lib/sim/options";
+import { doctrine, pressing, projectAsks, site } from "../src/lib/sim/world";
+import { stockItem } from "../src/lib/stock";
 import { diff } from "../src/lib/sync/ops";
 import { denyReason } from "../src/lib/sync/permissions";
 import { playerView } from "../src/lib/sync/redact";
@@ -237,6 +239,201 @@ function check(label: string, got: unknown, want: unknown) {
   const brief = doctrine(g);
   check("they're told what they learned, and who said it", [brief.includes("Scout the shaft"), brief.includes("Vale, after The Perihelion")], [true, true]);
   check("and told plainly when there's nothing yet", doctrine(world()).includes("the first of it"), true);
+}
+
+// Crafting, which the simulated crew reported three separate complaints about.
+{
+  const g = world();
+  const c = g.characters[0];
+  const craft = (crafts: string[]) => ({ ...newAction(g, c, "Fabricate Common Item"), crafts });
+  const labels = (x: GameState = g) => legalOptions(x, x.characters[0]).options.filter((o) => o.task === "Fabricate Common Item").map((o) => `${o.subject} — ${o.terms}`);
+
+  // One task makes two items, and offering a single recipe at a time threw that allowance away.
+  const batched = labels().filter((l) => l.startsWith("2× "));
+  check("the batch of two is on the menu", batched.length > 0, true);
+  check("and it costs the same Energy as making one", batched.every((l) => l.includes("2 Energy")), true);
+  check("while nothing offers more than the allowance", labels().some((l) => l.startsWith("3× ")), false);
+
+  // A recipe naming two trades is Routine on either, which has to be said or it reads as a bug.
+  const medic = g.characters[1];
+  medic.skills.firstAid = 3;
+  medic.skills.mechTech = 0;
+  const kit = legalOptions(g, medic).options.find((o) => o.subject === "Improvised Medkit");
+  check("the medic can make a medkit on First Aid alone", !!kit, true);
+  check("and is told which skill qualified, not just that it's Routine", kit?.terms.includes("your First Aid 3 meets its threshold of 3"), true);
+
+  // A name nothing recognises used to cost nothing, roll nothing and pass as Routine.
+  check("an unrecognised recipe is refused", permissionReasons(g, craft(["Improvised Medkits"])), ["No recipe called Improvised Medkits"]);
+  check("and is never Routine while it's refused", taskTerms(g, craft(["Improvised Medkits"])).routine, false);
+  check("the real one is fine", permissionReasons(g, craft(["Improvised Medkit"])), []);
+
+  // You strip somebody else's hull, never the one you're standing in.
+  const salvage = (x: GameState) => taskTerms(x, { ...newAction(x, x.characters[0], "Salvage Ship") }).blocker;
+  check("there's nothing alongside to strip", salvage(g), "Nothing alongside but open space. Fly to a derelict first — their own ship isn't salvage");
+  check("so it isn't offered at all", tasks(g).includes("Salvage Ship"), false);
+
+  const chart = g.maps.find((m) => m.kind === "star");
+  if (chart?.kind === "star" && chart.shipAt) {
+    const at = chart.shipAt;
+    chart.nodes.push({ id: uid(), x: at.x, y: at.y, name: "The Perihelion", type: "derelict", status: "visited", notes: "" });
+    check("a derelict alongside can be stripped", salvage(g), null);
+    check("and now it's on the menu", tasks(g).includes("Salvage Ship"), true);
+    chart.nodes[0].status = "looted";
+    check("but not twice", salvage(g), "The Perihelion has already been picked over");
+    chart.nodes[0].type = "planet";
+    chart.nodes[0].status = "visited";
+    check("and a planet is not a hulk", salvage(g), "The Perihelion is a planet, not a hulk to strip");
+  } else check("the seeded campaign has a chart with the ship on it", false, true);
+}
+
+// Two different items off the same bench, which the menu can't enumerate and so the crafter names.
+const MATERIALS = ["Scrap Metal", "Scrap Components", "Basic Adhesive", "Fuel Unit"] as const;
+
+/** A workshop with exactly this much in the hold, and a crafter who meets Tier I but is no Expert. */
+function bench(components: number) {
+  const g = world();
+  const c = g.characters[0];
+  c.skills.mechTech = 3;
+  g.items = g.items.filter((i) => !MATERIALS.includes(i.name as (typeof MATERIALS)[number]));
+  for (const name of MATERIALS) stockItem(g, name, name === "Scrap Components" ? components : 4, { category: "Material" });
+  const menu = legalOptions(g, c);
+  const pick = (subject: string) => menu.options.find((o) => o.task === "Fabricate Common Item" && o.subject === subject);
+  return { g, c, menu, pick };
+}
+
+{
+  const { g, c, menu, pick } = bench(4);
+  const kit = pick("Improvised Toolkit")!;
+  const cell = pick("Flickering Power Cell")!;
+  const rest = menu.options.find((o) => o.task === "Rest")!;
+  check("the bench offers a toolkit, a cell, a batch and a bed", [!!kit, !!cell, !!pick("2× Improvised Toolkit"), !!rest], [true, true, true, true]);
+
+  const both = combineCrafts(g, c, menu, kit, [cell.n]);
+  check("one task makes two different items", both.action.crafts, ["Improvised Toolkit", "Flickering Power Cell"]);
+  check("and it's still the one Energy", taskTerms(g, both.action).energy, taskTerms(g, kit.action).energy);
+  check("the second is named for the transcript", both.added, ["Flickering Power Cell"]);
+
+  check("a full batch takes nothing more", combineCrafts(g, c, menu, pick("2× Improvised Toolkit")!, [cell.n]).refused, ["Flickering Power Cell is past what one task makes"]);
+  check("asking it of a bed is refused in plain terms", combineCrafts(g, c, menu, rest, [cell.n]).refused, ["only a Fabricate task makes more than one thing, and they chose Rest"]);
+  check("naming the same choice twice is still one of it", combineCrafts(g, c, menu, kit, [cell.n, cell.n]).action.crafts, ["Improvised Toolkit", "Flickering Power Cell"]);
+  check("and naming nothing changes nothing", combineCrafts(g, c, menu, kit, []).action.crafts, ["Improvised Toolkit"]);
+  check("nor does a number nobody offered", combineCrafts(g, c, menu, kit, [999]).refused, ["999 isn't another Fabricate choice"]);
+}
+
+{
+  // One Scrap Components in the hold: either item alone, never both.
+  const { g, c, menu, pick } = bench(1);
+  const kit = pick("Improvised Toolkit")!;
+  const cell = pick("Flickering Power Cell")!;
+  check("each is affordable on its own", [!!kit, !!cell, !!pick("2× Improvised Toolkit")], [true, true, false]);
+  const greedy = combineCrafts(g, c, menu, kit, [cell.n]);
+  check("what the hold won't cover is dropped, not sent", greedy.action.crafts, ["Improvised Toolkit"]);
+  check("and the reason says what was short", greedy.refused, ["Flickering Power Cell: Hold is short 1 Scrap Components"]);
+}
+
+// Rigging is wanted most where the ship isn't: a wreck's hull is weightless, airless and exposed at once.
+{
+  const g = world();
+  startExpedition(g, { site: "The Perihelion", crew: [g.characters[0].id], siteId: "tanager" });
+  check("the away team can rig a derelict", tasks(g).includes("Rig Safety Lines"), true);
+  check("and the one who stayed aboard still can too", tasks(g, 1).includes("Rig Safety Lines"), true);
+}
+
+// Asking for a project, which only the GM can open.
+{
+  const g = world();
+  const [vale, okonkwo] = ids(g);
+  const player = (id: string) => ({ role: "player" as const, characterId: id });
+  const submit = (fn: (x: GameState) => void, who: string) => {
+    const after: GameState = structuredClone(g);
+    fn(after);
+    return denyReason(g, diff(g, after), player(who));
+  };
+  const ask = (by: string, template = "Hull Repair") => ({ id: uid(), by, template, note: "The hull is holed." });
+
+  // The rule itself: a project is still the GM's, and the message says what to do instead.
+  check("a player can't open a project", submit((x) => { x.ship.projects.push({ ...x.ship.projects[0], id: uid() }); }, vale), "Only the GM changes projects. Add Progress with a Work on a project task instead.");
+
+  check("but they can ask for one", submit((x) => { x.projectRequests = [ask(vale)]; }, vale), null);
+  check("in their own name only", submit((x) => { x.projectRequests = [ask(okonkwo)]; }, vale), "Ask for a project as your own character.");
+  check("and only for work that exists", submit((x) => { x.projectRequests = [ask(vale, "Build a Cathedral")]; }, vale), "There's no project template called Build a Cathedral.");
+
+  g.projectRequests = [ask(vale)];
+  check("an ask the GM has read doesn't change under them", submit((x) => { x.projectRequests = [{ ...x.projectRequests![0], template: "Expand Ship" }]; }, vale), "Withdraw the request and make a new one instead.");
+  check("they can withdraw their own", submit((x) => { x.projectRequests = []; }, vale), null);
+  check("but not somebody else's", submit((x) => { x.projectRequests = []; }, okonkwo), "Only the GM can answer someone else's project request.");
+  check("the GM answers any of them", denyReason(g, diff(g, { ...structuredClone(g), projectRequests: [] }), { role: "gm", characterId: null }), null);
+
+  // It's the crew's own ask, so a player's copy carries it.
+  check("and a player is sent it", playerView(g).projectRequests?.map((r) => r.template), ["Hull Repair"]);
+
+  // What the simulated crew may ask for, and what it may not ask twice.
+  const c = g.characters[0];
+  check("a template they named is turned into an ask", projectAsk(g, c, "Expand Ship", "We need the room.")?.template, "Expand Ship");
+  check("spelled however they spelled it", projectAsk(g, c, "  expand ship  ", "")?.template, "Expand Ship");
+  check("what's already pending is dropped", projectAsk(g, c, "Hull Repair", ""), null);
+  check("so is work the app doesn't have", projectAsk(g, c, "Build a Cathedral", ""), null);
+  check("and saying nothing asks nothing", projectAsk(g, c, undefined, "why"), null);
+
+  const brief = projectAsks(g);
+  check("they're told what can be asked for, by its exact name", brief.includes("- Hull Repair — Mech. Technician 3 / Engineering 4, 1 Progress"), true);
+  check("and warned off asking again", brief.includes("Already asked for and waiting on the GM"), true);
+}
+
+// Solar panels and defenses: a day's work with materials, not a GM's gift.
+{
+  const g = world();
+  const c = g.characters[0];
+  c.skills.engineering = 3;
+  // The seed hold already carries scrap, so empty the two the panels want and stock them by hand.
+  g.items = g.items.filter((i) => i.name !== "Scrap Metal" && i.name !== "Scrap Components");
+  const room = g.ship.rooms.find((r) => !r.fitting)!;
+  const panels = FACILITY_BY_NAME["Makeshift Solar Panels"];
+  const plan = (patch: Partial<SegmentAction> = {}) => ({ ...newAction(g, c, "Install Panels or Defenses"), ...patch });
+  const fit = (name: string, roomId: string) => plan({ fit: { name, roomId } });
+
+  check("every fitting is offered for every free slot", [...new Set(fitOptions(g).map((f) => f.name))], ["Makeshift Solar Panels", "Traps", "Defensive Gun"]);
+  check("but it needs to know what and where", taskTerms(g, plan()).blocker, "Pick solar panels, traps, or a defensive gun");
+  check("and a module is not a fitting", taskTerms(g, fit("Bioconverter", room.id)).blocker, "Pick solar panels, traps, or a defensive gun");
+
+  // With nothing in the hold it's an ask, not an option: the materials are the whole of the problem.
+  check("an empty hold is the only thing stopping it", permissionReasons(g, fit(panels.name, room.id)), ["Hold is short 10 Scrap Metal", "Hold is short 5 Scrap Components"]);
+  check("so it's listed as needing the GM, not hidden", skipped(g).some((s) => s.startsWith("Install Panels or Defenses")), true);
+  for (const [name, qty] of [["Scrap Metal", 10], ["Scrap Components", 5]] as const) stockItem(g, name, qty, { category: "Material" });
+  check("stocked, it's on the menu", tasks(g).includes("Install Panels or Defenses"), true);
+  check("and clear to go", permissionReasons(g, fit(panels.name, room.id)), []);
+  check("Routine for a trained engineer", taskTerms(g, fit(panels.name, room.id)).routine, true);
+
+  /** Plan the task, then settle it the way the server does. */
+  const run = (x: GameState, a: SegmentAction, status: "success" | "strong" | "failed") => {
+    x.actions.push(a);
+    return resolveAction(x, a.id, { status, energy: 0, outcome: "" });
+  };
+
+  // A success fits them and spends the hold.
+  const won: GameState = structuredClone(g);
+  const draw = won.ship.rooms.find((r) => r.id === room.id)!.powerDraw;
+  const lines = run(won, fit(panels.name, room.id), "success");
+  check("the panels go up", won.ship.rooms.find((r) => r.id === room.id)?.fitting, "Makeshift Solar Panels");
+  check("the materials are spent", [supplyCount(won, "Scrap Metal"), supplyCount(won, "Scrap Components")], [0, 0]);
+  check("and panels ask nothing of the grid", won.ship.rooms.find((r) => r.id === room.id)?.powerDraw, draw);
+  check("the log says what it cost", lines.some((l) => typeof l === "string" && l.includes("fitted in") && l.includes("10 Scrap Metal")), true);
+
+  // A failure costs half, rounded up, and fits nothing.
+  const lost: GameState = structuredClone(g);
+  run(lost, fit(panels.name, room.id), "failed");
+  check("a botched job fits nothing", lost.ship.rooms.find((r) => r.id === room.id)?.fitting, undefined);
+  check("and wastes half the materials, rounded up", [supplyCount(lost, "Scrap Metal"), supplyCount(lost, "Scrap Components")], [5, 2]);
+
+  // A gun draws power of its own, unlike panels.
+  const armed: GameState = structuredClone(g);
+  for (const [name, qty] of [["Scrap Metal", 6], ["Aluminum Alloy", 2], ["Scrap Components", 3]] as const) stockItem(armed, name, qty, { category: "Material" });
+  run(armed, { ...newAction(armed, armed.characters[0], "Install Panels or Defenses"), fit: { name: "Defensive Gun", roomId: room.id } }, "success");
+  check("a gun adds its own draw to the room", armed.ship.rooms.find((r) => r.id === room.id)!.powerDraw - draw, 2);
+
+  // One slot, one fitting: the room that already has panels is out of the running.
+  check("a filled slot is off the list", fitOptions(won).some((f) => f.roomId === room.id), false);
+  check("and taking it anyway is refused", taskTerms(won, fit("Traps", room.id)).blocker, `${room.name}'s spare slot already holds Makeshift Solar Panels`);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

@@ -2,6 +2,7 @@ import { needsPermission, permissionReasons, restPushConflict, tasksInWindow } f
 import { poolFor } from "../derive";
 import { coreMapId } from "../maps";
 import { completeModuleWork } from "../modules";
+import { PROJECT_TEMPLATES } from "../rules";
 import type { GameState, Item, SegmentAction, StarMap, TilePos } from "../types";
 import { applyOps, type Op, type Seg } from "./ops";
 
@@ -33,6 +34,7 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
       case "catalog":
       case "mechs":
       case "mechRequests":
+      case "projectRequests":
       case "firstAidOffers":
       case "research":
         continue;
@@ -92,6 +94,10 @@ export function denyReason(game: GameState, ops: Op[], actor: Actor): string | n
     if (after.some((r) => !before.has(r.id) && r.by !== own)) return "Ask for mechs as your own character.";
     const kept = new Set(after.map((r) => r.id));
     if ([...before.values()].some((r) => !kept.has(r.id) && r.by !== own)) return "Only the GM can answer someone else's mech request.";
+  }
+  if (ops.some((o) => o.path[0] === "projectRequests")) {
+    const reason = projectRequestDenyReason(game, ops, own);
+    if (reason) return reason;
   }
   if (ops.some((o) => o.path[0] === "firstAidOffers")) {
     const reason = firstAidOfferDenyReason(game, ops, own);
@@ -168,6 +174,28 @@ function usesOneKit(a: Item, b: Item | undefined, kit: { name: string; location:
   if (!b) return a.qty === 1 && (a.charges ?? 1) <= 1;
   if (b.qty === a.qty - 1) return JSON.stringify({ ...b, qty: a.qty, charges: a.charges }) === JSON.stringify(a);
   return b.qty === a.qty && (b.charges ?? 0) === (a.charges ?? 0) - 1 && JSON.stringify({ ...b, charges: a.charges }) === JSON.stringify(a);
+}
+
+/**
+ * A player asks for a project in their own name, and withdraws their own ask.
+ *
+ * Answering one is the GM's, because the answer is a project — and so is editing an ask, since a
+ * request the GM has read shouldn't change under them. The ask has to name a real template, or
+ * accepting it would mean the GM inventing the work the crew thought they were asking for.
+ */
+function projectRequestDenyReason(game: GameState, ops: Op[], own: string | null): string | null {
+  if (own === null) return "Pick your character in Play together to ask for a project.";
+  const before = new Map((game.projectRequests ?? []).map((r) => [r.id, r]));
+  const after = applyOps(structuredClone(game), ops).projectRequests ?? [];
+  if (after.some((r) => before.has(r.id) && JSON.stringify(before.get(r.id)) !== JSON.stringify(r))) return "Withdraw the request and make a new one instead.";
+  for (const r of after) {
+    if (before.has(r.id)) continue;
+    if (r.by !== own) return "Ask for a project as your own character.";
+    if (!PROJECT_TEMPLATES.some((t) => t.name === r.template)) return `There's no project template called ${r.template}.`;
+  }
+  const kept = new Set(after.map((r) => r.id));
+  if ([...before.values()].some((r) => !kept.has(r.id) && r.by !== own)) return "Only the GM can answer someone else's project request.";
+  return null;
 }
 
 /** Players offer First Aid as their own character. The healer withdraws an offer; the patient accepts or declines it. */

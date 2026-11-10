@@ -538,6 +538,14 @@ export type GameState = {
   fight?: Fight;
   /** Mechs players have asked the GM to add. They don't exist until the GM allows them. */
   mechRequests?: { id: string; by: string; mech: Mech }[];
+  /**
+   * Projects the crew has asked the GM to open. Nothing is under way until the GM starts one.
+   *
+   * Opening a project stays the GM's: it spends materials, decides what the ship becomes, and is
+   * the one thing the crew can't undo. But every route to a better ship runs through a project, so
+   * without a way to ask, a crew that can see exactly what the ship needs has nothing to do about it.
+   */
+  projectRequests?: ProjectRequest[];
   /** First Aid a player has offered another survivor. It's rolled when the patient's player (or the GM) accepts. */
   firstAidOffers?: FirstAidOffer[];
   research: Research;
@@ -579,6 +587,16 @@ export type Lesson = {
  */
 export type FirstAidOffer = { id: string; healerId: string; patientId: string; injuryId: string | null; kit?: { name: string; location: string }; clear?: string[] };
 
+/**
+ * One ask for a project, which the GM either starts or turns down.
+ *
+ * `template` names a row of the Project Templates table rather than describing the work, so what
+ * the crew asks for is always something the app can actually open — the GM accepts it into the
+ * ordinary New Project dialog, where the materials and the room are settled as they always were.
+ * `by` is the character who asked, because the reason for the ask is usually theirs.
+ */
+export type ProjectRequest = { id: string; by: string; template: string; roomId?: string | null; note: string };
+
 export type ActionStatus = "planned" | "success" | "strong" | "failed" | "cancelled";
 
 export type SegmentAction = {
@@ -611,6 +629,8 @@ export type SegmentAction = {
   crafts?: string[];
   /** Skill a Train Skill task practices. */
   trainSkill?: SkillKey;
+  /** The fitting an Install Panels or Defenses task bolts into a room's spare slot, and which room. */
+  fit?: { name: string; roomId: string } | null;
   /** A Master Pilot's once-a-day move that burned no Power Cell. */
   freeCell?: boolean;
   /** A player's roll for this task, made by the server. Once rolled, the dice decide the result. */
