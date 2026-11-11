@@ -408,6 +408,8 @@ export type WeaponProfile = {
   thrown?: boolean;
   /** Conditions a hit applies, whatever the damage did. */
   applies?: { name: string; duration: ConditionDuration }[];
+  /** A hazard preset it leaves standing in the zone, which the GM places from the Site tab. */
+  leaves?: string;
 };
 
 export type ItemTemplate = {

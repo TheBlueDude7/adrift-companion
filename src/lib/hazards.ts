@@ -18,6 +18,8 @@ export const HAZARD_PRESETS: { key: string; name: string; from: string; damage: 
   { key: "razorwire", name: "Razorwire", from: "Razorwire Deployer", damage: 1, type: "Physical", conditions: ["Restrained"] },
   { key: "frozen-zone", name: "Frozen zone", from: "Cryogenic Dispersal Array", damage: 2, type: "Chemical", conditions: ["Slowed"] },
   { key: "fire", name: "Spreading fire", from: "The site itself", damage: 2, type: "Fire", conditions: ["Burning"], rounds: 3 },
+  { key: "thermobaric-fire", name: "Thermobaric fire", from: "Thermobaric Charge", damage: 2, type: "Fire", conditions: ["Burning"], rounds: 2 },
+  { key: "toxic-gas", name: "Toxic gas", from: "Toxic Gas Canister", damage: 2, type: "Chemical", conditions: ["Contaminated"], rounds: 3 },
 ];
 
 export const PRESET_BY_KEY = Object.fromEntries(HAZARD_PRESETS.map((h) => [h.key, h])) as Record<string, (typeof HAZARD_PRESETS)[number]>;

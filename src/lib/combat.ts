@@ -5,6 +5,7 @@ import { markDamage, marksOn, spendMarks, type Marks } from "./marks";
 import { applyDamage, damageSteps } from "./mechanics";
 import { zoneDistance } from "./expedition";
 import { actionBlocker, clearOverwatch, fireOverwatch, overwatchFor, spendAction, type ActionKind } from "./fight";
+import { hazardLine, PRESET_BY_KEY } from "./hazards";
 import { borderTransparent, COVER_POINTS, PRESSURE_STATES, SKILL_BY_KEY, WEAPON_RANGES, scaleDamage, threatBand, type Cover, type DamageType, type WeaponProfile } from "./rules";
 import type { Character, GameState, Item, KnownDefense, Line, Threat, ThreatStats } from "./types";
 
@@ -324,6 +325,8 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
     lines.push({ text: weapon.zone ? `Everything in that zone is ${cond.name} (${cond.duration}).` : `${target.name} is ${cond.name} (${cond.duration}) — apply it.` });
   }
   if (weapon.blast) lines.push({ text: `Everything else in that zone takes ${weapon.blast} ${weapon.damageType} damage — apply it to each.` });
+  const left = weapon.leaves ? PRESET_BY_KEY[weapon.leaves] : undefined;
+  if (left) lines.push({ text: `It leaves ${left.name.toLowerCase()} in that zone (${hazardLine(left)}${left.rounds ? `, ${left.rounds} Rounds` : ""}) — place it with "Leave a hazard here" on the Site tab.` });
   if (hits > 1) lines.push({ text: `${hits - 1} extra success${hits === 2 ? "" : "es"} to spend on combat stunts.` });
   return { dice, hits, lines };
 }
