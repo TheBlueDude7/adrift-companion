@@ -627,7 +627,7 @@ export type SegmentAction = {
   target?: { mapId: string; x: number; y: number } | null;
   /** Another action this one assists. */
   assists?: string | null;
-  /** The crewmate a task is performed on: Reduce Pressure, Stop Bleeding. */
+  /** The crewmate a task is performed on: Reduce Pressure, Surgery. */
   subjectId?: string | null;
   /** Recipe names to fabricate, duplicates allowed. Cooking, medicine, and salvage use the first. */
   crafts?: string[];

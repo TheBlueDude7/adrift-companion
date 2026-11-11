@@ -665,8 +665,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Purify Water | 1 | Cooking 2 | Use up one charge of a water filter: 4 Water Units from a Crude Water Filter, 6 from a Water Filter. |
 | Filter Reclaimed Water | 1 | Cooking 1 | Draw the day’s reclaimed water out of Life Support: 2 Water Units, once a day. |
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
-| First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. |
-| Stop Bleeding | 1 | First Aid | Use up a medkit to end one survivor’s Bleeding. |
+| First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. Every 6 left over heals 1 HP or clears a condition, Bleeding included. |
 | Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. The patient spends the segment on the table and takes no Task of their own. |
 | Craft Medicine | 1 | First Aid 3 or Surgery 5 | Produce medicine from a known recipe. |
 | Decontaminate | 1 | First Aid 5 or Biology 5 |   |
@@ -4401,7 +4400,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | 3-1 | Minor | Whiplash | −1d6 to Piloting. |
 | 4-1 | Major | Severe Concussion | −2d6 to Intelligence and Wits rolls. Disoriented until Surgery. |
 | 5-1 | Major | Fractured Jaw | −2d6 to Entertainer. Silenced until Surgery. |
-| 6-1 | Deadly | Brain Swelling | −2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within one segment or die. |
+| 6-1 | Deadly | Brain Swelling | −2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within four segments or die. |
 
 ### Senses Injuries
 
@@ -4445,7 +4444,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | 3-5 | Minor | Back Spasm | −1d6 to Engineering and Botany. |
 | 4-5 | Major | Broken Ribs | −2d6 to Strength and Constitution rolls. Weakened until Surgery. |
 | 5-5 | Major | Punctured Lung | −2d6 to Constitution rolls. Suffocating after Sprinting or a second strenuous Slow Action in a Scene. |
-| 6-5 | Deadly | Crushed Torso | −2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within one segment or die. |
+| 6-5 | Deadly | Crushed Torso | −2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within four segments or die. |
 
 ### Internal Injuries
 
@@ -4456,7 +4455,7 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | 3-6 | Minor | Mild Infection | −1d6 to Constitution rolls made to resist Poisoned or Contaminated. |
 | 4-6 | Major | Internal Bleeding | −2d6 to Constitution rolls. Bleeding again after every combat Scene until Surgery. |
 | 5-6 | Major | Systemic Infection | −2d6 to Constitution rolls. Poisoned until Surgery. |
-| 6-6 | Deadly | Organ Failure | −2d6 to Constitution rolls. Poisoned and Drained. Surgery within one segment or die, and −2 Max HP afterward. |
+| 6-6 | Deadly | Organ Failure | −2d6 to Constitution rolls. Poisoned and Drained. Surgery within four segments or die, and −2 Max HP afterward. |
 
 ### Afflictions
 

@@ -5,6 +5,28 @@ import { applyCondition, clampVitals } from "./mechanics";
 import { SEGMENTS, SKILL_BY_KEY, type Attribute, type InjurySeverity, type SkillKey } from "./rules";
 import type { Character, GameState, Injury } from "./types";
 
+/**
+ * Segments a Deadly injury allows before it kills: the one it happened in and the three after it, so
+ * the window is a full day's worth of chances wherever in the day the wound lands.
+ */
+export const SURGERY_WINDOW = 4;
+
+/** `n` segments on from a point in a day, rolling into the days that follow. */
+export function segmentsOn(day: number, segment: number, n: number) {
+  const total = segment + n;
+  return { day: day + Math.floor(total / SEGMENTS.length), segment: total % SEGMENTS.length };
+}
+
+/** A deadline read out loud, naming the day only when it isn't this one. */
+export function deadlineWhen(today: number, deadline: { day: number; segment: number }) {
+  return `${SEGMENTS[deadline.segment]}${deadline.day === today ? "" : ` on day ${deadline.day}`}`;
+}
+
+/** Segments of grace left, counting the one they're in. 0 means the deadline has passed. */
+export function segmentsLeft(g: Pick<GameState, "day" | "segment">, deadline: { day: number; segment: number }) {
+  return Math.max(0, (deadline.day - g.day) * SEGMENTS.length + (deadline.segment - g.segment) + 1);
+}
+
 /** The two d6 rolled at the table: Severity, then Location. */
 export type InjuryRoll = { severity: number; location: number };
 
@@ -60,8 +82,8 @@ export function addInjury(g: GameState, c: Character, entry: InjuryDef, out: str
     location: entry.location,
   };
   if (entry.deadline) {
-    injury.deadline = { day: g.day, segment: Math.min(g.segment + 1, SEGMENTS.length - 1) };
-    out.push(`☠ ${c.name} needs Surgery by the end of ${SEGMENTS[injury.deadline.segment]}, or they die.`);
+    injury.deadline = segmentsOn(g.day, g.segment, SURGERY_WINDOW - 1);
+    out.push(`☠ ${c.name} needs Surgery within ${SURGERY_WINDOW} segments — by the end of ${deadlineWhen(g.day, injury.deadline)} — or they die.`);
   }
   c.injuries.push(injury);
   if (entry.severity !== "Minor") applyCondition(g, c, "Bleeding", "Ongoing", out, `From ${entry.name}`);
@@ -123,9 +145,9 @@ export function injuryPenalty(c: Character, skill: SkillKey | null, attr: Attrib
   return { dice, sources };
 }
 
-/** Deadly injuries whose Surgery deadline has arrived or passed. */
+/** Deadly injuries whose Surgery deadline has passed: the deadline segment itself is still a chance. */
 export function overdueInjuries(g: GameState, c: Character) {
-  return c.injuries.filter((i) => i.deadline && (g.day > i.deadline.day || (g.day === i.deadline.day && g.segment >= i.deadline.segment)));
+  return c.injuries.filter((i) => i.deadline && segmentsLeft(g, i.deadline) === 0);
 }
 
 /** The closest new injury for each entry in the old 60-entry table. */

@@ -91,9 +91,6 @@ const MEDICINE_SKILLS: { skill: SkillKey; threshold: number }[] = [
   { skill: "surgery", threshold: 5 },
 ];
 
-/** The humblest medkit the medic can reach: Stop Bleeding doesn't care how good it is. */
-const plainestKit = (g: GameState, healerId: string) => medkitsFor(g, healerId).sort((a, b) => a.dice - b.dice)[0] ?? null;
-
 /** What a task needs out of the hold before it can work at all. */
 export function supplyProblems(g: GameState, a: SegmentAction): string[] {
   const def = taskFor(a);
@@ -103,8 +100,6 @@ export function supplyProblems(g: GameState, a: SegmentAction): string[] {
       return bestWaterFilter(g) ? [] : ["No water filter in the hold"];
     case "reclaim":
       return g.ship.reclaimed ? ["Life Support's reclaimed water is already drawn today"] : [];
-    case "bleed":
-      return plainestKit(g, a.characterId) ? [] : ["No medkit to hand"];
     case "salvage":
       return !name || haveInStorage(g, name) > 0 ? [] : [`No ${name} in the hold`];
     case "medicine": {
@@ -1008,18 +1003,6 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
         subject.encouraged = true;
         out.push(`${subject.name} takes heart: +1d6 on their next roll.`);
       }
-    }
-  }
-  if (ok && def.effect === "bleed") {
-    const subject = g.characters.find((x) => x.id === a.subjectId);
-    const kit = plainestKit(g, a.characterId);
-    if (!subject || subject.dead) out.push("⚠ Nobody was there to treat.");
-    else if (!kit || !spendKit(g, kit)) out.push(`⚠ ${c?.name ?? "The medic"} has no medkit to hand, so the Bleeding goes on.`);
-    else {
-      const bleeding = subject.conditions.some((x) => x.name === "Bleeding");
-      subject.conditions = subject.conditions.filter((x) => x.name !== "Bleeding");
-      const used = kit.location === "ship" ? `the ship's ${kit.name}` : `their own ${kit.name}`;
-      out.push(bleeding ? `${subject.name} stops Bleeding, using ${used}.` : `${subject.name} wasn't Bleeding, but ${used} is used up patching them anyway.`);
     }
   }
   if (ok && def.effect === "morale") {

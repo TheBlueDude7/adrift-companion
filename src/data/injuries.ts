@@ -7,7 +7,8 @@ export type InjuryLocation = (typeof INJURY_LOCATIONS)[number];
  * One entry per 2d6 roll: the first die is Severity (1–3 Minor, 4–5 Major, 6 Deadly), the second is Location.
  * `skills` and `attrs` are the rolls the dice penalty applies to: −1d6 for Minor, −2d6 for Major and Deadly.
  * `conditions` last until Surgery. `bleed` is Bleeding damage per round. A `deadline` injury needs Surgery
- * within one segment or the character dies. A `permanent` loss never heals naturally.
+ * within four segments — the one it happened in and the three after — or the
+ * character dies. A `permanent` loss never heals naturally.
  */
 export type InjuryDef = {
   code: string;
@@ -34,7 +35,7 @@ const LOCATION_ROWS: Record<InjuryLocation, [Row, Row, Row, Row, Row, Row]> = {
     { name: "Whiplash", effect: "−1d6 to Piloting.", skills: ["piloting"] },
     { name: "Severe Concussion", effect: "−2d6 to Intelligence and Wits rolls. Disoriented until Surgery.", attrs: ["INT", "WIT"], conditions: ["Disoriented"] },
     { name: "Fractured Jaw", effect: "−2d6 to Entertainer. Silenced until Surgery.", skills: ["entertainer"], conditions: ["Silenced"] },
-    { name: "Brain Swelling", effect: "−2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within one segment or die.", attrs: ["INT", "WIT"], conditions: ["Confused", "Silenced"], deadline: true },
+    { name: "Brain Swelling", effect: "−2d6 to Intelligence and Wits rolls. Confused and Silenced. Surgery within four segments or die.", attrs: ["INT", "WIT"], conditions: ["Confused", "Silenced"], deadline: true },
   ],
   Senses: [
     { name: "Ringing Ears", effect: "−1d6 to Perception.", skills: ["perception"] },
@@ -66,7 +67,7 @@ const LOCATION_ROWS: Record<InjuryLocation, [Row, Row, Row, Row, Row, Row]> = {
     { name: "Back Spasm", effect: "−1d6 to Engineering and Botany.", skills: ["engineering", "botany"] },
     { name: "Broken Ribs", effect: "−2d6 to Strength and Constitution rolls. Weakened until Surgery.", attrs: ["STR", "CON"], conditions: ["Weakened"] },
     { name: "Punctured Lung", effect: "−2d6 to Constitution rolls. Suffocating after Sprinting or a second strenuous Slow Action in a Scene.", attrs: ["CON"] },
-    { name: "Crushed Torso", effect: "−2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within one segment or die.", attrs: ["STR", "CON"], conditions: ["Immobilized", "Weakened"], deadline: true },
+    { name: "Crushed Torso", effect: "−2d6 to Strength and Constitution rolls. Immobilized and Weakened. Surgery within four segments or die.", attrs: ["STR", "CON"], conditions: ["Immobilized", "Weakened"], deadline: true },
   ],
   Internal: [
     { name: "Minor Shock", effect: "−1d6 to Navigation and Entertainer.", skills: ["navigation", "entertainer"] },
@@ -74,7 +75,7 @@ const LOCATION_ROWS: Record<InjuryLocation, [Row, Row, Row, Row, Row, Row]> = {
     { name: "Mild Infection", effect: "−1d6 to Constitution rolls made to resist Poisoned or Contaminated." },
     { name: "Internal Bleeding", effect: "−2d6 to Constitution rolls. Bleeding again after every combat Scene until Surgery.", attrs: ["CON"] },
     { name: "Systemic Infection", effect: "−2d6 to Constitution rolls. Poisoned until Surgery.", attrs: ["CON"], conditions: ["Poisoned"] },
-    { name: "Organ Failure", effect: "−2d6 to Constitution rolls. Poisoned and Drained. Surgery within one segment or die, and −2 Max HP afterward.", attrs: ["CON"], conditions: ["Poisoned", "Drained"], deadline: true, maxHp: -2 },
+    { name: "Organ Failure", effect: "−2d6 to Constitution rolls. Poisoned and Drained. Surgery within four segments or die, and −2 Max HP afterward.", attrs: ["CON"], conditions: ["Poisoned", "Drained"], deadline: true, maxHp: -2 },
   ],
 };
 

@@ -7,14 +7,13 @@ import {
   OVERLOAD_BONUS,
   PRESSURE_STATES,
   pressureTip,
-  SEGMENTS,
   SKILLS,
   stressBand,
   type Attribute,
   type SkillKey,
 } from "./rules";
 import { cyberAttr, cyberMaxEnergy, cyberMaxHp } from "./cyber";
-import { injuryMaxHp, injuryPenalty } from "./injuries";
+import { deadlineWhen, injuryMaxHp, injuryPenalty, segmentsLeft } from "./injuries";
 import { mechModules, mechStats, pilotedMech } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
@@ -215,9 +214,15 @@ export function characterAlerts(state: GameState, c: Character) {
   if (untreated) alerts.push({ text: `${untreated} untreated injur${untreated > 1 ? "ies" : "y"}`, tone: "warn", tip: `Each untreated injury costs 1 HP at End of Day (−${untreated} tonight). Treat it with First Aid or Surgery to stop the loss.` });
   for (const i of c.injuries) {
     if (!i.deadline) continue;
-    const due = state.day > i.deadline.day || (state.day === i.deadline.day && state.segment >= i.deadline.segment);
-    const when = state.day === i.deadline.day ? `the end of ${SEGMENTS[i.deadline.segment]}` : `the end of ${SEGMENTS[i.deadline.segment]} on day ${i.deadline.day}`;
-    alerts.push({ text: due ? `${i.name}: Surgery now` : `${i.name}: Surgery by ${SEGMENTS[i.deadline.segment]}`, tone: "danger", tip: `${i.name} is Deadly. Without Surgery by ${when}, ${c.name} dies.` });
+    const left = segmentsLeft(state, i.deadline);
+    const when = deadlineWhen(state.day, i.deadline);
+    alerts.push({
+      text: left === 0 ? `${i.name}: Surgery now` : `${i.name}: Surgery in ${left} segment${left === 1 ? "" : "s"}`,
+      tone: "danger",
+      tip: left === 0
+        ? `${i.name} is Deadly and its window has closed: ${c.name} dies without Surgery this segment.`
+        : `${i.name} is Deadly. Without Surgery by the end of ${when}, ${c.name} dies. That's ${left} segment${left === 1 ? "" : "s"} counting this one.`,
+    });
   }
   if (c.energy <= 0) alerts.push({ text: "Exhausted", tone: "warn", tip: "No Energy left. They can't take tasks that cost Energy until they Rest or sleep." });
   if (c.pressure >= 4) alerts.push({ text: "Panicked", tone: "danger", tip: pressureTip(c.pressure) });

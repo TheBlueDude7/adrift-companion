@@ -241,9 +241,9 @@ function CookPicker({ c, value, onChange }: { c: Character; value: string[]; onC
 }
 
 /** Who a task is performed on: another survivor for Reduce Pressure, anyone for Stop Bleeding. */
-function SubjectPicker({ c, value, onChange, self, label }: { c: Character; value: string | null | undefined; onChange: (v: string | null) => void; self: boolean; label: string }) {
+function SubjectPicker({ c, value, onChange, label }: { c: Character; value: string | null | undefined; onChange: (v: string | null) => void; label: string }) {
   const game = useGame((s) => s.game);
-  const crew = game.characters.filter((x) => !x.dead && (self || x.id !== c.id));
+  const crew = game.characters.filter((x) => !x.dead && x.id !== c.id);
   const subject = crew.find((x) => x.id === value);
   return (
     <div className="grid gap-1.5">
@@ -509,7 +509,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     (def.effect === "course" && !draft.target) ||
     (def.effect === "assist" && !draft.assists) ||
     (needsRecipe && !draft.crafts?.length) ||
-    ((def.effect === "calm" || def.effect === "bleed" || def.effect === "surgery") && !draft.subjectId) ||
+    ((def.effect === "calm" || def.effect === "surgery") && !draft.subjectId) ||
     (def.effect === "fit" && !draft.fit) ||
     (def.effect === "train" && !draft.trainSkill);
 
@@ -522,7 +522,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (def.effect !== "course" && def.effect !== "scan") d.target = null;
     if (def.effect !== "assist") d.assists = null;
     if (!needsRecipe) delete d.crafts;
-    if (def.effect !== "calm" && def.effect !== "bleed" && def.effect !== "surgery") d.subjectId = null;
+    if (def.effect !== "calm" && def.effect !== "surgery") d.subjectId = null;
     if (def.effect !== "fit") d.fit = null;
     if (def.effect !== "train") delete d.trainSkill;
     if (def.effect !== "search") delete d.thorough;
@@ -620,13 +620,12 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               note="The item is used up whether or not the salvage comes out. Toolkit charges never come back."
             />
           )}
-          {(def.effect === "calm" || def.effect === "bleed" || def.effect === "surgery") && (
+          {(def.effect === "calm" || def.effect === "surgery") && (
             <SubjectPicker
               c={c}
               value={draft.subjectId}
               onChange={(v) => set({ subjectId: v })}
-              self={def.effect === "bleed"}
-              label={def.effect === "bleed" ? "Who is bleeding" : def.effect === "surgery" ? "Who is on the table" : "Who to settle"}
+              label={def.effect === "surgery" ? "Who is on the table" : "Who to settle"}
             />
           )}
           {(def.effect === "course" || def.effect === "scan") && (

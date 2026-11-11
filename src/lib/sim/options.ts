@@ -78,7 +78,6 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
         .filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist")
         .map((a) => make({ assists: a.id }));
     case "calm":
-    case "bleed":
     case "surgery":
       // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
       return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));

@@ -10,7 +10,8 @@ import { uid } from "../src/lib/dice";
 import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
 import { FOOD_ITEMS, foodCount, hullTier, maxHp, supplyCount } from "../src/lib/derive";
 import { INJURY_TABLE } from "../src/data/injuries";
-import { addInjury, injuryMaxHpSources, operate } from "../src/lib/injuries";
+import { SHIPBOARD_TASKS } from "../src/data/tasks";
+import { addInjury, injuryMaxHpSources, operate, overdueInjuries, segmentsLeft } from "../src/lib/injuries";
 import { normalizeGame } from "../src/lib/maps";
 import { POWER_CELLS, burnDailyPower, powerDaysLeft } from "../src/lib/power";
 import { PANICKED } from "../src/lib/rules";
@@ -63,7 +64,7 @@ function check(label: string, got: unknown, want: unknown) {
   startExpedition(g, { site: "", crew: ids(g), siteId: "tanager" });
   const menu = tasks(g);
   check("the Expedition Tasks are offered", ["Scout Ahead", "Search", "Analyze", "Breach", "Secure", "Field Repair", "Stand Watch", "Carry or Extract", "Catch Your Breath"].filter((t) => !menu.includes(t)), []);
-  check("along with what works anywhere", ["Stop Bleeding", "Reduce Pressure", "Other"].filter((t) => !menu.includes(t)), []);
+  check("along with what works anywhere", ["Reduce Pressure", "Other"].filter((t) => !menu.includes(t)), []);
   check("the reactor is out of reach", menu.includes("Tune the Reactor"), false);
   check("so is a bed", menu.includes("Rest"), false);
   check("and they're already out, so there's nothing to embark on", menu.includes("Embark Expedition"), false);
@@ -616,6 +617,40 @@ function bench(components: number) {
   check("healing it gives the 2 back", maxHp(c), before);
 }
 
+// A Deadly injury allows four segments wherever in the day it lands, rolling into the next day.
+{
+  const g = world();
+  const c = g.characters[0];
+  g.day = 3;
+  g.segment = 2; // Evening
+  addInjury(g, c, INJURY_TABLE.find((e) => e.name === "Crushed Torso")!, []);
+  const due = c.injuries[0].deadline!;
+  check("the deadline rolls into tomorrow", due, { day: 4, segment: 1 });
+  check("and that is four segments of grace", segmentsLeft(g, due), 4);
+  check("nobody is overdue yet", overdueInjuries(g, c), []);
+
+  g.segment = 3; // Night of the same day
+  check("three left the next segment", segmentsLeft(g, due), 3);
+  g.day = 4;
+  g.segment = 1; // the deadline segment itself
+  check("the deadline segment is still a chance", [segmentsLeft(g, due), overdueInjuries(g, c).length], [1, 0]);
+  g.segment = 2;
+  check("past it, they are out of time", [segmentsLeft(g, due), overdueInjuries(g, c).length], [0, 1]);
+
+  // The window was clamped to the end of the day, so a wound at Night left almost no time at all.
+  const night = world();
+  night.segment = 3;
+  addInjury(night, night.characters[0], INJURY_TABLE.find((e) => e.name === "Brain Swelling")!, []);
+  check("a wound at Night gets the same four", segmentsLeft(night, night.characters[0].injuries[0].deadline!), 4);
+}
+
+// Stop Bleeding is gone: First Aid clears Bleeding with its spare sixes.
+{
+  const g = world();
+  check("the task is off the board", SHIPBOARD_TASKS.some((t) => t.name === "Stop Bleeding"), false);
+  check("and off every menu", tasks(g).includes("Stop Bleeding"), false);
+  check("First Aid says it clears conditions", SHIPBOARD_TASKS.find((t) => t.name === "First Aid: Minor Injury")!.result.includes("Bleeding included"), true);
+}
 // A cell holds as many days as it says it does. `normalizeGame` used to delete the grid's remaining
 // charge, and it runs on every load and every sync, so every cell burned out after a single night.
 {
