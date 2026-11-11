@@ -3,11 +3,13 @@ import {
   BIO_BY_KEY,
   BIO_MILESTONE,
   BIO_TEMP_HP,
+  BIO_TIER_LABEL,
   STRESS_GATE,
   SURGE_BY_PRESSURE,
   TIER_THREE_SURGE,
   dampenSurge,
   type BioDef,
+  type BioTier,
   type BioTree,
 } from "@/data/biology";
 import { dampening } from "./cyber";
@@ -83,20 +85,28 @@ export const bioTempHp = (c: Character) => grown(c).length * BIO_TEMP_HP;
 /** The integrated attacks an augmented body has of its own, needing no weapon in hand. */
 export const bioAttacks = (c: Character) => grown(c).filter((x) => x.def.attack);
 
-/** Tier I is every crew's from the start; the rest is found by Biological Cultivation and belongs to all of them. */
-export const isBioUnlocked = (g: GameState, def: BioDef) => def.tier === 1 || (g.research.biology ?? []).includes(def.key);
+/**
+ * Nothing biological is known until the lab grows it.
+ *
+ * This is where the path parts company with cybernetics, which hands every crew its Tier I from the
+ * start. Human engineering is known technology somebody could have read about; what the dark can be
+ * made to do is not. So the whole catalogue is dark until a Biological Cultivation project turns a
+ * strain up, and a crew's own trees are the only map of the path they ever get.
+ */
+export const isBioUnlocked = (g: GameState, def: BioDef) => (g.research.biology ?? []).includes(def.key);
 
-/** Two Tier IIs in the same tree open its Tier III, the way two Tier II technologies open a cybernetic one. */
-export const bioTierThreeReady = (g: GameState, tree: BioTree) =>
-  BIOLOGY.filter((d) => d.tree === tree && d.tier === 2 && isBioUnlocked(g, d)).length >= 2;
+/** Two cultivations at the tier below open the next one, all the way up each tree. */
+export function bioTierReady(g: GameState, tree: BioTree, tier: BioTier) {
+  if (tier === 1) return true;
+  return BIOLOGY.filter((d) => d.tree === tree && d.tier === tier - 1 && isBioUnlocked(g, d)).length >= 2;
+}
 
 /** Why the crew hasn't got this augmentation to grow yet, or null. */
 export function bioResearchBlocker(g: GameState, def: BioDef): string | null {
   if (isBioUnlocked(g, def)) return null;
   const tree = def.tree === "adaptive" ? "Adaptive" : "Utility";
-  if (def.tier === 2) return `Needs a Tier II ${tree} cultivation project`;
-  if (!bioTierThreeReady(g, def.tree)) return `Needs two Tier II ${tree} augmentations cultivated first`;
-  return `Needs a Tier III ${tree} cultivation project`;
+  if (!bioTierReady(g, def.tree, def.tier)) return `Needs two ${BIO_TIER_LABEL[(def.tier - 1) as BioTier]} ${tree} augmentations cultivated first`;
+  return `Needs a ${BIO_TIER_LABEL[def.tier]} ${tree} cultivation project`;
 }
 
 /**

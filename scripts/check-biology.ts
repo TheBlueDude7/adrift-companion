@@ -1,5 +1,5 @@
-import { BIOLOGY, BIO_BY_KEY, BIO_TEMP_HP, STRESS_GATE, dampenSurge } from "../src/data/biology";
-import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierThreeReady, certaintyLive, expressionsLive, grown, growBlocker, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
+import { BIOLOGY, BIO_BY_KEY, BIO_TEMP_HP, BIO_TIER_LABEL, STRESS_GATE, dampenSurge } from "../src/data/biology";
+import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, certaintyLive, expressionsLive, grown, growBlocker, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
 import { PROJECT_TEMPLATE_BY_NAME } from "../src/lib/rules";
 import { CYBER_BY_KEY } from "../src/data/cybernetics";
 import { dampening } from "../src/lib/cyber";
@@ -163,16 +163,25 @@ const chrome = (c: Character, keys: string[]) => {
 // Finding one, then growing it.
 {
   const g = createInitialState();
-  check("Tier I is every crew's from the start", isBioUnlocked(g, BIO_BY_KEY["ripper-tendons"]) === false && isBioUnlocked(g, BIO_BY_KEY["redundant-tissue-mass"]), true);
-  check("a Tier II wants a project", bioResearchBlocker(g, BIO_BY_KEY["ripper-tendons"]), "Needs a Tier II Adaptive cultivation project");
+  // The whole catalogue is dark at the start: a crew knows nothing biological it hasn't grown, which
+  // is the one rule that sets this path apart from cybernetics.
+  check("a fresh crew knows nothing at all", BIOLOGY.filter((d) => isBioUnlocked(g, d)).length, 0);
+  check("not even a Tier I", bioResearchBlocker(g, BIO_BY_KEY["redundant-tissue-mass"]), "Needs a Tier I Adaptive cultivation project");
+  check("a Tier II wants two Tier Is first", bioResearchBlocker(g, BIO_BY_KEY["ripper-tendons"]), "Needs two Tier I Adaptive augmentations cultivated first");
   check("and a Tier III wants two Tier IIs first", bioResearchBlocker(g, BIO_BY_KEY["apex-carapace"]), "Needs two Tier II Adaptive augmentations cultivated first");
-  g.research.biology = ["ripper-tendons", "reactive-carapace"];
-  check("two of them open the tier", bioTierThreeReady(g, "adaptive"), true);
-  check("and then it only wants the project", bioResearchBlocker(g, BIO_BY_KEY["apex-carapace"]), "Needs a Tier III Adaptive cultivation project");
-  check("the other tree is untouched by it", bioTierThreeReady(g, "utility"), false);
+  check("Tier I is the only one that needs no ladder", ([1, 2, 3] as const).map((t) => bioTierReady(g, "adaptive", t)), [true, false, false]);
+
+  g.research.biology = ["redundant-tissue-mass", "hypercoagulation-mesh"];
+  check("two Tier Is open Tier II", bioTierReady(g, "adaptive", 2), true);
+  check("and then it only wants the project", bioResearchBlocker(g, BIO_BY_KEY["ripper-tendons"]), "Needs a Tier II Adaptive cultivation project");
+  check("the other tree is untouched by it", bioTierReady(g, "utility", 2), false);
+  check("one Tier II is not two", bioTierReady({ ...g, research: { ...g.research, biology: [...g.research.biology, "ripper-tendons"] } }, "adaptive", 3), false);
+
+  g.research.biology = [...g.research.biology, "ripper-tendons", "reactive-carapace"];
+  check("two Tier IIs open Tier III", bioTierReady(g, "adaptive", 3), true);
   g.research.biology = [...g.research.biology, "apex-carapace"];
   check("a cultivated augmentation is unlocked", isBioUnlocked(g, BIO_BY_KEY["apex-carapace"]), true);
-  check("the two projects are on the Project list", ["Biological Cultivation (Tier II)", "Biological Cultivation (Tier III)"].every((n) => !!PROJECT_TEMPLATE_BY_NAME[n]), true);
+  check("all three projects are on the Project list", ([1, 2, 3] as const).every((t) => !!PROJECT_TEMPLATE_BY_NAME[`Biological Cultivation (${BIO_TIER_LABEL[t]})`]), true);
 }
 {
   const g = createInitialState();
@@ -181,9 +190,9 @@ const chrome = (c: Character, keys: string[]) => {
   check("an augmentation they have can't be grown twice", growBlocker(g, c, BIO_BY_KEY["ripper-tendons"]), "They already have it");
   check("anything the crew has found can be, with no cap", growBlocker(g, c, BIO_BY_KEY["distributed-vitality"]), null);
   check("and anything it hasn't found can't", growBlocker(g, c, BIO_BY_KEY["apex-carapace"]), "Needs two Tier II Adaptive augmentations cultivated first");
-  check("Tier I never needs finding", growBlocker(g, c, BIO_BY_KEY["redundant-tissue-mass"]), null);
+  check("not even a Tier I it hasn't found", growBlocker(g, c, BIO_BY_KEY["redundant-tissue-mass"]), "Needs a Tier I Adaptive cultivation project");
   c.dead = true;
-  check("the dead grow nothing", growBlocker(g, c, BIO_BY_KEY["redundant-tissue-mass"]), "They're dead");
+  check("the dead grow nothing", growBlocker(g, c, BIO_BY_KEY["ripper-tendons"]), "They're dead");
   check("an unknown key is simply not there", grown(survivor(["no-such-thing"])).length, 0);
   check("and a survivor with no biology at all is fine", [grown(undefined).length, bioMaxHp(newCharacter("X", null, null, "gm"))], [0, 0]);
 }

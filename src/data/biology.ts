@@ -90,8 +90,8 @@ export const dampenSurge = (dampening: number) => Math.floor(dampening / 2);
 
 export const BIO_TIER_LABEL: Record<BioTier, string> = { 1: "Tier I", 2: "Tier II", 3: "Tier III" };
 
-/** What it takes to find a Tier II or Tier III augmentation, and then to grow one into somebody. */
-export const CULTIVATE_TASK = "Biological Cultivation (Tier II or III) is a Ship Project: Wits + Biology in a Biological Lab, committing an extracted Research Trait, Scrapped Biomass and Chemical Mixture at the start. Tier I needs no project — those are common traits.";
+/** What it takes to find an augmentation at all, and then to grow one into somebody. */
+export const CULTIVATE_TASK = "Nothing biological is known until the lab grows it. Biological Cultivation is a Ship Project at every tier: Wits + Biology in a Biological Lab, committing Scrapped Biomass and Chemical Mixture at the start, and an extracted Research Trait from Tier II up. Two cultivations in a tree open the tier above it.";
 export const GRAFT_TASK = "Growing one into a survivor is a Surgery Task in a Medical Bay, as an implant would be. It takes hold over a full Rest, and a failed graft costs the committed biomass.";
 
 export const BIO_TREES: { key: BioTree; name: string; focus: string }[] = [

@@ -21,11 +21,12 @@ import {
   GRAFT_TASK,
   STRESS_GATE,
   type BioDef,
+  type BioTier,
   type BioTree,
 } from "@/data/biology";
 import {
   bioTempHp,
-  bioTierThreeReady,
+  bioTierReady,
   certaintyLive,
   expressionsLive,
   grown,
@@ -43,8 +44,8 @@ import { EmptyState, Pill } from "./common";
 
 const char = (g: GameState, id: string) => g.characters.find((c) => c.id === id)!;
 
-/** What a Tier II or III project could still turn up in a tree, so the table has something to roll on. */
-export const cultivateCandidates = (g: GameState, tree: BioTree, tier: 2 | 3) =>
+/** What a project could still turn up in a tree, so the table has something to roll on. */
+export const cultivateCandidates = (g: GameState, tree: BioTree, tier: BioTier) =>
   BIOLOGY.filter((d) => d.tree === tree && d.tier === tier && !isBioUnlocked(g, d));
 
 function GrownRow({ x, c }: { x: ReturnType<typeof grown>[number]; c: Character }) {
@@ -108,7 +109,7 @@ export function BiologyPanel({ c }: { c: Character }) {
       </div>
       {pool.parts.length > 0 && <p className="text-xs text-muted-foreground">Surge pool: {pool.parts.join(", ")}.</p>}
       {list.length === 0 ? (
-        <EmptyState title="Nothing grown" body="Tier I augmentations are common enough to need no project. Grafting one is Surgery in a Medical Bay, and it takes hold over a full Rest." />
+        <EmptyState title="Nothing grown" body="The lab finds a strain before anyone can carry it. Grafting one is Surgery in a Medical Bay, and it takes hold over a full Rest." />
       ) : (
         <div className="grid gap-2">{list.map((x) => <GrownRow key={x.inst.id} x={x} c={c} />)}</div>
       )}
@@ -131,7 +132,8 @@ function GraftDialog({ c }: { c: Character }) {
   const { isGM } = usePerms();
 
   const def = key ? BIO_BY_KEY[key] : null;
-  const defs = BIOLOGY.filter((d) => d.tree === tree);
+  // A player picks from what the lab has actually grown. Naming the rest would hand them the tree.
+  const defs = BIOLOGY.filter((d) => d.tree === tree && (isGM || isBioUnlocked(game, d)));
   const blocker = def ? growBlocker(game, c, def) : null;
   const force = isGM && !!blocker;
 
@@ -153,7 +155,7 @@ function GraftDialog({ c }: { c: Character }) {
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Graft a biological augmentation</DialogTitle>
-          <DialogDescription>Tier I is common enough to need no project. Tier II and III are cultivated in the Biological Lab first, and belong to the whole crew once grown. Nobody has a limit on how many they carry.</DialogDescription>
+          <DialogDescription>Only what the lab has grown can be grafted, at any tier, and a cultivation belongs to the whole crew once it exists. Nobody has a limit on how many they carry.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-1">
           {BIO_TREES.map((t) => (
@@ -163,6 +165,11 @@ function GraftDialog({ c }: { c: Character }) {
         <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <ScrollArea className="h-56 pr-3 sm:h-96">
             <div className="grid gap-1">
+              {defs.length === 0 && (
+                <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                  Nothing in this tree has been grown yet. Run a Biological Cultivation project in the lab to find out what can be.
+                </p>
+              )}
               {defs.map((d) => {
                 const why = growBlocker(game, c, d);
                 return (
@@ -225,10 +232,10 @@ function RecordCultivationDialog() {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const [open, setOpen] = useState(false);
-  const [tier, setTier] = useState<2 | 3>(2);
+  const [tier, setTier] = useState<BioTier>(1);
   const [tree, setTree] = useState<BioTree>("adaptive");
   const candidates = useMemo(() => cultivateCandidates(game, tree, tier), [game, tree, tier]);
-  const gated = tier === 3 && !bioTierThreeReady(game, tree);
+  const gated = !bioTierReady(game, tree, tier);
   const treeName = BIO_TREES.find((t) => t.key === tree)!.name;
 
   function record(d: BioDef) {
@@ -248,9 +255,9 @@ function RecordCultivationDialog() {
           <DialogDescription>Choose the tier and tree you cultivated, roll at the table, and pick the matching result. What the crew already has is left out, so reroll anything that isn&apos;t listed.</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-2">
-          <Select value={String(tier)} onValueChange={(v) => setTier(Number(v) as 2 | 3)}>
+          <Select value={String(tier)} onValueChange={(v) => setTier(Number(v) as BioTier)}>
             <SelectTrigger className="w-full"><SelectValue>{BIO_TIER_LABEL[tier]}</SelectValue></SelectTrigger>
-            <SelectContent><SelectItem value="2">Tier II</SelectItem><SelectItem value="3">Tier III</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="1">Tier I</SelectItem><SelectItem value="2">Tier II</SelectItem><SelectItem value="3">Tier III</SelectItem></SelectContent>
           </Select>
           <Select value={tree} onValueChange={(v) => setTree(v as BioTree)}>
             <SelectTrigger className="w-full"><SelectValue>{treeName}</SelectValue></SelectTrigger>
@@ -258,7 +265,7 @@ function RecordCultivationDialog() {
           </Select>
         </div>
         {gated ? (
-          <p className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-100">Tier III {treeName} cultivation needs two Tier II {treeName} augmentations grown first.</p>
+          <p className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-100">{BIO_TIER_LABEL[tier]} {treeName} cultivation needs two {BIO_TIER_LABEL[(tier - 1) as BioTier]} {treeName} augmentations grown first.</p>
         ) : candidates.length === 0 ? (
           <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">Everything in this tree and tier is already cultivated.</p>
         ) : (
@@ -287,6 +294,7 @@ function RecordCultivationDialog() {
 export function BioResearchCard() {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
   const cultivated = (game.research.biology ?? []).map((k) => BIO_BY_KEY[k]).filter(Boolean);
   const lab = game.ship.rooms.some((r) => r.module === "Biological Lab" && r.condition !== "Destroyed");
 
@@ -299,7 +307,8 @@ export function BioResearchCard() {
       <CardContent className="grid gap-3">
         {!lab && <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-100">No Biological Lab aboard. The lab is needed for Biological Cultivation and for extracting Research Traits. Build one from the Ship tab.</p>}
         <p className="text-xs text-muted-foreground">{CULTIVATE_TASK}</p>
-        <div className="flex flex-wrap gap-1.5"><RecordCultivationDialog /></div>
+        {/* The roll table is the list of what hasn't been found, which is the one thing players mustn't read. */}
+        {isGM && <div className="flex flex-wrap gap-1.5"><RecordCultivationDialog /></div>}
         <div className="grid gap-2 sm:grid-cols-2">
           {BIO_TREES.map((t) => {
             const mine = cultivated.filter((d) => d.tree === t.key);
