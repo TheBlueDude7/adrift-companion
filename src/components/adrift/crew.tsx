@@ -56,7 +56,6 @@ import {
   SKILLS,
   stressBand,
   xpForNextLevel,
-  type Attribute,
   type InjurySeverity,
   type InjuryState,
 } from "@/lib/rules";
@@ -70,7 +69,7 @@ import { READ_ONLY, usePerms } from "@/lib/use-perms";
 import { claimCharacter } from "@/lib/sync/client";
 import { toast } from "sonner";
 import { ApplyConditionDialog, ConditionChips, conditionTip, QuickConditions, SceneControls } from "./conditions";
-import { EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
+import { attrHue, EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
 import { DiceRoller } from "./dice-roller";
 import { AddItemDialog, ItemList } from "./inventory";
 import { CyberneticsPanel } from "./cybernetics";
@@ -288,13 +287,6 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   );
 }
 
-const ATTRIBUTE_TONE: Record<Attribute, { card: string; text: string; badge: string; group: string }> = {
-  STR: { card: "border-rose-500/40 bg-rose-500/10", text: "text-rose-300", badge: "bg-rose-500/20 text-rose-200", group: "border-t-rose-500/70" },
-  CON: { card: "border-amber-400/40 bg-amber-400/10", text: "text-amber-300", badge: "bg-amber-400/20 text-amber-200", group: "border-t-amber-400/70" },
-  INT: { card: "border-sky-500/40 bg-sky-500/10", text: "text-sky-300", badge: "bg-sky-500/20 text-sky-200", group: "border-t-sky-500/70" },
-  WIT: { card: "border-emerald-500/40 bg-emerald-500/10", text: "text-emerald-300", badge: "bg-emerald-500/20 text-emerald-200", group: "border-t-emerald-500/70" },
-};
-
 function Attributes({ c, edit }: { c: Character; edit: Edit }) {
   const spend = creationSpend(c);
   return (
@@ -311,13 +303,13 @@ function Attributes({ c, edit }: { c: Character; edit: Edit }) {
             b.mod && `${sign(b.mod)} mod`,
           ].filter(Boolean);
           return (
-            <div key={a} className={cn("rounded-lg border p-3", ATTRIBUTE_TONE[a].card)}>
+            <div key={a} className={cn("rounded-lg border p-3", attrHue(a).card)}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className={cn("rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-wider", ATTRIBUTE_TONE[a].badge)}>{a}</span>
+                  <span className={cn("rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-wider", attrHue(a).badge)}>{a}</span>
                   <p className="mt-1.5 truncate text-sm font-medium">{ATTRIBUTE_NAMES[a]}</p>
                 </div>
-                <span className={cn("font-mono text-4xl font-bold", ATTRIBUTE_TONE[a].text)}>{attributeValue(c, a)}</span>
+                <span className={cn("font-mono text-4xl font-bold", attrHue(a).text)}>{attributeValue(c, a)}</span>
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <Stepper value={c.attributes[a]} min={1} max={10} size="xs" label={`${a} base`} onChange={(v) => edit(`${c.name} ${a} → ${v}`, (x) => { x.attributes[a] = v; return `${x.name}'s base ${ATTRIBUTE_NAMES[a]} set to ${v}.`; })} />
@@ -354,8 +346,8 @@ function Skills({ c, edit }: { c: Character; edit: Edit }) {
       <SectionTitle action={<span className={cn("text-xs", spend.skillXp > CREATION_SKILL_XP ? "text-amber-300" : "text-muted-foreground")}>{spend.skillXp}/{CREATION_SKILL_XP} creation XP</span>}>Skills</SectionTitle>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3">
         {groups.map((grp) => (
-          <div key={grp.attr} className={cn("rounded-lg border border-t-2 bg-background/40 p-2", ATTRIBUTE_TONE[grp.attr].group)}>
-            <p className={cn("px-1 pb-1 text-[11px] font-semibold tracking-wide uppercase", ATTRIBUTE_TONE[grp.attr].text)}>{ATTRIBUTE_NAMES[grp.attr]} · {attributeValue(c, grp.attr)}</p>
+          <div key={grp.attr} className={cn("rounded-lg border border-t-2 bg-background/40 p-2", attrHue(grp.attr).group)}>
+            <p className={cn("px-1 pb-1 text-[11px] font-semibold tracking-wide uppercase", attrHue(grp.attr).text)}>{ATTRIBUTE_NAMES[grp.attr]} · {attributeValue(c, grp.attr)}</p>
             <div className="grid">
               {grp.skills.map((s) => {
                 const lvl = skillLevel(c, s.key);

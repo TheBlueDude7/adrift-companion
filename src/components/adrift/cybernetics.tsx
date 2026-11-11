@@ -481,7 +481,7 @@ export function CyberResearchCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><FlaskConicalIcon className="size-4 text-primary" /> Cybernetic research</CardTitle>
-        <CardDescription>Research is crew-wide: once a technology is unlocked, anyone eligible can receive it and it can be fabricated again and again.</CardDescription>
+        <CardDescription>Research is crew-wide: once a technology is unlocked, anyone eligible can receive it and it can be fabricated again and again. The whole tree, and what&apos;s left to find in it, is on the Cybernetics tab.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {!lab && <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-100">No Cybernetics Lab aboard. The lab is needed for Cybernetic Research and for crafting Cybernetic Cores. Build one from the Ship tab.</p>}

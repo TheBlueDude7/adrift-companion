@@ -25,9 +25,26 @@ import type { Character } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Tip } from "./common";
 
+/** Resistance and Vulnerability to a damage type, which the compendium lists as rules rather than conditions. */
+const scalingEffect = (name: string) => {
+  const resists = name.startsWith("Resistant: ");
+  const type = name.slice(name.indexOf(": ") + 2);
+  if (!resists && !name.startsWith("Vulnerable: ")) return undefined;
+  return resists
+    ? {
+        effect: `Halves every ${type} hit, rounded down. Where a Xenoflora dose or a ruling grants Resistance; an implant that grants it needs nothing applied here.`,
+        removal: "Lasts until the GM clears it, so it survives the end of a Scene.",
+      }
+    : {
+        effect: `Raises every ${type} hit by half, rounded down — the same strength as a permanent Vulnerability, which it doesn't stack with.`,
+        removal: "Ends after the next hit of that type, or at the end of the Scene.",
+      };
+};
+
 const effectOf = (name: string): { effect: string; removal?: string } | undefined =>
   CONDITIONS.find((c) => c.name === name) ??
-  (MIND_BREAK_BY_NAME[name] && { effect: MIND_BREAK_BY_NAME[name].effect, removal: "Lasts until the immediate danger ends (the scene), or the GM clears it." });
+  (MIND_BREAK_BY_NAME[name] && { effect: MIND_BREAK_BY_NAME[name].effect, removal: "Lasts until the immediate danger ends (the scene), or the GM clears it." }) ??
+  scalingEffect(name);
 
 export function conditionTip(name: string) {
   const e = effectOf(name);

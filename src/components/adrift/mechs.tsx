@@ -505,6 +505,7 @@ function MechCard({ mech }: { mech: Mech }) {
           <Pill>Noise: {s.chassis.noise}</Pill>
           {mech.external && <Pill tone="warn">Secured outside</Pill>}
           {s.expert && <Pill tone="good">Mech Expert: +1 slot, +4 HP</Pill>}
+          {s.plugged > 0 && <Pill tone="good" tip="The pilot's Interface system, which works precisely because they are inside a frame.">Interface: +{s.plugged} HP</Pill>}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">

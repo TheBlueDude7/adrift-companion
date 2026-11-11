@@ -1,5 +1,6 @@
 import { CHASSIS, MECH_DAMAGE_TYPES, MECH_TIERS, MODULE_BY_KEY, type MechModule } from "@/data/mechs";
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
+import { cyberMechHp } from "./cyber";
 import { uid } from "./dice";
 import { scaleDamage } from "./rules";
 import type { Character, GameState, Mech, MechChassis, MechDamageType } from "./types";
@@ -22,6 +23,9 @@ export function mechStats(g: GameState, m: Mech) {
   const tier = MECH_TIERS[m.tier];
   const pilot = g.characters.find((c) => c.id === m.pilotId);
   const expert = isMechExpert(pilot);
+  // What the pilot's own Interface implants lend the frame. Interface is Frame-Compatible by
+  // definition, so unlike their other implants it is doing its work precisely while they're inside.
+  const plugged = cyberMechHp(pilot);
   const mods = mechModules(m);
   const live = mods.filter((x) => !x.inst.damaged);
   const maxArmor = maxMechArmor(m);
@@ -30,7 +34,7 @@ export function mechStats(g: GameState, m: Mech) {
   for (const x of live) if (x.def.resist) resist[x.def.resist] += 1;
   return {
     chassis,
-    maxHp: chassis.hp + tier.hpBonus + live.reduce((s, x) => s + (x.def.hp ?? 0), 0) + (expert ? 4 : 0),
+    maxHp: chassis.hp + tier.hpBonus + live.reduce((s, x) => s + (x.def.hp ?? 0), 0) + (expert ? 4 : 0) + plugged,
     slots: tier.slots + (expert ? 1 : 0),
     usedSlots: mods.reduce((s, x) => s + x.def.slots, 0),
     hardpoints: chassis.hardpoints,
@@ -43,6 +47,7 @@ export function mechStats(g: GameState, m: Mech) {
     cells: tier.cells,
     resist,
     expert,
+    plugged,
     offline: m.hp <= 0 || m.upgrading,
   };
 }

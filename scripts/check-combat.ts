@@ -8,6 +8,8 @@ import { pushLog } from "../src/lib/log";
 import { marksOn } from "../src/lib/marks";
 import { applyDamage } from "../src/lib/mechanics";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
+import { mechStats, newMech } from "../src/lib/mechs";
+import { CYBER_BY_KEY } from "../src/data/cybernetics";
 import { DEFAULT_ITEM_TEMPLATES, PRESSURE_STATES, threatBand } from "../src/lib/rules";
 import { playerView } from "../src/lib/sync/redact";
 import type { Character, GameState, Line } from "../src/lib/types";
@@ -794,6 +796,151 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   check("their own watch is public", sent.find((x) => x.id === shooterId)!.overwatch, { watching: "the hatch", trigger: "when it opens" });
   check("the monster's is not", sent.find((x) => x.id === t.id)!.overwatch, undefined);
   check("and the key isn't even there to notice", Object.keys(sent.find((x) => x.id === t.id)!).includes("overwatch"), false);
+}
+
+// A survivor's own damage Resistance, which the engine passed "false" for until now.
+{
+  /** An implant installed the way the Cybernetics tab installs one: Enhanced, undamaged, integrated. */
+  const implant = (c: Character, key: string, opts: { damaged?: boolean; replacement?: boolean } = {}) =>
+    void c.cybernetics!.push({ id: uid(), key, location: CYBER_BY_KEY[key].name, replacement: !!opts.replacement, damaged: !!opts.damaged, lineage: [], choice: "" });
+
+  const hit = (set?: (c: Character) => void, weapon = "Ballistic Rifle") => {
+    allSixes();
+    const { g, shooterId } = world();
+    const id = give(g, shooterId, weapon);
+    const victim = bystander(g);
+    victim.cybernetics = [];
+    set?.(victim);
+    const before = victim.hp;
+    const lines = rolled(resolveAttack(g, shooterId, victim.id, id, shot));
+    return { g, victim, lost: before - victim.hp, lines };
+  };
+
+  check("3 Ballistic into bare flesh costs 3", hit().lost, 3);
+  check("Kinetic Bracing halves it", hit((c) => implant(c, "kinetic-bracing")).lost, 1);
+  check("and says which implant did", hit((c) => implant(c, "kinetic-bracing")).lines.some((l) => /Kinetic Bracing gives Target Ballistic Resistance/.test(l)), true);
+  check("a damaged implant protects nothing", hit((c) => implant(c, "kinetic-bracing", { damaged: true })).lost, 3);
+  check("nor does a Replacement", hit((c) => implant(c, "kinetic-bracing", { replacement: true })).lost, 3);
+  check("and Resistance to the wrong type is no help", hit((c) => implant(c, "toxin-processor")).lost, 3);
+  check("the Chemical system halves a Chemical hit", hit((c) => implant(c, "toxin-processor"), "Chemical Injector").lost, 0);
+
+  // Where a Xenoflora dose and a GM's ruling land, for anyone with no implant at all.
+  check(
+    "a Resistant: Type condition halves it too",
+    hit((c) => void c.conditions.push({ id: uid(), name: "Resistant: Ballistic", duration: "Persistent", notes: "Xenoflora dose" })).lost,
+    1,
+  );
+  check("and only its own type", hit((c) => void c.conditions.push({ id: uid(), name: "Resistant: Fire", duration: "Persistent", notes: "" })).lost, 3);
+
+  // Resistance and Vulnerability to the same type cancel out, as they do for a threat.
+  check(
+    "an implant and a Vulnerable mark cancel",
+    hit((c) => {
+      implant(c, "kinetic-bracing");
+      c.conditions.push({ id: uid(), name: "Vulnerable: Ballistic", duration: "Brief", notes: "" });
+    }).lost,
+    3,
+  );
+
+  // A mech suppresses the Structural and Damage systems, so the frame's numbers are the ones in play.
+  {
+    allSixes();
+    const { g, shooterId } = world();
+    const id = give(g, shooterId, "Ballistic Rifle");
+    const victim = bystander(g);
+    victim.cybernetics = [];
+    implant(victim, "kinetic-bracing");
+    const mech = newMech("Dray", "utility", 1, []);
+    mech.pilotId = victim.id;
+    mech.deployed = true;
+    g.mechs.push(mech);
+    const before = victim.hp;
+    resolveAttack(g, shooterId, victim.id, id, shot);
+    check("a frame suppresses the plating it replaces", before - victim.hp, 3);
+  }
+}
+
+// What a Damage system does to its owner's own attacks of its type.
+{
+  /** `weapon` null means bare hands, which is the smallest hit in the game at 1 Physical. */
+  const shoot = (keys: string[], weapon: string | null, setUp?: (t: ReturnType<typeof newThreat>) => void) => {
+    allSixes();
+    const { g, shooterId } = world();
+    const c = g.characters[0];
+    c.cybernetics = keys.map((key) => ({ id: uid(), key, location: CYBER_BY_KEY[key].name, replacement: false, damaged: false, lineage: [], choice: "" }));
+    const id = weapon ? give(g, shooterId, weapon) : null;
+    const t = newThreat("Drone", 20, 0);
+    setUp?.(t);
+    g.threats.push(t);
+    const r = resolveAttack(g, shooterId, t.id, id, { ...shot, zones: 0 });
+    const all = "lines" in r ? r.lines : [{ text: r.error }];
+    return { t, lost: 20 - t.stats!.hp, armor: t.stats!.armor, lines: text(all.filter((l) => !l.gm)), gm: text(all.filter((l) => l.gm)) };
+  };
+
+  // 20% of a 3-damage rifle rounds up to 1, and 40% to 2.
+  check("a Tier II Ballistic system adds 1 to a 3-damage rifle", shoot(["reactive-ballistic-lattice"], "Ballistic Rifle").lost, 4);
+  check("and Tier III adds 2", shoot(["kinetic-rejection-array"], "Ballistic Rifle").lost, 5);
+  check("a Tier III integrating its Tier II doesn't add both", shoot(["reactive-ballistic-lattice", "kinetic-rejection-array"], "Ballistic Rifle").lost, 5);
+  check("and it does nothing for another type", shoot(["reactive-ballistic-lattice"], "Cleaver").lost, 3);
+  check("while a Physical system pays for the cleaver", shoot(["powered-skeletal-lattice"], "Cleaver").lost, 4);
+
+  // The share is what keeps a system worth its Load on a big weapon: a 6-damage rocket gets 2 and 3
+  // where the rifle got 1 and 2, and rounding up means the smallest hit there is still gets 1.
+  check("a 6-damage rocket is bare without a system", shoot([], "Rocket Launcher").lost, 6);
+  check("a Tier II Fire system takes 20% of it, rounded up", shoot(["heat-exchange-network"], "Rocket Launcher").lost, 8);
+  check("and Tier III takes 40%", shoot(["closed-thermal-reactor"], "Rocket Launcher").lost, 9);
+  check("the log names the share it took", shoot(["closed-thermal-reactor"], "Rocket Launcher").lines.some((l) => l === "Vale's Closed Thermal Reactor: +3 Fire damage (40%)."), true);
+  check("a bare fist still gets its point at Tier II", shoot(["powered-skeletal-lattice"], null).lost, 2);
+  check("and rounding up can't make Tier III give more", shoot(["inertial-dominance-frame"], null).lost, 2);
+
+  // The Ballistic signature: a step of the target's Cover, and all of it at Tier III.
+  const covered = (keys: string[], cover: "partial" | "strong") => {
+    allSixes();
+    const { g, shooterId } = world();
+    const c = g.characters[0];
+    c.cybernetics = keys.map((key) => ({ id: uid(), key, location: CYBER_BY_KEY[key].name, replacement: false, damaged: false, lineage: [], choice: "" }));
+    const id = give(g, shooterId, "Ballistic Rifle");
+    const t = newThreat("Drone", 20, 0);
+    g.threats.push(t);
+    resolveAttack(g, shooterId, t.id, id, { ...shot, cover });
+    return 20 - t.stats!.hp;
+  };
+  check("Strong Cover stops 2 of a rifle's 3", covered([], "strong"), 1);
+  check("a Tier II Ballistic system looks through a point of it", covered(["reactive-ballistic-lattice"], "strong"), 3);
+  check("and Tier III through all of it", covered(["kinetic-rejection-array"], "strong"), 5);
+  check("with nothing left to look through, the damage still lands", covered(["kinetic-rejection-array"], "partial"), 5);
+
+  // The Physical signature: plating stripped past the one point every hit takes.
+  const plated = shoot(["powered-skeletal-lattice"], "Cleaver", (t) => void (t.stats!.armor = 4));
+  check("a Tier II Physical system takes 2 points of plating", plated.armor, 2);
+  check("and the usual 1 is still absorbed", plated.lost, 3);
+  check("Tier III takes 3", shoot(["inertial-dominance-frame"], "Cleaver", (t) => void (t.stats!.armor = 4)).armor, 1);
+  check("and never more than there is", shoot(["inertial-dominance-frame"], "Cleaver", (t) => void (t.stats!.armor = 1)).armor, 0);
+  check("the log says what the system did", plated.lines.some((l) => l === "Vale's Powered Skeletal Lattice: +1 Physical damage (20%)."), true);
+  check("the plating it cost is the GM's to read", plated.gm.some((l) => l === "It strips 1 more point of Drone's Armor."), true);
+  check("and the crew is never told the Drone had plating", plated.lines.some((l) => /plating|armor|absorb/i.test(l)), false);
+}
+
+{
+  // The Interface ladder: what a pilot's own connection lends the frame they climb into.
+  const frame = (keys: string[], opts: { replacement?: boolean; damaged?: boolean } = {}) => {
+    const { g } = world();
+    const pilot = g.characters[0];
+    pilot.cybernetics = keys.map((key) => ({ id: uid(), key, location: CYBER_BY_KEY[key].name, replacement: !!opts.replacement, damaged: !!opts.damaged, lineage: [], choice: "" }));
+    const m = newMech("Dray", "utility", 1, []);
+    m.pilotId = pilot.id;
+    g.mechs.push(m);
+    return mechStats(g, m);
+  };
+  const bare = frame([]).maxHp;
+  check("an unaugmented pilot lends the frame nothing", frame([]).plugged, 0);
+  check("a Tier I Interface system is still nothing", frame(["mech-control-interface"]).plugged, 0);
+  check("Tier II lends it 2 Mech HP", frame(["neural-mech-integration"]).maxHp - bare, 2);
+  check("Tier III lends it 4", frame(["total-mech-integration"]).maxHp - bare, 4);
+  check("and a Tier III integrating its Tier II doesn't lend both", frame(["neural-mech-integration", "total-mech-integration"]).plugged, 4);
+  check("a damaged implant lends nothing", frame(["total-mech-integration"], { damaged: true }).plugged, 0);
+  check("nor does a Replacement", frame(["total-mech-integration"], { replacement: true }).plugged, 0);
+  check("and another system's Tier III is no help to the frame", frame(["full-skeletal-lattice"]).plugged, 0);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

@@ -552,6 +552,7 @@ export const CONDITION_GROUPS: { name: string; conditions: string[] }[] = [
   { name: "Fire", conditions: ["Burning", "Smoldering", "Illuminated", "Overheated"] },
   { name: "Electric", conditions: ["Conductive", "Disrupted", "Jammed"] },
   { name: "Chemical", conditions: ["Corroded", "Poisoned", "Contaminated"] },
+  { name: "Damage types", conditions: [...DAMAGE_TYPES.map((t) => `Resistant: ${t}`), ...DAMAGE_TYPES.map((t) => `Vulnerable: ${t}`)] },
   { name: "Environment", conditions: ["Suffocating", "Freezing", "Anchored", "Weightless"] },
   { name: "Beneficial", conditions: ["Regenerating", "Hidden", "Fortified", "Accelerated"] },
 ];
@@ -589,6 +590,8 @@ export const DEFAULT_CONDITION_DURATION: Record<string, ConditionDuration> = {
   Crippled: "Persistent",
   Poisoned: "Persistent",
   Contaminated: "Persistent",
+  // A dose of Xenoflora lasts the expedition, which outlives any one Scene.
+  ...Object.fromEntries(DAMAGE_TYPES.map((t) => [`Resistant: ${t}`, "Persistent" as const])),
 };
 
 export const defaultDuration = (name: string): ConditionDuration => DEFAULT_CONDITION_DURATION[name] ?? "Scene";

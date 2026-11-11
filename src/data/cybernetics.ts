@@ -25,6 +25,17 @@ export type CyberDef = {
   effects: string[];
   /** Flat bonuses while Enhanced (not as a Replacement). */
   bonus?: { attr?: Partial<Record<Attribute, number>>; maxHp?: number; maxEnergy?: number; dampening?: number };
+  /**
+   * Damage types this implant halves while Enhanced and undamaged. Written here as well as in
+   * `effects` so the app halves the hit rather than leaving the sentence for the GM to remember.
+   */
+  resist?: DamageType[];
+  /**
+   * What a Damage system does to its owner's own attacks of its `damage` type. `boost` is the share
+   * of the hit added to it, rounded up; `cover` is how many points of the target's Cover it looks
+   * through; `armor` is how many points of their worn Armor it strips beyond the usual one.
+   */
+  attack?: { boost: number; cover?: number; armor?: number };
   /** Set when the rulebook leaves something open. */
   note?: string;
 };
@@ -38,6 +49,13 @@ export const CYBER_SYSTEMS: { key: CyberSystem; name: string; attr?: Attribute; 
   { key: "damage", name: "Damage", focus: "Damage bonuses, damage Resistance, condition protection, and conditional Immunity", mech: "Suppressed" },
 ];
 export const CYBER_SYSTEM_BY_KEY = Object.fromEntries(CYBER_SYSTEMS.map((s) => [s.key, s])) as Record<CyberSystem, (typeof CYBER_SYSTEMS)[number]>;
+
+/**
+ * What a Damage system adds to its owner's own attacks of its type, as a share of the damage the hit
+ * would otherwise land, rounded up. A share rather than a flat number so the system stays worth its
+ * Load against a rocket as well as a pistol — and rounding up means it never does less than +1.
+ */
+export const DAMAGE_BOOST: Record<CyberTier, number> = { 1: 0, 2: 0.2, 3: 0.4 };
 
 export const CYBERNETICS: CyberDef[] = [
   // Structural
@@ -58,6 +76,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "kinetic-bracing", name: "Kinetic Bracing", system: "structural", tier: 2, requires: [{ keys: ["spinal-brace"], label: "Spinal Brace" }],
     effects: ["Gain Physical Resistance and Ballistic Resistance.", "Become Resistant to Prone and forced movement.", "Falling Damage is reduced by 2."],
+    resist: ["Physical", "Ballistic"],
   },
   {
     key: "precision-actuators", name: "Precision Actuators", system: "structural", tier: 2, requires: [{ keys: ["cyber-limb"], limb: "arm", label: "Cybernetic Arm" }],
@@ -163,6 +182,7 @@ export const CYBERNETICS: CyberDef[] = [
   {
     key: "toxin-processor", name: "Toxin Processor", system: "internal", tier: 2, requires: [{ keys: ["artificial-kidney"], label: "Artificial Kidney" }],
     effects: ["Gain Chemical Damage Resistance.", "Once per Scene, remove Poisoned from yourself as a Slow Action. Doing so applies Drained until the end of the Scene."],
+    resist: ["Chemical"],
   },
   {
     key: "closed-cycle-respirator", name: "Closed-Cycle Respirator", system: "internal", tier: 2, requires: [{ keys: ["artificial-lung"], label: "Artificial Lung" }],
@@ -288,80 +308,101 @@ export const CYBERNETICS: CyberDef[] = [
   },
 
   // Damage systems
+  //
+  // Each of the five is built the same way, so a crew can learn one and know the rest: Resistance to
+  // its type, protection from the conditions that type carries, +20% Damage at Tier II and +40% at
+  // Tier III on your own attacks of it, both rounded up, and that type's signature — the thing only
+  // it can do.
   {
     key: "reactive-ballistic-lattice", name: "Reactive Ballistic Lattice", system: "damage", tier: 2, damage: "Ballistic",
-    effects: ["Gain Ballistic Resistance.", "Become Immune to Pinned caused by Ballistic attacks.", "The first Ballistic attack you make each Round deals +1 Damage."],
+    resist: ["Ballistic"], attack: { boost: DAMAGE_BOOST[2], cover: 1 },
+    effects: [
+      "Gain Ballistic Resistance.",
+      "Become Immune to Pinned caused by Ballistic attacks.",
+      "Your Ballistic attacks deal +20% Damage, rounded up, and treat the target's Cover as one step lower: Strong becomes Partial, Partial becomes none.",
+    ],
   },
   {
     key: "kinetic-rejection-array", name: "Kinetic Rejection Array", system: "damage", tier: 3, damage: "Ballistic", requires: [{ keys: ["reactive-ballistic-lattice"], label: "Reactive Ballistic Lattice" }],
+    resist: ["Ballistic"], attack: { boost: DAMAGE_BOOST[3], cover: 2 },
     effects: [
       "Retain Ballistic Resistance and Immunity to Pinned caused by Ballistic attacks.",
       "Once per Round, reduce one Ballistic attack against you to 0 Damage; the array can't negate another until the beginning of your next turn.",
-      "Your first successful Ballistic attack each Round deals +2 Damage.",
+      "Your Ballistic attacks deal +40% Damage, rounded up, and ignore the target's Cover entirely.",
     ],
   },
   {
     key: "powered-skeletal-lattice", name: "Powered Skeletal Lattice", system: "damage", tier: 2, damage: "Physical",
+    resist: ["Physical"], attack: { boost: DAMAGE_BOOST[2], armor: 1 },
     effects: [
       "Gain Physical Resistance.",
       "Become Immune to Prone caused by ordinary impacts.",
+      "Your Physical attacks deal +20% Damage, rounded up, and strip one additional point of the target's worn Armor.",
       "Once per Round, after dealing Physical Damage, apply Brittle or move the target one zone without spending an additional success. Too large or Anchored targets may resist.",
     ],
   },
   {
     key: "inertial-dominance-frame", name: "Inertial Dominance Frame", system: "damage", tier: 3, damage: "Physical", requires: [{ keys: ["powered-skeletal-lattice"], label: "Powered Skeletal Lattice" }],
+    resist: ["Physical"], attack: { boost: DAMAGE_BOOST[3], armor: 2 },
     effects: [
       "Retain Physical Resistance. Become Immune to Prone and ordinary forced movement.",
-      "Your Physical attacks deal +1 Damage.",
+      "Your Physical attacks deal +40% Damage, rounded up, and strip two additional points of the target's worn Armor.",
       "Once per combat, after dealing Physical Damage, apply Crippled, Immobilized, or Disarmed without spending an additional success.",
       "Drawback: Electric Damage automatically applies Conductive to you.",
     ],
   },
   {
     key: "heat-exchange-network", name: "Heat Exchange Network", system: "damage", tier: 2, damage: "Fire",
+    resist: ["Fire"], attack: { boost: DAMAGE_BOOST[2] },
     effects: [
       "Gain Fire Resistance. Immune to Burning caused by ordinary environmental fire.",
-      "The first Fire attack you make each Round deals +1 Damage.",
+      "Your Fire attacks deal +20% Damage, rounded up, and your Fire Damage suppresses regeneration and natural healing on the target until the end of its next turn.",
       "When your Resistance reduces Fire Damage, gain 1 Heat (store up to 2). As a Fast Action, spend all Heat as extra Fire Damage on your next successful attack.",
     ],
   },
   {
     key: "closed-thermal-reactor", name: "Closed Thermal Reactor", system: "damage", tier: 3, damage: "Fire", requires: [{ keys: ["heat-exchange-network"], label: "Heat Exchange Network" }],
+    resist: ["Fire"], attack: { boost: DAMAGE_BOOST[3] },
     effects: [
       "Immune to Fire Damage while you have fewer than 3 Heat; each prevented hit gains 1 Heat. At 3 Heat, become Overheated and lose the Immunity (keep Fire Resistance).",
-      "Your Fire attacks deal +2 Damage.",
+      "Your Fire attacks deal +40% Damage, rounded up, and your Fire Damage suppresses regeneration and natural healing on the target until the end of the Scene.",
       "Slow Action: vent all Heat and Overheated, choosing 2 Fire Damage to everyone else in your zone, an Illuminated and Burning hazard in your zone, or +3 Fire Damage on your next successful Fire attack.",
     ],
   },
   {
     key: "surge-capture-network", name: "Surge Capture Network", system: "damage", tier: 2, damage: "Electric",
+    resist: ["Electric"], attack: { boost: DAMAGE_BOOST[2] },
     effects: [
-      "Immune to Conductive. Resistance to Disrupted.",
-      "The first Electric attack you make each Round deals +1 Damage.",
+      "Gain Electric Resistance. Immune to Conductive. Resistance to Disrupted.",
+      "Your Electric attacks deal +20% Damage, rounded up, and may apply Disrupted or Power-Starved to a Mechanical target that would ordinarily resist them.",
       "The first time each Scene you take Electric Damage, become Charged: your next successful attack may deal +2 Electric Damage, apply Staggered, or Disrupt a Mechanical target.",
     ],
   },
   {
     key: "closed-circuit-nervous-system", name: "Closed-Circuit Nervous System", system: "damage", tier: 3, damage: "Electric", requires: [{ keys: ["surge-capture-network"], label: "Surge Capture Network" }],
+    resist: ["Electric"], attack: { boost: DAMAGE_BOOST[3] },
     effects: [
-      "Immune to Electric Damage while not Overloaded, and Immune to Conductive. Each prevented hit gains 1 Charge; at 3 Charges become Overloaded and lose the Immunity.",
-      "Your Electric attacks deal +2 Damage.",
+      "Immune to Electric Damage while not Overloaded, and Immune to Conductive. Each prevented hit gains 1 Charge; at 3 Charges become Overloaded and lose the Immunity (keep Electric Resistance).",
+      "Your Electric attacks deal +40% Damage, rounded up, and may apply Disrupted or Power-Starved to a Mechanical target that is Immune to them.",
       "Slow Action: discharge all Charges for 3 Electric Damage to everyone else in your zone, 4 Electric Damage to one target in an adjacent zone, remove Disrupted from yourself or an adjacent machine, or power one Power-Starved or Offline machine until the end of the Scene.",
     ],
   },
   {
     key: "closed-circulatory-processor", name: "Closed Circulatory Processor", system: "damage", tier: 2, damage: "Chemical",
+    resist: ["Chemical"], attack: { boost: DAMAGE_BOOST[2] },
     effects: [
       "Gain Chemical Resistance. Immune to ordinary Poisoned. Resistance to Contaminated.",
+      "Your Chemical attacks deal +20% Damage, rounded up, and Poisoned and Corroded you apply last one additional Round.",
       "Once per Scene, when you would become Poisoned or Contaminated, store the substance instead (one at a time).",
       "Slow Action: expel it to deal 1 Chemical Damage to a target in your zone, apply Poisoned, or apply Corroded to equipment or a Mechanical target.",
     ],
   },
   {
     key: "synthetic-metabolic-isolation", name: "Synthetic Metabolic Isolation", system: "damage", tier: 3, damage: "Chemical", requires: [{ keys: ["closed-circulatory-processor"], label: "Closed Circulatory Processor" }],
+    resist: ["Chemical"], attack: { boost: DAMAGE_BOOST[3] },
     effects: [
       "Immune to Chemical Damage through breathing, skin contact, ingestion, or ordinary wounds, and to Poisoned and Contaminated. Direct injection, Surgery, or effects designed to bypass filtration ignore this.",
-      "Your Chemical attacks deal +1 Damage. Once per Scene, after dealing Chemical Damage, apply both Poisoned and Corroded.",
+      "Your Chemical attacks deal +40% Damage, rounded up, and Poisoned and Corroded you apply last two additional Rounds. Once per Scene, after dealing Chemical Damage, apply both Poisoned and Corroded.",
       "Drawback: biological healing and ordinary medication restore 1 less HP or provide one fewer benefit, to a minimum of 0.",
     ],
   },
@@ -385,6 +426,17 @@ export const CYBER_LOCATIONS: Record<NonNullable<CyberDef["location"]>, { name: 
 };
 
 export const CYBER_LOAD: Record<CyberTier, number> = { 1: 1, 2: 2, 3: 3 };
+
+/** What the best implant in a system adds to the Attribute that system is built around. */
+export const SYSTEM_ATTR_BONUS: Record<CyberTier, number> = { 1: 0, 2: 1, 3: 2 };
+
+/**
+ * What an Interface system adds to the Maximum HP of a mech its owner is piloting. Interface is the
+ * one branch built around no Attribute, because the thing it improves isn't the body: a deeper
+ * connection means the frame takes punishment that would have stopped a bolted-on pilot. So it has
+ * the same ladder as the others, paid out in the frame.
+ */
+export const INTERFACE_MECH_HP: Record<CyberTier, number> = { 1: 0, 2: 2, 3: 4 };
 
 export function dampeningForLoad(load: number) {
   return load >= 9 ? 3 : load >= 6 ? 2 : load >= 3 ? 1 : 0;

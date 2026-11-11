@@ -16,6 +16,7 @@ import { maxHp } from "@/lib/derive";
 import { uid } from "@/lib/dice";
 import { addInjury, addInjuryFromRoll, injuryFor, resolveInjuryRoll, type InjuryRoll } from "@/lib/injuries";
 import { markDamage, marksNeedingType, marksOn } from "@/lib/marks";
+import { damageResistance } from "@/lib/derive";
 import { applyDamage, damageSteps, findChar, rollAffliction } from "@/lib/mechanics";
 import { CONDITION_DURATIONS, DAMAGE_TYPES, type ConditionDuration, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
@@ -86,12 +87,15 @@ const COVER = [
 
 export function DamageDialog({ character }: { character: Character }) {
   const act = useGame((s) => s.act);
+  const game = useGame((s) => s.game);
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(2);
   const [useArmor, setUseArmor] = useState(true);
   const [pierce, setPierce] = useState(0);
   const [cover, setCover] = useState(0);
-  const [resistant, setResistant] = useState(false);
+  // Null while the sheet is left to answer for itself. An Affliction can nullify a Resistance the
+  // sheet still shows, so the GM can always overrule it.
+  const [resistOverride, setResistOverride] = useState<boolean | null>(null);
   const [vulnerable, setVulnerable] = useState(false);
   const [pressureChoice, setPressure] = useState<boolean | null>(null);
   const [injuryChoice, setInjury] = useState<boolean | null>(null);
@@ -102,12 +106,14 @@ export function DamageDialog({ character }: { character: Character }) {
   // the hit to have a type. Fortified and Corroded meet it the same either way, so they don't ask.
   const waiting = marksNeedingType(character);
   const marks = marksOn(character, type || null);
+  const resists = damageResistance(game, character, type || null);
+  const resistant = resistOverride ?? resists.length > 0;
   const steps = damageSteps(character, { amount: amount + marks.bonus, useArmor, pierce, cover, resistant, vulnerable, marks });
   const pressure = pressureChoice ?? steps.lost >= 2;
   const injury = injuryChoice ?? (steps.lost >= 3 || (steps.lost > 0 && steps.lost >= character.hp));
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setPressure(null); setInjury(null); setResistant(false); setVulnerable(false); setType(""); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setRoll(EMPTY_ROLL); setPressure(null); setInjury(null); setResistOverride(null); setVulnerable(false); setType(""); } }}>
       <DialogTrigger render={<Button size="sm" variant="destructive"><HeartCrackIcon /> Damage</Button>} />
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
@@ -121,7 +127,7 @@ export function DamageDialog({ character }: { character: Character }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={resistant} onCheckedChange={(v) => setResistant(!!v)} />
+              <Checkbox checked={resistant} onCheckedChange={(v) => setResistOverride(!!v)} />
               Resistant (half)
             </label>
             <label className="flex items-center gap-2 text-sm">
@@ -129,18 +135,18 @@ export function DamageDialog({ character }: { character: Character }) {
               Vulnerable (+half)
             </label>
           </div>
-          {waiting.length > 0 && (
-            <div className="grid gap-1.5">
-              <Label>Damage type ({waiting.join(", ")} {waiting.length === 1 ? "is" : "are"} waiting on this hit)</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {["", ...DAMAGE_TYPES].map((x) => (
-                  <button key={x || "any"} type="button" onClick={() => setType(x as DamageType | "")} className={cn("rounded-md border py-1 text-xs", type === x ? "border-primary bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/40")}>
-                    {x || "Unsaid"}
-                  </button>
-                ))}
-              </div>
+          {resists.length > 0 && <p className="text-xs text-amber-200/90">{resists[0]} halves {type} damage for {character.name}.</p>}
+          <div className="grid gap-1.5">
+            <Label>Damage type{waiting.length > 0 ? ` (${waiting.join(", ")} ${waiting.length === 1 ? "is" : "are"} waiting on this hit)` : ""}</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {["", ...DAMAGE_TYPES].map((x) => (
+                <button key={x || "any"} type="button" onClick={() => setType(x as DamageType | "")} className={cn("rounded-md border py-1 text-xs", type === x ? "border-primary bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/40")}>
+                  {x || "Unsaid"}
+                </button>
+              ))}
             </div>
-          )}
+            <p className="text-[11px] text-muted-foreground">Say the type and the sheet answers for Resistance and for whatever is waiting on this hit.</p>
+          </div>
           <div className="grid gap-1.5">
             <Label>Cover (Ballistic attacks only)</Label>
             <div className="grid grid-cols-3 gap-1.5">

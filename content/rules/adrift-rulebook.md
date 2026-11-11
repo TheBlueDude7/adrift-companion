@@ -3348,9 +3348,41 @@ Damage cannot normally reduce HP below 0.
 
 #### Resistance and Vulnerability
 
-Resistance to a damage type halves each hit of that type, rounded down (3 becomes 1). Vulnerability adds half, rounded down (3 becomes 4). Resistance has no levels: any source gives it, and more sources don't stack. Resistance and Vulnerability to the same type cancel out. Immunity means that type deals no damage.
+Resistance to a damage type halves each hit of that type, rounded down (3 becomes 1). Vulnerability adds half, rounded down (3 becomes 4). Neither has levels: any source gives it, and more sources don't stack. Resistance and Vulnerability to the same type cancel out. Immunity means that type deals no damage.
 
-The short-lived Vulnerable: Damage Type condition is separate: +1 damage on the next hit of that type.
+There is only one strength of Vulnerability. The Vulnerable: Damage Type condition is a temporary way to apply it, not a smaller version of it.
+
+<!-- updated: damage-types -->
+
+#### What Each Damage Type Does
+
+Every attack, hazard, and upgrade in Adrift deals one of five damage types. They are not five names for the same number: each one does something no other type can, and those five things hold everywhere — for a survivor, a mech, a threat, and a ship module alike.
+
+| Type | What it is for | Only this type |
+| --- | --- | --- |
+| Ballistic | Denying ground at range | Cover reduces it, and its riders take position away: Pinned, Marked, Exposed |
+| Physical | Breaking a thing and moving it | Strips worn Armor incidentally, and forces movement: Brittle, Prone, Crippled, Disarmed |
+| Fire | Making a place unsurvivable | Stays in the terrain after the attack, and suppresses regeneration and natural healing |
+| Electric | Shutting a machine down | Cares whether the target is a machine: Conductive, Disrupted, Power-Starved |
+| Chemical | Ruining what it touches, slowly | Seals stop it where Armor does not, and it puts a clock on the target: Poisoned, Contaminated, Corroded |
+
+Read as rules:
+
+- **Ballistic is the only type Cover reduces.** Cover Armor absorbs Ballistic Damage and nothing else. A hit of any other type goes past Cover untouched.
+- **Physical is the only type that strips Armor incidentally.** All worn Armor is ablative, but Physical effects are the ones that take extra points off it and that shove a target around without a stunt paying for it.
+- **Fire is the only type that outlives its own attack.** Burning, Smoldering, and Illuminated remain in the zone, and Fire Damage suppresses regeneration and natural healing on what it hits. This is what makes Fire the answer to a target that heals faster than it can be hurt.
+- **Electric is the only type that asks what the target is made of.** Against a mech, a ship module, a vehicle, a drone, or a character who counts as Mechanical, Electric reaches conditions nothing else can: Disrupted, Power-Starved, Conductive. A purely biological target with no electronics in it is normally Immune to Electric Damage and can never be Power-Starved.
+- **Chemical is the only type a seal stops.** Sealed Armor protects against Chemical while its seals hold, whatever the Armor value is; a breach ends that protection even with Armor left. Chemical's conditions are the ones that keep working after the attacker has moved on.
+
+#### Damage Types and the Three Upgrade Paths
+
+The five types are what make the Cybernetic, Mech, and Biological paths answer each other, without any of them needing rules of its own:
+
+- **Electric hunts machinery.** Cybernetics and mechs are machinery, so a heavily implanted survivor and a piloted frame are both exposed to the one type that disables rather than wounds. Industrial Frame Integration says so outright: its owner counts as Mechanical for Electric and machine-targeting effects.
+- **Fire and Chemical hunt flesh.** Both work on living tissue, and Fire shuts off the regeneration a biological build depends on. A sealed, unbreached mech is close to untouchable by Chemical; the moment it is Breached, it is not.
+- **Ballistic and Physical work on everything.** They have no counter-target and no immunity to find, which is why ordinary weapons stay worth carrying at every tier.
+
+A GM wanting a threat to pressure one path in particular picks its damage type rather than its stat line.
 
 ### Armor
 
@@ -5006,7 +5038,7 @@ Some abilities apply temporary vulnerability as a condition.
 
 #### Vulnerable: Damage Type
 
-The next hit of the listed damage type deals +1 Damage.
+The next hit of the listed damage type is raised by half, rounded down, exactly as a permanent Vulnerability would raise it.
 
 Examples include:
 
@@ -5018,9 +5050,7 @@ Examples include:
 
 The condition ends after triggering or at the end of the Scene.
 
-This condition is separate from a creature’s permanent damage Vulnerability.
-
-A target with both a permanent Vulnerability and Vulnerable: Fire takes both bonuses unless an ability states otherwise.
+A target that already has a permanent Vulnerability to that type gains nothing from the condition: Vulnerability has no levels and does not stack with itself.
 
 ### Adaptive Defenses
 
@@ -5028,7 +5058,7 @@ Some monsters and upgrades change their defenses during an encounter.
 
 #### Adaptive: Damage Type
 
-The target gains Resistance 1 against the listed damage type.
+The target gains Resistance against the listed damage type.
 
 If Adaptive is applied for a different damage type, the previous Adaptive Resistance is replaced.
 
