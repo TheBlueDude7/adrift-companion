@@ -55,16 +55,16 @@ function standing(c: Character, t: ShipboardTask): { text: string; tone: "good" 
   const best = bestFor(c, t);
   if (!best) return null;
   const pool = `${best.pool}d6 (${best.using})`;
-  if (t.mode === "crisis") return { text: `Always rolled: ${c.name} rolls ${pool}.`, tone: "danger" };
-  if (t.mode === "skilled" || !t.threshold) return { text: `Rolled: ${c.name} rolls ${pool}.`, tone: "warn" };
+  if (t.mode === "crisis") return { text: `Always rolls ${pool}`, tone: "danger" };
+  if (t.mode === "skilled" || !t.threshold) return { text: `Rolls ${pool}`, tone: "warn" };
   const practiced = t.labor ? LABOR_PRACTICED_MARGIN : PRACTICED_MARGIN;
   const expert = t.expertAt ?? (t.labor ? LABOR_EXPERT_MARGIN : EXPERT_MARGIN);
-  if (best.level < t.threshold) return { text: `Rolled: ${c.name} has ${best.level} of the ${t.threshold} needed for Routine, so rolls ${pool}.`, tone: "warn" };
+  if (best.level < t.threshold) return { text: `Rolls ${pool} · ${best.level}/${t.threshold} for Routine`, tone: "warn" };
   const margin = best.level - t.threshold;
   const cheaper = margin >= practiced && t.energy > 0;
-  if (margin >= expert && t.strong) return { text: `Expert: Routine for ${c.name}, who gets the Strong Result without rolling${cheaper ? " and spends 1 less Energy" : ""}.`, tone: "good" };
-  if (cheaper) return { text: `Practiced: Routine for ${c.name}, and it costs 1 less Energy.`, tone: "good" };
-  return { text: `Routine for ${c.name}: it succeeds without a roll, given tools and no threat.`, tone: "good" };
+  if (margin >= expert && t.strong) return { text: `Expert: Strong Result, no roll${cheaper ? ", −1 Energy" : ""}`, tone: "good" };
+  if (cheaper) return { text: "Practiced: Routine, −1 Energy", tone: "good" };
+  return { text: "Routine: no roll needed", tone: "good" };
 }
 
 function TaskCard({ t, who }: { t: ShipboardTask; who?: Character }) {
@@ -85,7 +85,7 @@ function TaskCard({ t, who }: { t: ShipboardTask; who?: Character }) {
       </div>
       <p className="text-muted-foreground"><GlossaryText text={t.result} skip={t.name} /></p>
       {t.strong && !t.noStrong && <p className="text-xs"><span className="font-medium">Strong Result:</span> <span className="text-muted-foreground"><GlossaryText text={t.strong} skip={t.name} /></span></p>}
-      {me && <p className="text-xs"><Pill tone={me.tone}>{me.text}</Pill></p>}
+      {me && <p className="text-xs"><Pill tone={me.tone} className="max-w-full whitespace-normal">{me.text}</Pill></p>}
     </div>
   );
 }

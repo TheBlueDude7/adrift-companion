@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { rollPool, sixes, uid } from "@/lib/dice";
 import { hullTier, power, roomDraw, roomWorks } from "@/lib/derive";
 import {
@@ -845,16 +847,87 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
 }
 
 /**
+ * A player's ask for a project, which goes to the GM and nobody else.
+ *
+ * It writes nothing to the log, because the log is the whole crew's. The GM answers it from the
+ * Ship tab with the ordinary New Project dialog, or turns it down.
+ */
+function AskProjectDialog() {
+  const { game, act } = useGame();
+  const { myCharacterId } = usePerms();
+  const [open, setOpen] = useState(false);
+  const [template, setTemplate] = useState<string>(PROJECT_TEMPLATES[0].name);
+  const [roomId, setRoomId] = useState("none");
+  const [note, setNote] = useState("");
+  const templates = projectTemplates(game);
+  const me = game.characters.find((c) => c.id === myCharacterId);
+
+  function send() {
+    if (!me) return;
+    act("Ask for a project", (g) => {
+      g.projectRequests = [...(g.projectRequests ?? []), { id: uid(), by: me.id, template, roomId: roomId === "none" ? null : roomId, note: note.trim() }];
+      return [];
+    });
+    toast.success(`Asked the GM for ${template}`);
+    setOpen(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setTemplate(templates[0]?.name ?? PROJECT_TEMPLATES[0].name); setRoomId("none"); setNote(""); } }}>
+      <DialogTrigger
+        render={
+          <Button size="sm" disabled={!me} title={me ? "Ask the GM to start a project" : "Pick your character in Play together first"}>
+            <HammerIcon /> Ask for a project
+          </Button>
+        }
+      />
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Ask the GM for a project</DialogTitle>
+          <DialogDescription>Only the GM sees this. They start it, with its materials, or turn it down.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Project</Label>
+            <Select value={template} onValueChange={(v) => setTemplate((v as string) ?? template)}>
+              <SelectTrigger className="w-full"><SelectValue>{template}</SelectValue></SelectTrigger>
+              <SelectContent>{templates.map((t) => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Room</Label>
+            <Select value={roomId} onValueChange={(v) => setRoomId(v as string)}>
+              <SelectTrigger className="w-full"><SelectValue>{game.ship.rooms.find((r) => r.id === roomId)?.name ?? "No particular room"}</SelectValue></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No particular room</SelectItem>
+                {game.ship.rooms.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="project-ask-note">Why</Label>
+            <Textarea id="project-ask-note" value={note} maxLength={300} rows={2} placeholder="What it's for, or which module you have in mind" onChange={(e) => setNote(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={send}>Send to the GM</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * What the crew has asked for and nobody has opened yet.
  *
- * Shown to everyone, because the crew knows what it asked: a player who can see their own request
- * sitting there doesn't ask twice. Only the GM can answer one, and the answer is either the ordinary
- * New Project dialog or a refusal — the ask itself never becomes work on its own.
+ * The GM sees every request; a player sees only their own, so they can withdraw it and don't ask
+ * twice. Only the GM can answer one, and the answer is either the ordinary New Project dialog or a
+ * refusal — the ask itself never becomes work on its own.
  */
 function ProjectRequests() {
   const { game, act } = useGame();
-  const { isGM } = usePerms();
-  const requests = game.projectRequests ?? [];
+  const { isGM, myCharacterId } = usePerms();
+  const requests = (game.projectRequests ?? []).filter((r) => isGM || r.by === myCharacterId);
   if (!requests.length) return null;
   return (
     <div className="mb-3 grid gap-2">
@@ -871,7 +944,7 @@ function ProjectRequests() {
             <Button
               size="xs"
               variant="ghost"
-              onClick={() => act("Answer project request", (g) => { g.projectRequests = (g.projectRequests ?? []).filter((x) => x.id !== r.id); return `${isGM ? "Turned down" : "Withdrew"} the request for ${r.template}.`; })}
+              onClick={() => act("Answer project request", (g) => { g.projectRequests = (g.projectRequests ?? []).filter((x) => x.id !== r.id); return isGM ? [{ text: `Turned down ${who}'s request for ${r.template}.`, gm: true }] : []; })}
             >
               {isGM ? "Turn it down" : "Withdraw"}
             </Button>
@@ -987,7 +1060,7 @@ function ProjectsSection() {
 
   return (
     <section>
-      <SectionTitle action={isGM && <AddProjectDialog />}>Projects · {live.filter((p) => !p.done).length} active</SectionTitle>
+      <SectionTitle action={isGM ? <AddProjectDialog /> : <AskProjectDialog />}>Projects · {live.filter((p) => !p.done).length} active</SectionTitle>
       <ProjectRequests />
       <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
         <TabsList className="mb-3">

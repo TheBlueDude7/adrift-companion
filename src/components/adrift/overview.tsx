@@ -22,6 +22,7 @@ export function OverviewTab({ onOpenCharacter, onGo }: { onOpenCharacter: (id: s
   const p = power(ship);
   const troubled = ship.rooms.filter((r) => r.condition !== "Operational");
   const active = openProjects(game);
+  const asks = perms.isGM ? (game.projectRequests ?? []).length : 0;
 
   return (
     <div className="grid gap-5">
@@ -103,7 +104,7 @@ export function OverviewTab({ onOpenCharacter, onGo }: { onOpenCharacter: (id: s
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardContent>
-            <SectionTitle>Active projects</SectionTitle>
+            <SectionTitle action={asks > 0 && <Button size="xs" variant="outline" className="border-amber-400/40 text-amber-200" onClick={() => onGo("ship")}>{asks} project request{asks > 1 ? "s" : ""}</Button>}>Active projects</SectionTitle>
             {active.length === 0 ? <p className="text-sm text-muted-foreground">Nothing under construction. Start projects from the Ship tab.</p> : <div className="grid gap-2">{active.map((x) => <ProjectRow key={x.id} p={x} />)}</div>}
           </CardContent>
         </Card>
