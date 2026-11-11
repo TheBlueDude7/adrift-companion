@@ -887,7 +887,10 @@ export function ProjectRow({ p }: { p: Project }) {
   const rooms = useGame((s) => s.game.ship.rooms);
   const room = rooms.find((r) => r.id === p.roomId);
   const patient = useGame((s) => s.game.characters.find((c) => c.id === p.patientId));
-  const bill = useGame((s) => projectBill(s.game, p));
+  // Computed outside the selector: `projectBill` builds a fresh object, and a selector that never
+  // returns the same reference twice re-renders without end.
+  const game = useGame((s) => s.game);
+  const bill = projectBill(game, p);
   const edit = (label: string, fn: (x: Project, g: GameState) => void | string | string[]) =>
     act(label, (g) => fn(g.ship.projects.find((x) => x.id === p.id)!, g));
 

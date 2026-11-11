@@ -15,7 +15,7 @@ import { actionBlocker, clearOverwatch, combatantName, DECK_SIZE, declareOverwat
 import { COVER_POINTS, DAMAGE_TYPES, SKILL_BY_KEY, WEAPON_RANGES, threatBand, type Cover, type DamageType } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import { attackOwnTarget } from "@/lib/sync/client";
-import type { Character, Combatant, GameState, Line, Threat } from "@/lib/types";
+import type { Character, Combatant, GameState, Line, Threat, Zone } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EmptyState, Meter, Pill, SectionTitle, Stepper } from "./common";
@@ -35,6 +35,9 @@ const RANGE_LABEL: Record<keyof typeof WEAPON_RANGES, string> = {
 };
 
 const BAND_TONE = { unhurt: "muted", hurt: "warn", "badly hurt": "danger", down: "muted" } as const;
+
+/** One shared empty list for when there's no expedition: a fresh `[]` out of a selector never settles. */
+const NO_ZONES: Zone[] = [];
 
 /**
  * Everything a shot could be aimed at: the GM's threats first, then survivors still standing.
@@ -116,7 +119,7 @@ function TypeRow({ label, chosen, others, onChange }: { label: string; chosen: D
 
 function ThreatDialog({ existing }: { existing?: Threat }) {
   const act = useGame((s) => s.act);
-  const zones = useGame((s) => s.game.expedition?.zones ?? []);
+  const zones = useGame((s) => s.game.expedition?.zones) ?? NO_ZONES;
   const [open, setOpen] = useState(false);
   const s = existing?.stats;
   const [zone, setZone] = useState(existing?.zone ?? "nowhere");

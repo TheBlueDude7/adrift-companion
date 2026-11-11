@@ -42,6 +42,12 @@ export function actorOf(s: Pick<Store, "session" | "me" | "people">): Actor {
   return { role, characterId: role === "gm" ? null : (s.people.find((p) => p.id === s.me?.id)?.characterId ?? null) };
 }
 
+/**
+ * A selector passed to `useGame` has to return the same reference when nothing has changed. zustand 5
+ * doesn't memoize selectors, so one that builds a fresh object, array or Set every call — `?? []`,
+ * `.filter(...)`, or a helper returning `{ ... }` — re-renders until React gives up with "Maximum
+ * update depth exceeded". Select the state you need and do the work outside the selector.
+ */
 export const useGame = create<Store>()(
   persist(
     (set, get) => {
