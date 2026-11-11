@@ -130,7 +130,7 @@ export const MECH_MODULES: MechModule[] = [
   m("Medical", "Stabilization Harness", 1, 1, "A passenger carried by the mech can't suffer additional Bleeding damage while the harness is active."),
   m("Medical", "Trauma Monitoring System", 1, 1, "Automatically identifies the severity of visible Injuries and whether Surgery is urgently required."),
   m("Medical", "Auto-Injector Array", 1, 2, "Once per Scene, remove Weakened, Confused, or Staggered from the pilot. The pilot becomes Drained afterward."),
-  m("Medical", "Mobile Surgical Cradle", 2, 3, "Permits Surgery outside a Medical Bay. Surgery is still a Crisis task."),
+  m("Medical", "Mobile Surgical Cradle", 2, 3, "Counts as a Field Setup Medical Bay wherever the mech is: Surgery gets −2d6 instead of −3d6 out in a derelict, or aboard a ship with no working Medical Bay. Surgery is still a Crisis task."),
   m("Medical", "Life-Support Bypass", 1, 2, "Compensates for Punctured Lungs, Collapsed Lung, Organ Failure, or similar Injuries while inside the mech. Doesn't heal them."),
   m("Medical", "Neural Grounding System", 1, 2, "Ignore the first Pressure gained from an environmental hazard each expedition. Affliction triggers still apply."),
   m("Medical", "Casualty Recovery Frame", 2, 2, "Carry up to two Downed or Immobilized characters without using inventory slots, and pull one in from an adjacent zone as a Fast Action. Neither of them can suffer further Bleeding damage while aboard."),

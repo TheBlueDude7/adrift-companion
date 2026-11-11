@@ -248,7 +248,7 @@ export function FirstAidDialog({ character }: { character: Character }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{character.name} gives First Aid</DialogTitle>
-          <DialogDescription>A free skilled roll, no Energy, that uses up a medkit. The kit heals its HP and adds its dice. Treating an Untreated injury takes the first 6 (Major and Deadly injuries still need Surgery afterward); every other 6 heals 1 HP or clears a condition.</DialogDescription>
+          <DialogDescription>A free skilled roll, no Energy, that uses up a medkit. The kit heals its HP and adds its dice. Treating an Untreated injury takes the first 6 (Major and Deadly injuries still need Surgery afterward, and a Deadly one gains one more segment before it kills); every other 6 heals 1 HP or clears a condition.</DialogDescription>
         </DialogHeader>
         {!kits.length ? (
           <p className="text-sm text-muted-foreground">{character.name} needs a medkit, carried or in ship storage.</p>

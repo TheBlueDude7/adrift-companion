@@ -35,7 +35,7 @@ import {
   wornArmor,
 } from "@/lib/derive";
 import { INJURY_BY_CODE, INJURY_TABLE } from "@/data/injuries";
-import { convertLegacy, effectiveSeverity, injuryMaxHpSources, operate, suggestConversion } from "@/lib/injuries";
+import { convertLegacy, effectiveSeverity, FESTER_DAYS, injuryMaxHpSources, injuryPain, operate, suggestConversion } from "@/lib/injuries";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
   ATTRIBUTES,
@@ -227,7 +227,12 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           limit={isGM ? maxEnergy(c) : c.energy}
           tone="energy"
           onChange={(v) => edit(`${c.name} Energy → ${v}`, (x) => { const diff = v - x.energy; x.energy = v; return `${x.name} ${diff < 0 ? "spends" : "regains"} ${Math.abs(diff)} Energy (${v}/${maxEnergy(x)}).`; })}
-          extra={c.survival.energyPenalty > 0 ? <span className="text-[11px] text-amber-300">−{c.survival.energyPenalty} max today</span> : c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined}
+          extra={(() => {
+            const pain = injuryPain(c);
+            const notes = [c.survival.energyPenalty > 0 && `−${c.survival.energyPenalty} max today`, pain > 0 && `−${pain} Pain`].filter(Boolean).join(", ");
+            if (notes) return <span className="text-[11px] text-amber-300" title={pain > 0 ? "Pain: each Major or Deadly injury costs 1 Maximum Energy until it has Surgery." : undefined}>{notes}</span>;
+            return c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined;
+          })()}
         />
         <StatBlock label="Willpower" value={c.willpower} max={maxWillpower(c)} tone="willpower" onChange={(v) => edit(`${c.name} Willpower → ${v}`, (x) => { x.willpower = v; return `${x.name} Willpower set to ${v}.`; })} />
         <StatBlock
@@ -430,6 +435,8 @@ function Abilities({ c, edit }: { c: Character; edit: Edit }) {
 }
 
 function Injuries({ c, edit }: { c: Character; edit: Edit }) {
+  const { isGM } = usePerms();
+  const today = useGame((s) => s.game.day);
   return (
     <div>
       <SectionTitle action={<CompendiumPicker character={c} kind="injury" />}>Injuries</SectionTitle>
@@ -447,6 +454,12 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                 ) : (
                   <span className="text-xs text-muted-foreground">{effectiveSeverity(inj)} {inj.location}{inj.operated && ` (was ${inj.severity})`}</span>
                 )}
+                {inj.festered && !inj.operated && <Tip content={`Went ${FESTER_DAYS} days without Surgery and became Deadly.`}><Pill className="border-rose-500/50 text-rose-300">Festered</Pill></Tip>}
+                {!inj.legacy && !inj.operated && inj.severity === "Major" && (
+                  <span className="text-xs text-amber-300/80" title={`A Major injury left ${FESTER_DAYS} days without Surgery, counting the day it happened, festers into a Deadly one at that End of Day.`}>
+                    · festers {(() => { const nights = inj.dayReceived + FESTER_DAYS - today; return nights <= 1 ? "tonight" : `in ${nights} nights`; })()}
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">· day {inj.dayReceived}</span>
                 <div className="ml-auto flex items-center gap-1">
                   {inj.legacy ? (
@@ -458,8 +471,8 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                       <ConvertInjuryDialog injury={inj} edit={edit} />
                     </>
                   ) : (
-                    effectiveSeverity(inj) !== "Minor" && (
-                      <Tip content="Record a successful Surgery: the injury becomes a Treated Minor one (−1d6) and the conditions it caused end. Surgery is a Crisis task, and the patient drops to half Max HP when it begins.">
+                    isGM && effectiveSeverity(inj) !== "Minor" && (
+                      <Tip content="GM override: record a Surgery that happened outside the Actions tab. The injury becomes a Treated Minor one (−1d6) and the conditions it caused end. Nothing else is applied: no tools spent and no HP drop. Plan a Surgery task to play it out.">
                         <Button size="sm" variant="outline" onClick={() => edit(`Surgery on ${inj.name}`, (x) => { const out: string[] = []; operate(x, inj.id, out); return out; })}>Surgery</Button>
                       </Tip>
                     )

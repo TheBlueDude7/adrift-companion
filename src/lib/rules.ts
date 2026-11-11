@@ -132,7 +132,7 @@ export const BACKGROUNDS: Background[] = [
     specialties: [
       { name: "You're Not Dying Today", frequency: "expedition", summary: "A reachable character who would die instead stays Stabilized at 0 HP until the Scene ends." },
       { name: "Combat Medic", frequency: "combat", summary: "Fast Action First Aid with no roll or kit: remove Bleeding, Burning, Poisoned, Staggered, Suffocating, or stabilize." },
-      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major/Critical Injury also does one of: restore 2 Maximum HP lost to that Injury and 3 current HP; cut postoperative Rest by two segments if the patient was at 1 HP; or operate on a second Injury in the same procedure. One benefit per Injury." },
+      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major or Deadly Injury also does one of: restore 2 Maximum HP lost to that Injury and 3 current HP; spare the patient the HP drop the operation would cost; or operate on a second Injury in the same procedure. One benefit per Injury." },
     ],
   },
   {

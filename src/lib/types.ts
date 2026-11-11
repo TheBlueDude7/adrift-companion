@@ -36,6 +36,8 @@ export type Injury = {
   operated?: boolean;
   /** A Deadly injury that needs Surgery by the end of this day and segment, or the character dies. */
   deadline?: { day: number; segment: number };
+  /** A Major injury that went too long without Surgery and became Deadly. */
+  festered?: boolean;
 };
 
 export type Affliction = {
@@ -685,8 +687,10 @@ export type SegmentAction = {
   target?: { mapId: string; x: number; y: number } | null;
   /** Another action this one assists. */
   assists?: string | null;
-  /** The crewmate a task is performed on: Reduce Pressure, Surgery. */
+  /** The crewmate a task is performed on: Reduce Pressure, Prep for Surgery, Surgery. */
   subjectId?: string | null;
+  /** The patient's injury a Surgery operates on. */
+  injuryId?: string | null;
   /** Recipe names to fabricate, duplicates allowed. Cooking, medicine, and salvage use the first. */
   crafts?: string[];
   /** Skill a Train Skill task practices. */

@@ -24,8 +24,8 @@ const MECHANICS: { terms: string[]; entry: GlossaryEntry }[] = [
   { terms: ["Reaction", "Reactions"], entry: { title: "Reaction", kind: "Combat", text: "One per round, such as Block or Dodge. An unused Reaction is lost at the start of your next turn." } },
   { terms: ["Expedition Turn", "Expedition Turns"], entry: { title: "Expedition Turn", kind: "Time", text: "About 20–40 minutes of careful activity. Eight make one day segment." } },
   { terms: ["Minor Injury", "Minor Injuries", "Minor injury", "Minor injuries"], entry: { title: "Minor injury", kind: "Injury", text: "−1d6 to the rolls it lists. First Aid treats it, and it can heal naturally on a Rest." } },
-  { terms: ["Major Injury", "Major Injuries", "Major injury", "Major injuries"], entry: { title: "Major injury", kind: "Injury", text: "−2d6 to the rolls it lists, a condition until Surgery, and Bleeding. Surgery turns it into a Treated Minor injury." } },
-  { terms: ["Deadly Injury", "Deadly Injuries", "Deadly injury", "Deadly injuries"], entry: { title: "Deadly injury", kind: "Injury", text: "Surgery by the end of the next segment or the character dies, or a permanent loss." } },
+  { terms: ["Major Injury", "Major Injuries", "Major injury", "Major injuries"], entry: { title: "Major injury", kind: "Injury", text: "−2d6 to the rolls it lists, a condition until Surgery, Bleeding, and Pain (−1 Maximum Energy). Surgery turns it into a Treated Minor injury. Left 3 days without Surgery, it festers into a Deadly one." } },
+  { terms: ["Deadly Injury", "Deadly Injuries", "Deadly injury", "Deadly injuries"], entry: { title: "Deadly injury", kind: "Injury", text: "Surgery within four segments or the character dies, or a permanent loss. Pain costs 1 Maximum Energy until Surgery. First Aid on it buys one more segment." } },
 ];
 
 function build() {

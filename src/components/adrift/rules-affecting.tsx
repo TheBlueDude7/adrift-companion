@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CONDITIONS } from "@/data/compendium";
 import { INJURY_BY_CODE, INJURY_PENALTY } from "@/data/injuries";
 import { characterAlerts, maxEnergy, maxHp, maxWillpower } from "@/lib/derive";
-import { effectiveSeverity } from "@/lib/injuries";
+import { effectiveSeverity, FESTER_DAYS } from "@/lib/injuries";
 import { activeStressBands, ATTRIBUTE_NAMES, MIND_BREAK_BY_NAME, pressureFloor, PRESSURE_STATES, SEGMENTS, SKILL_BY_KEY } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Character, Injury } from "@/lib/types";
@@ -42,7 +42,11 @@ function injuryRow(i: Injury, segment: number, day: number): Row {
   if (i.legacy) notes.push("Old-table injury: apply its effect by hand.");
   else if (hits.length) notes.push(`−${INJURY_PENALTY[sev]}d6 to ${hits.join(", ")}.`);
   if (i.state === "Untreated") notes.push("Untreated: costs 1 HP at End of Day.");
-  if (!i.legacy && !i.operated && sev !== "Minor") notes.push("Needs Surgery to become Minor.");
+  if (!i.legacy && !i.operated && sev !== "Minor") notes.push("Needs Surgery to become Minor. Pain: −1 Maximum Energy until then.");
+  if (!i.legacy && !i.operated && sev === "Major") {
+    const nights = i.dayReceived + FESTER_DAYS - day;
+    notes.push(`Festers into a Deadly injury ${nights <= 1 ? "at End of Day tonight" : `in ${nights} nights`} without Surgery.`);
+  }
   if (i.deadline) {
     const due = day > i.deadline.day || (day === i.deadline.day && segment >= i.deadline.segment);
     notes.push(due ? "Surgery is overdue: without it, the character dies." : `Surgery by the end of ${SEGMENTS[i.deadline.segment]}, or the character dies.`);

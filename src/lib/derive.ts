@@ -15,7 +15,7 @@ import {
 } from "./rules";
 import { bioMaxEnergy, bioMaxHp } from "./biology";
 import { cyberAttack, cyberAttr, cyberMaxEnergy, cyberMaxHp, cyberResists } from "./cyber";
-import { deadlineWhen, injuryMaxHp, injuryPenalty, segmentsLeft } from "./injuries";
+import { deadlineWhen, injuryMaxHp, injuryPain, injuryPenalty, segmentsLeft } from "./injuries";
 import { mechModules, mechStats, pilotedMech, portedImplants } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
@@ -62,11 +62,11 @@ export function maxHp(c: Character) {
 
 export function baseMaxEnergy(c: Character) {
   const con = attributeValue(c, "CON");
-  return 3 + Math.floor((con - 1) / 2);
+  return 4 + Math.floor((con - 1) / 2);
 }
 
 export function maxEnergy(c: Character) {
-  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) + bioMaxEnergy(c) - c.survival.energyPenalty);
+  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) + bioMaxEnergy(c) - c.survival.energyPenalty - injuryPain(c));
 }
 
 export function maxWillpower(c: Character) {

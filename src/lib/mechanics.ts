@@ -6,7 +6,7 @@ import { dampening, dampeningLeft, spendDampening } from "./cyber";
 import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
-import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, type InjuryRoll } from "./injuries";
+import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, festerInjuries, type InjuryRoll } from "./injuries";
 import { noMarks, spendMarks, type Marks } from "./marks";
 import { runSolarPanels } from "./modules";
 import { burnDailyPower } from "./power";
@@ -454,6 +454,7 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
       c.hp = Math.max(0, c.hp - untreated);
       out.push(`${c.name} loses ${untreated} HP from untreated injuries (HP ${c.hp}).`);
     }
+    festerInjuries(g, c, out);
 
     // Energy, pressure and resets
     s.energyPenalty = penalty;

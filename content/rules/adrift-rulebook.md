@@ -287,7 +287,7 @@ Every character in Adrift starts with base stats that they can use.
 Each human starts with:
 
 - 8 hp,
-- 3 max energy,
+- 4 max energy,
 - 1 willpower,
 - And 1 in every base attribute.
 - 6 attribute points to spend.
@@ -784,7 +784,9 @@ The GM may introduce an event at the start of a segment, after tasks are committ
 
 Energy measures how much meaningful work a character can perform before exhaustion. Energy is spent on shipboard tasks and other strenuous actions. Combat uses its own action economy and does not normally spend Energy unless a rule says otherwise.
 
-- Base Maximum Energy is 3.
+<!-- updated: base-energy -->
+
+- Base Maximum Energy is 4.
 - Every 2 Constitution above 1 increases Maximum Energy by 1.
 - Energy cannot normally fall below 0.
 - A character at 0 Energy is Exhausted and cannot begin another Energy-costing task unless they Push or an ability permits it.
@@ -1074,17 +1076,21 @@ A character carries at most 2 Minor Injuries and 1 Major Injury at a time. Going
 
 #### Injury Severity
 
-<!-- updated: injuries -->
+<!-- updated: injuries, surgery-window, pain-festering -->
 
 Each Injury lists the rolls it affects. Severity sets the penalty:
 
 - Minor Injuries impose −1d6 on the rolls they list.
 - Major Injuries impose −2d6 on the rolls they list and apply the condition they list until Surgery. The character starts Bleeding.
-- Deadly Injuries impose −2d6 on the rolls they list and are catastrophic: either the character needs Surgery by the end of the next day segment or dies, or the Injury is a permanent loss that only a cybernetic or graft replaces. The character starts Bleeding.
+- Deadly Injuries impose −2d6 on the rolls they list and are catastrophic: either the character needs Surgery within four segments (the one it happened in and the three after) or dies, or the Injury is a permanent loss that only a cybernetic or graft replaces. The character starts Bleeding.
 
 The penalty lasts until the Injury heals, even once it is Treated.
 
-Injuries do not automatically reduce Maximum HP, Maximum Energy, or increase the Energy cost of unrelated Tasks.
+Pain: every Major or Deadly Injury that hasn't had Surgery costs 1 Maximum Energy. The point comes back the moment the Surgery succeeds.
+
+Festering: a Major Injury left 3 days without Surgery, counting the day it happened, festers at that End of Day. It becomes a Deadly Injury, and its four-segment Surgery window opens from the next Morning.
+
+Injuries do not otherwise reduce Maximum HP or Maximum Energy, or increase the Energy cost of unrelated Tasks, unless the Injury says so.
 
 #### Injury States
 
@@ -1120,7 +1126,7 @@ Bleeding ends with a successful First Aid task or by spending an appropriate Med
 
 First Aid is a free action, usable any time outside the segment structure, with no Energy cost, but it uses up one medkit from the healer's inventory or ship storage. The kit heals its own HP (Improvised Medkit 1, Medkit 3, Glitterworld Medkit 5) and adds its dice (Medkit +1d6, Glitterworld Medkit +3d6). It is always a Skilled roll:
 
-- If treating an Untreated Injury of any Severity, the first 6 treats it. A Major or Deadly Injury still needs Surgery to become Minor.
+- If treating an Untreated Injury of any Severity, the first 6 treats it. A Major or Deadly Injury still needs Surgery to become Minor, but treating a Deadly Injury buys the patient one more segment before it kills.
 - Every other 6 heals 1 HP or removes one condition.
 - First Aid works with no Injury at all, purely to heal.
 - Giving First Aid to another player's character needs that player's agreement.
@@ -1130,16 +1136,27 @@ First Aid cannot repair permanent structural damage, restore lost organs, or rep
 
 #### Surgery
 
-<!-- updated: surgery -->
+<!-- updated: surgery, medical-rules -->
 
-Surgery is always a Crisis task. It requires a functioning Medical Bay, Surgical Tools, appropriate supplies, and another character to operate. A Mobile Surgical Cradle removes the need for a Medical Bay, but doesn't make Surgery easier.
+First Aid keeps a patient alive; Surgery repairs them. Surgery is always a Crisis task on one named Major or Deadly Injury. It costs the surgeon 3 Energy and the patient their segment: they spend it on the table and take no Task of their own. Nobody operates on themselves.
 
-- When Surgery begins, the patient drops to half their Maximum HP if above it, regardless of the outcome.
-- The patient loses 2 current Energy, to a minimum of 0.
-- If already at 1 HP, the patient collapses and must spend the next 2 segments resting after the procedure.
-- Success converts one Major or Deadly injury into a treated Minor injury unless the injury says otherwise.
-- Failure gives the patient one additional Minor injury and 1 Stress. The original injury remains.
-- Additional successes may restore 1 HP, remove a separate Minor injury, or reduce a lasting penalty, according to the Surgery stunt list.
+It requires Surgical Tools, from the surgeon's own pack or, aboard, from ship storage. Each Surgery spends one use of the best set to hand, success or fail. Enhanced Surgical Tools add +3d6 and cost no Energy.
+
+The Medical Bay sets how hard the operation is and how far the patient's HP drops when it begins. Out on an expedition the Medical Bay doesn't count. A working Mobile Surgical Cradle counts as a Field Setup wherever its mech is.
+
+| Where | Surgery roll | HP when it begins: success | HP when it begins: failure |
+| --- | --- | --- | --- |
+| No Medical Bay, or Base Setup | −3d6 | Half Max HP | Half Max HP |
+| Field Setup | −2d6 | Half Max HP | Half Max HP |
+| Operational | −1d6 | Three-quarters Max HP | Half Max HP |
+| Sterile Suite | — | Three-quarters Max HP | Three-quarters Max HP |
+| Advanced Care | — | No drop | No drop |
+
+The drop only applies if the patient is above it, and never takes them below 1 HP. A successful Prep for Surgery on the patient that day adds +2d6.
+
+- Success converts the Injury into a Treated Minor Injury. The conditions it caused end, its Pain ends, and any Surgery deadline is cleared.
+- Strong Result: the patient also regains 1 HP.
+- Failure leaves the Injury exactly as it was. The tools, the Energy, and the HP drop are spent anyway.
 
 #### Death
 
@@ -4108,10 +4125,10 @@ If the condition is caused by an untreated Injury, it is suppressed until the en
 
 #### High Surgeon
 
-When you successfully perform Surgery on a Major or Critical Injury, choose one additional benefit:
+When you successfully perform Surgery on a Major or Deadly Injury, choose one additional benefit:
 
 - Restore 2 Maximum HP lost to that Injury, and restore an additional 3 current HP to the patient.
-- If the patient was already at 1 HP before the surgery started, reduce required postoperative Rest by two segments.
+- Spare the patient the HP drop the operation would cost them.
 - Perform surgery on a second Injury during the same procedure.
 
 Each patient may receive only one High Surgeon benefit from the same Injury.

@@ -728,7 +728,7 @@ Once per Scene, remove Weakened, Confused, or Staggered from the pilot. The pilo
 Mobile Surgical Cradle
 2
 III
-Permits Surgery outside a Medical Bay, but the Task is always Skilled and suffers −3d6 unless the surrounding area is Secured.
+Counts as a Field Setup Medical Bay wherever the mech is: Surgery gets −2d6 instead of the −3d6 it takes with no Medical Bay. Surgery is still a Crisis task.
 Life-Support Bypass
 1
 II
