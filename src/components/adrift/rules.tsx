@@ -14,7 +14,7 @@ import { MEDKITS } from "@/lib/actions";
 import { MIND_BREAKS, PRESSURE_STATES, severityFromRoll, STRESS_BANDS } from "@/lib/rules";
 import { cn } from "@/lib/utils";
 import { RuleTable } from "./common";
-import { GlossaryText } from "./glossary";
+import { GlossaryText, ToneLegend } from "./glossary";
 import { AffectingPanel } from "./rules-affecting";
 import { MedicalRules } from "./rules-medical";
 import { CyberRules, MechRules } from "./rules-paths";
@@ -198,6 +198,7 @@ function Rulebook({ markdown }: { markdown: string }) {
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8" placeholder="Search the whole rulebook…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <ToneLegend />
           {query.length >= 2 ? (
             <div className="grid gap-1">
               <p className="text-xs text-muted-foreground">{hits.length ? `${hits.length} match${hits.length === 1 ? "" : "es"}` : "No matches."}</p>
