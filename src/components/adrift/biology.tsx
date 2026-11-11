@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   BIO_MILESTONE,
+  BIO_MILESTONE_CAP,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
   BIO_TREES,
@@ -32,9 +33,11 @@ import {
   growBlocker,
   hasBiologicalLab,
   isBioUnlocked,
-  milestones,
+  milestoneEnergy,
   surgePool,
+  tempHpCapped,
 } from "@/lib/biology";
+import { maxHp } from "@/lib/derive";
 import { useGame } from "@/lib/store";
 import { installBySurgery } from "@/lib/surgery";
 import type { Character, GameState } from "@/lib/types";
@@ -92,7 +95,9 @@ function GrownRow({ x, c }: { x: ReturnType<typeof grown>[number]; c: Character 
 export function BiologyPanel({ c }: { c: Character }) {
   const list = grown(c);
   const pool = surgePool(c);
-  const milestone = milestones(c);
+  const milestone = milestoneEnergy(c);
+  const ceiling = maxHp(c);
+  const capped = tempHpCapped(c, ceiling);
 
   return (
     <div className="grid gap-3">
@@ -102,7 +107,11 @@ export function BiologyPanel({ c }: { c: Character }) {
         </Pill>
         <Pill tone={expressionsLive(c) ? "warn" : "muted"}>Expressions {expressionsLive(c) ? "live" : `at ${STRESS_GATE.expression} Stress`}</Pill>
         {certaintyLive(c) && <Pill tone="warn" tip={`At ${STRESS_GATE.certainty}+ Stress one Surge Die counts as a 6 without rolling.`}>Certainty</Pill>}
-        {list.length > 0 && <Pill tone="info">+{bioTempHp(c)} Temp HP per fight</Pill>}
+        {list.length > 0 && (
+          <Pill tone="info" tip={`${BIO_TEMP_HP} for each augmentation, up to half of their ${ceiling} Maximum HP.${capped ? " The ceiling is what's holding it down: more grafts won't raise it until their Maximum HP does." : ""}`}>
+            +{bioTempHp(c, ceiling)} Temp HP per fight{capped ? " (capped)" : ""}
+          </Pill>
+        )}
         {c.tempHp ? <Pill tone="good">{c.tempHp} Temporary HP now</Pill> : null}
         {milestone > 0 && <Pill tone="good">+{milestone} Max Energy</Pill>}
         <div className="ml-auto"><GraftDialog c={c} /></div>
@@ -115,7 +124,7 @@ export function BiologyPanel({ c }: { c: Character }) {
       )}
       {list.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
-          Every {BIO_MILESTONE} augmentations is worth +1 Maximum Energy, and each one is worth +{BIO_TEMP_HP} Temporary HP when a fight starts. There is no cap on how many anyone carries.
+          Every {BIO_MILESTONE} augmentations is worth +1 Maximum Energy, stopping at +{BIO_MILESTONE_CAP}, and each one is worth +{BIO_TEMP_HP} Temporary HP when a fight starts, to a ceiling of half their Maximum HP. There is no cap on how many anyone carries.
         </p>
       )}
     </div>

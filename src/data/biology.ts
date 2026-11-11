@@ -66,17 +66,43 @@ export const SURGE_BY_PRESSURE = [0, 1, 2, 4, 6];
  */
 export const STRESS_GATE = { expression: 3, tierThree: 5, certainty: 6 };
 
-/** What a Tier III augmentation adds to the pool at 5+ Stress, and the most that bonus may reach. */
-export const TIER_THREE_SURGE = { each: 2, cap: 6 };
+/**
+ * What a Tier III augmentation adds to the pool at 5+ Stress, and the most that bonus may reach.
+ *
+ * The cap is where the path's depth is rewarded, so it is set at six Tier III augmentations rather
+ * than three. Everything else a grown body gets for breadth is bounded — Temporary HP by the body it
+ * is poured into, Maximum Energy by a flat ceiling — and this is the one term meant to keep climbing
+ * for a crew who committed to the trees. Six Tier IIIs is a campaign's worth of cultivation.
+ */
+export const TIER_THREE_SURGE = { each: 2, cap: 12 };
 
 /** Temporary HP each augmentation is worth at the start of a combat. */
 export const BIO_TEMP_HP = 2;
+
+/**
+ * The most Temporary HP a grown body can put up, as a share of its own Maximum HP.
+ *
+ * Two points per augmentation with nothing stopping it meant a deep build walked into a fight with
+ * more borrowed flesh than it had body — forty-eight points of it on a twenty-two point frame, back
+ * again free at the start of the next fight. The ceiling keeps the grafts worth taking while leaving
+ * the damage tables something to bite.
+ */
+export const TEMP_HP_CEILING = 0.5;
 
 /**
  * Every this many augmentations is worth +1 Maximum Energy, and lets its owner regrow a part of the
  * body that could not otherwise be regrown.
  */
 export const BIO_MILESTONE = 3;
+
+/**
+ * The most Maximum Energy the every-third-augmentation milestone may add.
+ *
+ * Energy is the day's currency, so an uncapped milestone bought a third again as many tasks as the
+ * rest of the crew could take, which is a bigger advantage than anything the combat tables hand out.
+ * The regrowth the milestone also grants is not capped: that one is fiction, not economy.
+ */
+export const BIO_MILESTONE_CAP = 4;
 
 /** Combat regeneration stops here, whatever grants it. */
 export const REGEN_CEILING = 0.5;

@@ -1,4 +1,4 @@
-import { BIO_TEMP_HP, BIO_TIER_LABEL, STRESS_GATE, dampenSurge } from "../src/data/biology";
+import { BIO_MILESTONE_CAP, BIO_TEMP_HP, BIO_TIER_LABEL, STRESS_GATE, TEMP_HP_CEILING, TIER_THREE_SURGE, dampenSurge } from "../src/data/biology";
 // Importing this installs the full catalogue into the registry, which is exactly what a server does.
 // Everything below then reads it the way the game rules do, through `biologyCatalogue`.
 import { allBiology, biologyFor } from "../src/lib/biology-server";
@@ -6,7 +6,7 @@ import { bioDef, biologyCatalogue, biologyReady, installBiology } from "../src/l
 
 const BIOLOGY = biologyCatalogue();
 const BIO_BY_KEY = Object.fromEntries(BIOLOGY.map((d) => [d.key, d]));
-import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, biologyInPlay, certaintyLive, expressionsLive, grown, growBlocker, hasBiologicalLab, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
+import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, biologyInPlay, certaintyLive, expressionsLive, grown, growBlocker, hasBiologicalLab, isBioUnlocked, milestoneEnergy, milestones, surgeDice, surgePool, tempHpCapped, tierThreeSurge } from "../src/lib/biology";
 import { PROJECT_TEMPLATE_BY_NAME } from "../src/lib/rules";
 import { CYBER_BY_KEY, DAMPENING_STRESS_COST, dampeningForLoad } from "../src/data/cybernetics";
 import { cyberLoad, dampening, dampeningLeft } from "../src/lib/cyber";
@@ -117,10 +117,14 @@ const chrome = (c: Character, keys: string[]) => {
   // matters most.
   const c = survivor(["living-ballista", "apex-carapace", "furnace-bloom", "necrotic-foundry"]);
   c.stress = 5;
-  check("four Tier IIIs would be eight, and the bonus caps at six", tierThreeSurge(c), 6);
+  check("four Tier IIIs are worth eight dice", tierThreeSurge(c), 8);
   c.pressure = 4;
-  check("so Panicked with four of them is twelve dice, not six", surgePool(c).dice, 12);
-  check("and the breakdown separates the two", surgePool(c).parts, ["Pressure 6", "Tier III 6"]);
+  check("so Panicked with four of them is fourteen dice", surgePool(c).dice, 14);
+  check("and the breakdown separates the two", surgePool(c).parts, ["Pressure 6", "Tier III 8"]);
+  // The cap is set where a campaign's worth of cultivation reaches it, not where a good run does.
+  const deepest = survivor(["living-ballista", "apex-carapace", "furnace-bloom", "necrotic-foundry", "siege-tendon-array", "razorstorm-colony", "predator-veil"]);
+  deepest.stress = 5;
+  check("seven of them would be fourteen, and the bonus stops at twelve", tierThreeSurge(deepest), TIER_THREE_SURGE.cap);
   const lesser = survivor(["ripper-tendons", "reactive-carapace"]);
   lesser.stress = 5;
   check("Tier IIs earn none of it", tierThreeSurge(lesser), 0);
@@ -136,13 +140,23 @@ const chrome = (c: Character, keys: string[]) => {
   check("the four HP entries together are 18", bioMaxHp(stacked), 18);
   check("and the sheet agrees", maxHp(stacked) - maxHp(bare), 18);
 
-  check("Temporary HP is two for each of them", bioTempHp(stacked), 4 * BIO_TEMP_HP);
-  check("a dozen augmentations open a fight with 24", bioTempHp(survivor(BIOLOGY.slice(0, 12).map((d) => d.key))), 24);
+  // Two per augmentation, until half the body is all it will fit in.
+  check("Temporary HP is two for each of them", bioTempHp(stacked, maxHp(stacked)), 4 * BIO_TEMP_HP);
+  check("and the four of them are nowhere near the ceiling", tempHpCapped(stacked, maxHp(stacked)), false);
+  const dozen = survivor(BIOLOGY.slice(0, 12).map((d) => d.key));
+  check("a dozen augmentations would be worth 24", 12 * BIO_TEMP_HP, 24);
+  check("but half their Maximum HP is all they get", bioTempHp(dozen, maxHp(dozen)), Math.floor(maxHp(dozen) * TEMP_HP_CEILING));
+  check("and the sheet says the ceiling is what's holding it", tempHpCapped(dozen, maxHp(dozen)), true);
+  check("a body with more to it carries more borrowed flesh", bioTempHp(dozen, 40) > bioTempHp(dozen, maxHp(dozen)), true);
 
   check("two augmentations reach no milestone", milestones(survivor(["ripper-tendons", "reactive-carapace"])), 0);
   check("three reach one", milestones(stacked.biology!.length === 4 ? survivor(["ripper-tendons", "reactive-carapace", "apex-carapace"]) : stacked), 1);
   check("and nine reach three", milestones(survivor(BIOLOGY.slice(0, 9).map((d) => d.key))), 3);
   check("each milestone is worth a point of Maximum Energy", bioMaxEnergy(survivor(BIOLOGY.slice(0, 9).map((d) => d.key))) - BIOLOGY.slice(0, 9).reduce((s, d) => s + (d.bonus?.maxEnergy ?? 0), 0), 3);
+  // The milestones keep coming — each one is a regrowth — but the Energy they pay out stops.
+  const deep = survivor(BIOLOGY.slice(0, 30).map((d) => d.key));
+  check("thirty augmentations reach ten milestones", milestones(deep), 10);
+  check("and only four of them are worth Energy", milestoneEnergy(deep), BIO_MILESTONE_CAP);
   const energetic = survivor(["perpetual-metabolism", "dense-caloric-tissue", "glycogen-reservoir"]);
   check("stated Energy bonuses count on top of the milestone", bioMaxEnergy(energetic), 3 + 1 + 1);
   check("and the sheet reads it", maxEnergy(energetic) - maxEnergy(survivor()), 5);
@@ -152,7 +166,7 @@ const chrome = (c: Character, keys: string[]) => {
 {
   const c = survivor(["redundant-tissue-mass", "regenerative-colony"]);
   c.armor = 0;
-  c.tempHp = bioTempHp(c);
+  c.tempHp = bioTempHp(c, maxHp(c));
   check("it starts at 4 for two augmentations", c.tempHp, 4);
   const small = damageSteps(c, { amount: 3, useArmor: true, pierce: 0 });
   check("a 3-point hit is paid for entirely out of it", [small.tempHp, small.lost], [3, 0]);

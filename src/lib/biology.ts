@@ -1,8 +1,10 @@
 import {
   BIO_MILESTONE,
+  BIO_MILESTONE_CAP,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
   STRESS_GATE,
+  TEMP_HP_CEILING,
   SURGE_BY_PRESSURE,
   TIER_THREE_SURGE,
   dampenSurge,
@@ -81,13 +83,31 @@ export const bioMaxHp = (c: Character) => grown(c).reduce((s, x) => s + (x.def.b
  * grown. The milestone is the path's reward for breadth rather than depth, and it comes with the
  * ability to regrow a part of the body that otherwise could not be regrown.
  */
-export const bioMaxEnergy = (c: Character) => grown(c).reduce((s, x) => s + (x.def.bonus?.maxEnergy ?? 0), 0) + milestones(c);
+export const bioMaxEnergy = (c: Character) => grown(c).reduce((s, x) => s + (x.def.bonus?.maxEnergy ?? 0), 0) + milestoneEnergy(c);
 
-/** How many times the every-third-augmentation milestone has been reached. */
+/**
+ * How many times the every-third-augmentation milestone has been reached. Uncapped, because the
+ * milestone also grants a regrowth each time and that part is the fiction rather than the economy.
+ */
 export const milestones = (c: Character) => Math.floor(grown(c).length / BIO_MILESTONE);
 
-/** Temporary HP every augmentation is worth at the start of a combat, which is where stacking tells. */
-export const bioTempHp = (c: Character) => grown(c).length * BIO_TEMP_HP;
+/** The Maximum Energy those milestones are worth, which stops at {@link BIO_MILESTONE_CAP}. */
+export const milestoneEnergy = (c: Character) => Math.min(milestones(c), BIO_MILESTONE_CAP);
+
+/** Two per augmentation, before the body it has to fit inside is taken into account. */
+const rawTempHp = (c: Character) => grown(c).length * BIO_TEMP_HP;
+
+/**
+ * Temporary HP a grown body puts up when a fight starts: two for every augmentation, and never more
+ * than half of what the body itself can take.
+ *
+ * `max` is the character's Maximum HP, passed in rather than computed, because Maximum HP is itself
+ * built partly out of this module and asking for it here would close the loop.
+ */
+export const bioTempHp = (c: Character, max: number) => Math.min(rawTempHp(c), Math.floor(max * TEMP_HP_CEILING));
+
+/** Whether the ceiling is what's holding the Temporary HP down, which is worth saying on the sheet. */
+export const tempHpCapped = (c: Character, max: number) => rawTempHp(c) > bioTempHp(c, max);
 
 /** The integrated attacks an augmented body has of its own, needing no weapon in hand. */
 export const bioAttacks = (c: Character) => grown(c).filter((x) => x.def.attack);

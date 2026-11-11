@@ -246,7 +246,7 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
             {r.resisted > 0 && <p>Resistance halves it, stopping {r.resisted}.</p>}
             {r.resisted === 0 && r.vulnerable === 0 && vulnerable && type !== "Other" && stats.resist[type] > 0 && <p>Resistance and Vulnerability cancel out.</p>}
             {r.covered > 0 && <p>Cover stops {r.covered}.</p>}
-            {r.armored > 0 && <p>Armor stops 1 (plating {stats.armor} → {stats.armor - 1}).</p>}
+            {r.armored > 0 && <p>Armor stops {r.armored} (plating {stats.armor} → {stats.armor - r.ablated}).</p>}
             {r.armored === 0 && stats.maxArmor > 0 && stats.armor === 0 && <p className="text-amber-200">The plating is spent: no Armor left to absorb a hit.</p>}
             <p>The mech takes <b>{r.toMech}</b>{mech.hp > 0 ? ` (HP ${mech.hp} → ${mech.hp - r.toMech})` : " (already Offline)"}.</p>
             {r.excess > 0 && <p className="text-rose-200">{r.excess} passes through to {pilot ? pilot.name : "the pilot"}.</p>}
@@ -270,8 +270,8 @@ function MechDamageDialog({ mech }: { mech: Mech }) {
                 const res = resolveMechDamage(g, m, amount, type, cover, vulnerable);
                 const wasUp = m.hp > 0;
                 m.hp -= res.toMech;
-                if (res.armored) m.armor = Math.max(0, mechStats(g, m).armor - res.armored);
-                const absorbed = [res.vulnerable && `+${res.vulnerable} Vulnerability`, res.resisted && `${res.resisted} resisted`, res.covered && `${res.covered} Cover`, res.armored && `1 Armor, plating down to ${m.armor}`].filter(Boolean).join(", ");
+                if (res.ablated) m.armor = Math.max(0, mechStats(g, m).armor - res.ablated);
+                const absorbed = [res.vulnerable && `+${res.vulnerable} Vulnerability`, res.resisted && `${res.resisted} resisted`, res.covered && `${res.covered} Cover`, res.armored && `${res.armored} to Armor, plating down to ${m.armor}`].filter(Boolean).join(", ");
                 out.push(`${m.name} takes ${res.toMech} ${type === "Other" ? "" : `${type} `}damage${absorbed ? ` (${absorbed})` : ""}. Mech HP ${m.hp}/${mechStats(g, m).maxHp}.`);
                 if (wasUp && m.hp <= 0) out.push(`⚠ ${m.name} goes Offline: no Frame Attributes, powered modules, or mounted weapons. The pilot stays inside until they exit (a Slow Action in combat).`);
                 const p = g.characters.find((c) => c.id === m.pilotId && m.deployed);
@@ -572,7 +572,9 @@ function MechCard({ mech }: { mech: Mech }) {
                 <Button size="xs" variant="outline" onClick={() => edit("Replate mech", (m) => { m.armor = s.maxArmor; return `${m.name}'s plating is replaced: Armor back to ${s.maxArmor}.`; })}><WrenchIcon /> Replate to {s.maxArmor}</Button>
               )}
             </div>
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Ablative: each hit it absorbs costs 1 point. At 0 the plating is spent and protects nothing until it&apos;s replaced.</p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Ablative: each hit it absorbs stops {s.absorb} and costs 1 point. At 0 the plating is spent and protects nothing until it&apos;s replaced, which the crew does for free at the end of a Scene.
+            </p>
           </div>
         )}
 

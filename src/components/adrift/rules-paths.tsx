@@ -183,7 +183,11 @@ function FrameRules() {
           />
           <Lines
             items={[
-              "Maximum Mech HP is the chassis HP plus the Tier's bonus, plus anything a Defensive module adds. A pilot's Interface system adds to it as well.",
+              "Maximum Mech HP is the chassis HP plus the Tier's bonus, plus anything a Defensive module adds.",
+              "Armor Points are the frame's own plus anything a Defensive module adds, plus what the pilot's Interface system lends. The plating is ablative: each hit it absorbs costs it a point, and at 0 it stops nothing.",
+              "A point of plating stops 1 Damage. Adaptive Plating makes it stop 2, and the point still only goes once.",
+              "Spent plating is replaced for free at the end of a Scene. Mech HP is not: that is repair work.",
+              "Defensive modules pay out along four lines — Armor Points, Maximum Mech HP, how deep the plating bites, and how often a backup fires. A loadout picks among them.",
               "Modules cost slots; weapons also need a hardpoint, and the chassis decides how many of those there are.",
               "Every ship supports one assembled mech. Each Cargo Bay Grade supports one more. A frame over capacity rides outside and may not survive the trip.",
               `Building a module: ${MODULE_CRAFT_TASK[1]} for Tier I, up through ${MODULE_CRAFT_TASK[3]} for Tier III.`,

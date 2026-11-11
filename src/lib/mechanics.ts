@@ -8,6 +8,7 @@ import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
 import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, festerInjuries, type InjuryRoll } from "./injuries";
 import { noMarks, spendMarks, type Marks } from "./marks";
+import { maxMechArmor } from "./mechs";
 import { runSolarPanels } from "./modules";
 import { applyPending } from "./pending";
 import { burnDailyPower } from "./power";
@@ -572,6 +573,15 @@ export function endScene(g: GameState): string[] {
     }
     const reopened = c.injuries.find((i) => !i.legacy && i.name === "Internal Bleeding" && !i.operated);
     if (reopened && !c.dead) applyCondition(g, c, "Bleeding", "Ongoing", out, "From Internal Bleeding");
+  }
+  // Spent plating goes back on between fights, free. Bolting fresh plate onto a frame is the kind of
+  // work a crew does while they catch their breath, and charging for it meant a frame that had been
+  // shot at once spent the rest of the expedition bare. Mech HP is the lasting wound; plating isn't.
+  for (const m of g.mechs) {
+    const full = maxMechArmor(m, g.characters.find((c) => c.id === m.pilotId));
+    if (m.armor >= full) continue;
+    m.armor = full;
+    out.push(`${m.name} is replated: Armor back to ${full}.`);
   }
   const ongoing = g.characters.flatMap((c) => c.conditions.filter((x) => x.duration !== "Persistent").map((x) => `${c.name} (${x.name})`));
   if (ongoing.length) out.push(`Still active until resolved: ${ongoing.join(", ")}.`);

@@ -7,9 +7,9 @@ import { actionBlocker, clearOverwatch, DECK_SIZE, declareOverwatch, endFight, n
 import { plantHazard, PRESET_BY_KEY } from "../src/lib/hazards";
 import { pushLog } from "../src/lib/log";
 import { marksOn } from "../src/lib/marks";
-import { applyDamage } from "../src/lib/mechanics";
+import { applyDamage, endScene } from "../src/lib/mechanics";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
-import { mechStats, newMech } from "../src/lib/mechs";
+import { maxMechArmor, mechStats, newMech, resolveMechDamage } from "../src/lib/mechs";
 import { MECH_TIERS } from "../src/data/mechs";
 import { CYBER_BY_KEY } from "../src/data/cybernetics";
 import { DEFAULT_ITEM_TEMPLATES, PRESSURE_STATES, threatBand } from "../src/lib/rules";
@@ -950,6 +950,42 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   const deep = frame(["total-mech-integration"]);
   check("the frame's own plating is unchanged by who's inside", deep.maxArmor - deep.plugged, MECH_TIERS[1].armor);
   check("and the pilot's points are part of what a replate restores", deep.maxArmor, MECH_TIERS[1].armor + 2);
+}
+
+{
+  // Defensive modules pay out along four separate lines, so a loadout is a choice rather than a
+  // stack of the same number. These are the three that touch the damage maths.
+  const fitted = (keys: string[], tier: 1 | 2 | 3 = 3) => {
+    const { g } = world();
+    const m = newMech("Dray", "assault", tier, []);
+    m.modules = keys.map((key) => ({ id: uid(), key, damaged: false, choice: "" }));
+    m.armor = maxMechArmor(m);
+    g.mechs.push(m);
+    return { g, m, s: mechStats(g, m) };
+  };
+  const bare = fitted([]);
+  check("a bare frame absorbs the standard 1 per hit", bare.s.absorb, 1);
+  check("Ballistic Plating is Armor Points", fitted(["ballistic-plating"]).s.maxArmor - bare.s.maxArmor, 2);
+  check("and no Mech HP", fitted(["ballistic-plating"]).s.maxHp - bare.s.maxHp, 0);
+  check("Impact Bracing is Mech HP", fitted(["impact-bracing"]).s.maxHp - bare.s.maxHp, 4);
+  check("and no Armor Points", fitted(["impact-bracing"]).s.maxArmor - bare.s.maxArmor, 0);
+  check("Adaptive Plating is depth as well as points", [fitted(["adaptive-plating"]).s.absorb, fitted(["adaptive-plating"]).s.maxArmor - bare.s.maxArmor], [2, 2]);
+
+  // Depth takes more out of each hit; the plating still loses one Point doing it.
+  const deepened = fitted(["adaptive-plating"]);
+  const hit = resolveMechDamage(deepened.g, deepened.m, 5, "Other", 0);
+  check("so a 5-point hit loses 2 to the plating", hit.armored, 2);
+  check("while the plating itself loses 1", hit.ablated, 1);
+  const shallow = fitted([]);
+  check("where a bare frame loses 1 and takes 4", [resolveMechDamage(shallow.g, shallow.m, 5, "Other", 0).armored, resolveMechDamage(shallow.g, shallow.m, 5, "Other", 0).toMech], [1, 4]);
+
+  // Spent plating goes back on for free when the fight is over. Mech HP does not.
+  const worn = fitted(["ballistic-plating"]);
+  worn.m.armor = 1;
+  worn.m.hp = 2;
+  endScene(worn.g);
+  check("a Scene ending replates the frame", worn.g.mechs[0].armor, worn.s.maxArmor);
+  check("but the frame's wounds stay where they are", worn.g.mechs[0].hp, 2);
 }
 
 {

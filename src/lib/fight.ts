@@ -1,4 +1,5 @@
-import { bioTempHp } from "./biology";
+import { bioTempHp, tempHpCapped } from "./biology";
+import { maxHp } from "./derive";
 import { d } from "./dice";
 import { hazardToll, tickHazards } from "./hazards";
 import { applyCondition, endRound } from "./mechanics";
@@ -82,10 +83,11 @@ export function startFight(g: GameState, start: FightStart): (string | Line)[] {
   // Grown flesh braces itself as the fight opens. It is granted fresh rather than topped up, so a
   // fight that ends with Temporary HP left over doesn't carry it into the next one.
   for (const c of crew) {
-    const temp = bioTempHp(c);
+    const ceiling = maxHp(c);
+    const temp = bioTempHp(c, ceiling);
     if (!temp) continue;
     c.tempHp = temp;
-    out.push(`${c.name}'s grown flesh braces: ${temp} Temporary HP.`);
+    out.push(`${c.name}'s grown flesh braces: ${temp} Temporary HP${tempHpCapped(c, ceiling) ? ` (as much as half their Maximum HP allows)` : ""}.`);
   }
   out.push(...upLine(g, f));
   return out;

@@ -46,6 +46,8 @@ export function mechStats(g: GameState, m: Mech) {
   return {
     chassis,
     maxHp: chassis.hp + tier.hpBonus + live.reduce((s, x) => s + (x.def.hp ?? 0), 0) + (expert ? 4 : 0),
+    // How deep the plating bites into a single hit. One by default, like every other kind of Armor.
+    absorb: 1 + live.reduce((s, x) => s + (x.def.absorb ?? 0), 0),
     slots: tier.slots + (expert ? 1 : 0),
     usedSlots: mods.reduce((s, x) => s + x.def.slots, 0),
     hardpoints: chassis.hardpoints,
@@ -85,21 +87,23 @@ export const pilotedMech = (g: GameState, characterId: string) => g.mechs.find((
 /**
  * Resolve an attack against a mech: Vulnerability, Resistance, Cover (Ballistic only), Armor, then Mech HP.
  * Any Resistance to the type counts once; extra sources don't stack.
- * Mech Armor is ablative like a survivor's: it absorbs 1 and the plating loses a point, so the caller
- * spends `armored` out of `m.armor`. What's left after the mech hits 0 passes to the pilot. An Offline
- * mech protects no one.
+ * Mech Armor is ablative like a survivor's: the plating loses one Point per hit, and the caller spends
+ * `ablated` out of `m.armor`. How much that Point stops is the frame's absorption depth, which is 1
+ * unless a module deepens it — so `armored` and `ablated` are not the same number. What's left after
+ * the mech hits 0 passes to the pilot. An Offline mech protects no one.
  */
 export function resolveMechDamage(g: GameState, m: Mech, amount: number, type: MechDamageType | "Other", cover: number, vulnerable = false) {
   const s = mechStats(g, m);
   const coverPoints = type === "Ballistic" ? cover : 0;
-  if (m.hp <= 0) return { vulnerable: 0, resisted: 0, covered: 0, armored: 0, toMech: 0, excess: Math.max(0, amount - coverPoints) };
+  if (m.hp <= 0) return { vulnerable: 0, resisted: 0, covered: 0, armored: 0, ablated: 0, toMech: 0, excess: Math.max(0, amount - coverPoints) };
   const resistant = type !== "Other" && s.resist[type] > 0;
   const scaled = scaleDamage(amount, resistant, vulnerable);
   const covered = Math.min(scaled, coverPoints);
-  const armored = s.armor > 0 && scaled - covered > 0 ? 1 : 0;
-  const after = scaled - covered - armored;
+  const reaching = scaled - covered;
+  const armored = s.armor > 0 && reaching > 0 ? Math.min(s.absorb, reaching) : 0;
+  const after = reaching - armored;
   const toMech = Math.min(m.hp, after);
-  return { vulnerable: Math.max(0, scaled - amount), resisted: Math.max(0, amount - scaled), covered, armored, toMech, excess: after - toMech };
+  return { vulnerable: Math.max(0, scaled - amount), resisted: Math.max(0, amount - scaled), covered, armored, ablated: armored > 0 ? 1 : 0, toMech, excess: after - toMech };
 }
 
 export function newMech(name: string, chassis: MechChassis, tier: 1 | 2 | 3, tierResist: MechDamageType[]): Mech {

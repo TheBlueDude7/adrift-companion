@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   BIO_MILESTONE,
+  BIO_MILESTONE_CAP,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
   BIO_TREES,
@@ -226,8 +227,8 @@ export function BioTreePanel() {
             Everything grown pays off under pressure. <span className="text-foreground/90">Surge Dice</span> are {SURGE_BY_PRESSURE.map((n, i) => `${n} at Pressure ${i}`).join(", ")}, plus one per
             Affliction carried, less one for every 2 Cybernetic Dampening — the one place the two paths pull against each other. A <span className="text-foreground/90">Stress Expression</span> is live at{" "}
             {STRESS_GATE.expression}+ Stress and most are paid for with a Backlash on a failed flat Constitution roll; at {STRESS_GATE.certainty}+ Stress a Surge Die counts as a 6. Every augmentation is
-            worth +{BIO_TEMP_HP} Temporary HP at the start of a fight, every {BIO_MILESTONE} of them is worth +1 Maximum Energy, and regeneration never carries anyone past{" "}
-            {Math.round(REGEN_CEILING * 100)}% of their Maximum HP.
+            worth +{BIO_TEMP_HP} Temporary HP at the start of a fight, to a ceiling of half their Maximum HP; every {BIO_MILESTONE} of them is worth +1 Maximum Energy and a regrowth, with the
+            Energy stopping at +{BIO_MILESTONE_CAP}; and regeneration never carries anyone past {Math.round(REGEN_CEILING * 100)}% of their Maximum HP.
           </p>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">

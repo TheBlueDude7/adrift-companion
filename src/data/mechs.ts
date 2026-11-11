@@ -41,6 +41,12 @@ export type MechModule = {
   weapon?: MechDamageType;
   hp?: number;
   armor?: number;
+  /**
+   * Damage the plating stops per hit beyond the standard 1, which is a different thing from carrying
+   * more Armor Points: more Points are more hits turned aside, where this is more taken out of each
+   * one. The plating still loses a single Point per hit however deep it goes.
+   */
+  absorb?: number;
   inventory?: number;
   resist?: MechDamageType;
   /** Keeps one of the pilot's otherwise suppressed implants connected, named on the installed module. */
@@ -67,18 +73,22 @@ export const MECH_MODULES: MechModule[] = [
   m("Cargo & Salvage", "Medical Evacuation Cradle", 1, 1, "Carries one Downed or Immobilized character without using normal inventory slots. The passenger is protected by the mech's environmental seal."),
   m("Cargo & Salvage", "Salvage Clamps", 1, 1, "Secure large machinery or structural pieces. One Heavy item the pilot carries occupies no slots."),
 
-  m("Defensive", "Ballistic Plating", 1, 1, "Grants Ballistic Resistance.", { resist: "Ballistic" }),
-  m("Defensive", "Impact Bracing", 1, 1, "Grants Physical Resistance and Resistance to Prone and forced movement.", { resist: "Physical" }),
-  m("Defensive", "Thermal Shielding", 1, 1, "Grants Fire Resistance and Resistance to Burning and Overheated.", { resist: "Fire" }),
-  m("Defensive", "Arc Grounding", 1, 1, "Grants Electric Resistance and Resistance to Conductive and Disrupted.", { resist: "Electric" }),
-  m("Defensive", "Chemical Seal", 1, 1, "Grants Chemical Resistance. Ordinary inhaled toxins can't reach the pilot while the mech is not Breached.", { resist: "Chemical" }),
+  // Every module here pays out along one of four lines, and no two neighbours share one: plating turns
+  // more hits aside (`armor`), structure soaks more punishment (`hp`), depth stops more per hit
+  // (`absorb`), and the trick modules fire more often. Which line a module takes follows its fiction —
+  // a shield is layers, a brace is mass, a backup is a second chance.
+  m("Defensive", "Ballistic Plating", 1, 1, "Grants Ballistic Resistance and +2 Armor.", { resist: "Ballistic", armor: 2 }),
+  m("Defensive", "Impact Bracing", 1, 1, "Grants Physical Resistance, Resistance to Prone and forced movement, and +4 Maximum Mech HP.", { resist: "Physical", hp: 4 }),
+  m("Defensive", "Thermal Shielding", 1, 1, "Grants Fire Resistance, Resistance to Burning and Overheated, and +2 Armor.", { resist: "Fire", armor: 2 }),
+  m("Defensive", "Arc Grounding", 1, 1, "Grants Electric Resistance, Resistance to Conductive and Disrupted, and +3 Maximum Mech HP.", { resist: "Electric", hp: 3 }),
+  m("Defensive", "Chemical Seal", 1, 1, "Grants Chemical Resistance and +3 Maximum Mech HP. Ordinary inhaled toxins can't reach the pilot while the mech is not Breached.", { resist: "Chemical", hp: 3 }),
   m("Defensive", "Reinforced Chassis", 1, 1, "+3 Maximum Mech HP and +1 Armor, but −2d6 to Stealth and Acrobatics.", { hp: 3, armor: 1 }),
   m("Defensive", "Heavy Reinforced Chassis", 2, 2, "+6 Maximum Mech HP and +3 Armor, but −4d6 to Stealth and Acrobatics.", { hp: 6, armor: 3 }),
-  m("Defensive", "Emergency Sealant System", 1, 1, "Once per expedition, prevent Breached when it would be applied."),
-  m("Defensive", "Reactive Stabilizers", 1, 2, "Resistant to Staggered, Immobilized, Servo-Locked, and forced movement."),
-  m("Defensive", "Redundant Control System", 1, 2, "The first time each expedition the mech would become Disrupted, Jammed, or Sensor-Blind, ignore it."),
-  m("Defensive", "Adaptive Plating", 2, 3, "After suffering a damage type, gain Resistance to that type until another damage type damages the mech."),
-  m("Defensive", "Emergency Barrier", 2, 3, "Once per combat, reduce one incoming attack's Damage to 0. The mech then becomes Power-Starved until the end of its next turn."),
+  m("Defensive", "Emergency Sealant System", 1, 1, "+2 Maximum Mech HP. Once per Scene, prevent Breached when it would be applied.", { hp: 2 }),
+  m("Defensive", "Reactive Stabilizers", 1, 2, "+3 Armor. Resistant to Staggered, Immobilized, Servo-Locked, and forced movement.", { armor: 3 }),
+  m("Defensive", "Redundant Control System", 1, 2, "+4 Maximum Mech HP. The first time each Scene the mech would become Disrupted, Jammed, or Sensor-Blind, ignore it.", { hp: 4 }),
+  m("Defensive", "Adaptive Plating", 2, 3, "+2 Armor, and the plating stops 1 more Damage per hit. After suffering a damage type, gain Resistance to that type until another damage type damages the mech.", { armor: 2, absorb: 1 }),
+  m("Defensive", "Emergency Barrier", 2, 3, "+4 Maximum Mech HP. Twice per combat, reduce one incoming attack's Damage to 0. The mech then becomes Power-Starved until the end of its next turn.", { hp: 4 }),
 
   m("Environmental", "Independent Life Support", 1, 1, "Protects the pilot from vacuum and Suffocating while the mech is powered and not Breached."),
   m("Environmental", "Extended Life Support", 1, 2, "Independent atmosphere for the pilot and one passenger for an entire expedition."),
