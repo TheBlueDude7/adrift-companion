@@ -195,8 +195,14 @@ export function supplyCount(state: GameState, name: string, location = "ship") {
   return state.items.filter((i) => i.name === name && (location === "*" || i.location === location)).reduce((s, i) => s + i.qty, 0);
 }
 
-/** Items that feed a survivor for a day, in the order the crew eats through them: plain fare first. */
-export const FOOD_ITEMS = ["Prepared Meal", "Food Unit", "Delicious Meal", "Delectable Meal"] as const;
+/**
+ * Items that feed a survivor for a day, in the order the crew eats through them: plain fare first.
+ *
+ * Raw Food comes last of all. It feeds someone — "not yummy, but beats starving" — but two of them
+ * cook into four Prepared Meals, so eating one off the vine throws away half its calories. The crew
+ * chews the greenhouse only once the galley is bare.
+ */
+export const FOOD_ITEMS = ["Prepared Meal", "Food Unit", "Delicious Meal", "Delectable Meal", "Raw Food"] as const;
 
 export const foodCount = (state: GameState, location = "ship") => FOOD_ITEMS.reduce((s, n) => s + supplyCount(state, n, location), 0);
 

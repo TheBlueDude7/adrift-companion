@@ -2,11 +2,13 @@
 // tasks they may take. Run with the react-server condition, since the prompt builders are
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
-import { extraTaskBlocker, fitOptions, newAction, permissionReasons, resolveAction, taskTerms } from "../src/lib/actions";
+import { advanceProject, extraTaskBlocker, fitOptions, newAction, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
+import { MECH_MODULE_RECIPES } from "../src/lib/crafting";
+import { MECH_MODULES } from "../src/data/mechs";
 import { FACILITY_BY_NAME } from "../src/data/ship-upgrades";
 import { uid } from "../src/lib/dice";
 import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
-import { hullTier, supplyCount } from "../src/lib/derive";
+import { FOOD_ITEMS, foodCount, hullTier, supplyCount } from "../src/lib/derive";
 import { PANICKED } from "../src/lib/rules";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { combineCrafts, legalOptions, projectAsk } from "../src/lib/sim/options";
@@ -15,7 +17,7 @@ import { stockItem } from "../src/lib/stock";
 import { diff } from "../src/lib/sync/ops";
 import { denyReason } from "../src/lib/sync/permissions";
 import { playerView } from "../src/lib/sync/redact";
-import type { GameState, SegmentAction } from "../src/lib/types";
+import type { GameState, Project, SegmentAction } from "../src/lib/types";
 
 function world(): GameState {
   const g = createInitialState();
@@ -440,6 +442,143 @@ function bench(components: number) {
   // One slot, one fitting: the room that already has panels is out of the running.
   check("a filled slot is off the list", fitOptions(won).some((f) => f.roomId === room.id), false);
   check("and taking it anyway is refused", taskTerms(won, fit("Traps", room.id)).blocker, `${room.name}'s spare slot already holds Makeshift Solar Panels`);
+}
+
+// Projects used to be free: the materials were prose on the sheet and nothing came out of the hold.
+{
+  const g = world();
+  const c = g.characters[0];
+  c.skills.mechTech = 6;
+  c.skills.engineering = 6;
+  // The seed hold carries scrap and a toolkit, so it's emptied and restocked by hand.
+  g.items = g.items.filter((i) => !["Scrap Metal", "Scrap Components", "Basic Adhesive"].includes(i.name) && !/toolkit/i.test(i.name));
+  const frame: Project = {
+    id: "frame",
+    name: "Mech Frame (Tier I)",
+    skill: "Mechanical Technician or Engineering",
+    threshold: 4,
+    progress: 0,
+    required: 6,
+    contributorLimit: 2,
+    energy: 2,
+    facility: "",
+    materials: "",
+    roomId: null,
+    notes: "",
+    done: false,
+  };
+  g.ship.projects.push(frame);
+  const work = () => ({ ...newAction(g, c, "Work on a project"), projectId: frame.id });
+
+  check("a frame costs scrap for every point of Progress", projectBill(g, frame).text, "2 Scrap Metal, 1 Scrap Components, 1 toolkit charge per Progress, 2 Basic Adhesive to finish");
+  check("and an empty hold stops it", permissionReasons(g, work()), ["Hold is short 2 Scrap Metal", "Hold is short 1 Scrap Components", "Hold is short 1 Toolkit charges"]);
+  check("so it's an ask, not an option", skipped(g).some((s) => s.startsWith("Work on a project")), true);
+
+  // Stocked for one point only, the first contribution empties the hold and the second is refused.
+  stockItem(g, "Scrap Metal", 2, { category: "Material" });
+  stockItem(g, "Scrap Components", 1, { category: "Material" });
+  stockItem(g, "Improvised Toolkit", 1, { category: "Equipment", maxCharges: 1 });
+  check("stocked for one point, it's clear", permissionReasons(g, work()), []);
+  const lines = resolveAction(g, (g.actions.push(work()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the Progress lands", g.ship.projects[0].progress, 1);
+  check("and the hold pays for it", [supplyCount(g, "Scrap Metal"), supplyCount(g, "Scrap Components")], [0, 0]);
+  check("the log says what it took", lines.some((l) => typeof l === "string" && l.includes("takes 2 Scrap Metal, 1 Scrap Components, 1 toolkit charge out of the hold")), true);
+  // The toolkit the probe stocked came out of the catalog with its full load of charges, so it has
+  // some left; the materials are what ran out, and they're what stops the next segment's work.
+  check("and the next point is unaffordable", permissionReasons(g, work()), ["Hold is short 2 Scrap Metal", "Hold is short 1 Scrap Components"]);
+
+  // The last point of Progress pays the completion cost on top of its own.
+  const last: GameState = structuredClone(g);
+  last.ship.projects[0].progress = 5;
+  for (const [name, qty] of [["Scrap Metal", 2], ["Scrap Components", 1], ["Basic Adhesive", 2]] as const) stockItem(last, name, qty, { category: "Material" });
+  advanceProject(last, "frame", 1);
+  check("finishing it costs the adhesive too", [last.ship.projects[0].done, supplyCount(last, "Basic Adhesive")], [true, 0]);
+
+  // Hull Repair is priced by what the hull is made of, so a better ship costs rarer stock.
+  const hull: Project = { ...frame, id: "hull", name: "Hull Repair", required: 2, progress: 0 };
+  const plated: GameState = structuredClone(g);
+  plated.ship.hullTier = 3;
+  check("a patched hull is mended with scrap", projectBill(g, hull).text, "3 Scrap Metal, 1 Basic Adhesive, 1 toolkit charge per Progress");
+  check("a plated one needs Neutronium", projectBill(plated, hull).text, "1 Neutronium, 1 Advanced Adhesive, 1 toolkit charge per Progress");
+
+  // Labour-only projects stay free, and nothing is charged for Progress that didn't land.
+  check("treating someone's Stress costs the hold nothing", projectBill(g, { name: "Stress Recovery" }).text, "");
+  const nothing: GameState = structuredClone(g);
+  for (const [name, qty] of [["Scrap Metal", 2], ["Scrap Components", 1]] as const) stockItem(nothing, name, qty, { category: "Material" });
+  advanceProject(nothing, "frame", 0);
+  check("and no Progress takes no materials", supplyCount(nothing, "Scrap Metal"), 2);
+}
+
+// Mech modules cost a segment at the bench, not a line on the Mechs tab.
+{
+  const g = world();
+  const c = g.characters[0];
+  c.skills.mechTech = 3;
+  const rack = MECH_MODULE_RECIPES.find((r) => r.name.startsWith("External Cargo Rack"))!;
+  const build = (name = rack.name) => ({ ...newAction(g, c, "Fabricate Mech Module"), crafts: [name] });
+  // The seed hold carries scrap and a toolkit, so the ask is cleared out to be set by hand.
+  g.items = g.items.filter((i) => !["Scrap Metal", "Scrap Components", "Basic Adhesive"].includes(i.name) && !/toolkit/i.test(i.name));
+  stockItem(g, "Scrap Metal", 4, { category: "Material" });
+  stockItem(g, "Scrap Components", 2, { category: "Material" });
+
+  check("every module is on the bench menu", MECH_MODULE_RECIPES.length, MECH_MODULES.length);
+  check("a Tier I module is Routine at Mechanical Technician 3", taskTerms(g, build()).routine, true);
+  check("and costs the sheet's 2 Energy", taskTerms(g, build()).energy, 2);
+  check("the hold is what's short", permissionReasons(g, build()), ["Hold is short 1 Basic Adhesive", "Hold is short 1 Toolkit charges"]);
+  check("so it's an ask, not an option", skipped(g).some((s) => s.startsWith("Fabricate Mech Module")), true);
+
+  stockItem(g, "Basic Adhesive", 1, { category: "Material" });
+  stockItem(g, "Improvised Toolkit", 1, { category: "Equipment", maxCharges: 1 });
+  check("stocked, the task is offered", tasks(g).includes("Fabricate Mech Module"), true);
+  check("and clear to build", permissionReasons(g, build()), []);
+  resolveAction(g, (g.actions.push(build()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the module lands in the hold", supplyCount(g, rack.name), 1);
+  check("and the materials are gone", [supplyCount(g, "Scrap Metal"), supplyCount(g, "Basic Adhesive")], [2, 0]);
+
+  // A Tier III module needs the better bench and the better crafter, and costs an Energy more.
+  const vault = MECH_MODULE_RECIPES.find((r) => r.tier === "Tier III")!;
+  check("a Tier III module isn't Routine for a Tier I hand", taskTerms(g, build(vault.name)).routine, false);
+  check("and asks the extra Energy", taskTerms(g, build(vault.name)).energy, 3);
+  check("while a Makeshift Bench can't take its materials", taskTerms(g, build(vault.name)).blocker, "Tier III materials need an Advanced Fabricator");
+}
+
+// Surgery spends the patient's segment as well as the surgeon's.
+{
+  const g = world();
+  const [medic, patient] = g.characters;
+  medic.skills.surgery = 5;
+  const cut = () => ({ ...newAction(g, medic, "Surgery"), subjectId: patient.id });
+
+  check("it needs to know who's on the table", taskTerms(g, { ...newAction(g, medic, "Surgery") }).blocker, "Pick who's on the table");
+  check("and nobody operates on themselves", taskTerms(g, { ...newAction(g, medic, "Surgery"), subjectId: medic.id }).blocker, "Nobody operates on themselves");
+  check("with a patient named, it stands", taskTerms(g, cut()).blocker, null);
+
+  // Once the surgery is planned, the patient's own segment is gone.
+  g.actions.push(cut());
+  check("the patient is on the table", surgeryOn(g, patient.id)?.characterId, medic.id);
+  check("so their tasks are refused by name", taskTerms(g, newAction(g, patient, "Rest")).blocker, `${medic.name} has them on the table, so the segment isn't theirs`);
+  check("nothing is left on their menu", tasks(g, 1), []);
+  check("while the surgeon's own segment is their own", taskTerms(g, cut()).blocker, null);
+  // The bench used to ignore every situational blocker, so Fabricate stayed on a patient's menu —
+  // and on the menu of a survivor two decks into a derelict.
+  check("not even the workbench", taskTerms(g, { ...newAction(g, patient, "Fabricate Common Item"), crafts: ["Improvised Medkit"] }).routine, false);
+
+  // The other way about: a patient who already committed keeps the segment until it's withdrawn.
+  const busy = world();
+  busy.characters[0].skills.surgery = 5;
+  busy.actions.push(newAction(busy, busy.characters[1], "Rest"));
+  check("a committed survivor can't be cut into", taskTerms(busy, { ...newAction(busy, busy.characters[0], "Surgery"), subjectId: busy.characters[1].id }).blocker, `${busy.characters[1].name} is already committed to Rest — withdraw it first`);
+}
+
+// Raw Food is food: the crew eats the greenhouse, but only once the galley is bare.
+{
+  const g = world();
+  g.items = g.items.filter((i) => !FOOD_ITEMS.includes(i.name as (typeof FOOD_ITEMS)[number]));
+  check("an empty hold feeds nobody", foodCount(g), 0);
+  stockItem(g, "Raw Food", 5, { category: "Supply", tier: "Tier I" });
+  check("but produce counts", foodCount(g), 5);
+  check("and nobody is told they're starving beside it", pressing(g).includes("Food: 5 rations"), true);
+  check("it's eaten last of all, after the cooked meals", FOOD_ITEMS.at(-1), "Raw Food");
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

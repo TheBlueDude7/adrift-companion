@@ -19,13 +19,14 @@ import {
   MODULE_CONDITION_EFFECTS,
   MODULE_PRESETS,
   OVERLOAD_BONUS,
+  PROJECT_COSTS,
   PROJECT_TEMPLATES,
   REPAIR_PROGRESS,
   type FacilityGrade,
 } from "@/lib/rules";
 import { FACILITIES, FACILITY_BY_NAME, ladderFor, ROOM_FITTINGS, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
-import { advanceProject } from "@/lib/actions";
+import { advanceProject, projectBill } from "@/lib/actions";
 import { CROP_DAYS, CROP_KINDS, CROP_KIND_BY_KEY, CROP_LEVEL_NAMES, XENO_STRAINS, type CropKindDef, cropKindOf, cropKindsFor, cropOf, cropStall, cropTending, cropYield, doseYield, growCrops, hydroponicsLevel, nextCropKind, readyTotal, strainLabel, strainOf } from "@/lib/crops";
 import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
@@ -675,9 +676,11 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
   const next = upgrading && room ? nextRoomLevel(room) : undefined;
   const levels = installing && moduleName ? installLevels(moduleName) : [];
   const plan = installing && room && moduleName ? { name: moduleName, level: levels.length ? startLevel : undefined } : next && room?.module ? { name: room.module, level: next.index } : null;
-  const { cost, toolkit } = plan ? moduleCost(plan.name, plan.level) : { cost: [], toolkit: 0 };
+  // A module project is priced from its own upgrade ladder; every other template that commits
+  // materials up front lists them on the sheet. Either way they come out of the hold at the start.
+  const { cost, toolkit } = plan ? moduleCost(plan.name, plan.level) : { cost: PROJECT_COSTS[t.name]?.upfront ?? [], toolkit: 0 };
   const paid = cost.length > 0 || toolkit > 0;
-  const short = plan ? shortfalls(game, cost, toolkit) : [];
+  const short = shortfalls(game, cost, toolkit);
   const threshold = upgrading && next ? upgradeThreshold(next.index) : t.threshold;
   const blocked = (needsPatient && !patient) || ((installing || upgrading) && !plan);
 
@@ -695,7 +698,7 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
   function start(pay: boolean) {
     act("New project", (g) => {
       const room = g.ship.rooms.find((r) => r.id === roomId);
-      if (plan && pay) spend(g, cost, toolkit);
+      if (paid && pay) spend(g, cost, toolkit);
       const levelName = plan?.level === undefined ? undefined : ladderFor(plan.name)?.levels[plan.level].name;
       const p: Project = {
         id: uid(),
@@ -728,7 +731,7 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
       g.ship.projects.push(p);
       if (request) g.projectRequests = (g.projectRequests ?? []).filter((x) => x.id !== request.id);
       const asked = request ? g.characters.find((c) => c.id === request.by)?.name : null;
-      return `Project started: ${p.name} (0/${p.required})${plan && pay && paid ? `, using ${recipeText(cost, toolkit)}` : ""}${asked ? `, as ${asked} asked` : ""}.`;
+      return `Project started: ${p.name} (0/${p.required})${paid && pay ? `, using ${recipeText(cost, toolkit)}` : ""}${asked ? `, as ${asked} asked` : ""}.`;
     });
     setOpen(false);
     setPatientId(null);
@@ -815,23 +818,23 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
               )}
             </div>
           )}
-          {plan && (
+          {(plan || paid) && (
             <div className="grid gap-1 rounded-lg border p-3 text-sm">
-              {plan.level !== undefined && <p className="text-xs">{ladderFor(plan.name)?.levels[plan.level].effect}</p>}
+              {plan?.level !== undefined && <p className="text-xs">{ladderFor(plan.name)?.levels[plan.level].effect}</p>}
               <p className="mt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Materials, spent when it starts</p>
               {!paid && <p className="text-xs text-muted-foreground">None listed. The GM can note any in the project.</p>}
-              {cost.map((p) => {
-                const miss = short.find((x) => x.name === p.name);
-                return <p key={p.name} className={miss ? "text-rose-300" : undefined}>{p.qty} {p.name}{miss && <span className="text-xs text-muted-foreground"> (have {miss.have})</span>}</p>;
+              {cost.map((part: { name: string; qty: number }) => {
+                const miss = short.find((x) => x.name === part.name);
+                return <p key={part.name} className={miss ? "text-rose-300" : undefined}>{part.qty} {part.name}{miss && <span className="text-xs text-muted-foreground"> (have {miss.have})</span>}</p>;
               })}
               {toolkit > 0 && <p className={short.some((x) => x.name === "Toolkit charges") ? "text-rose-300" : undefined}>{toolkit} charges of any toolkit</p>}
             </div>
           )}
         </div>
         <DialogFooter>
-          {plan && paid && isGM && <Button variant="ghost" onClick={() => start(false)}>Start without spending</Button>}
+          {paid && isGM && <Button variant="ghost" onClick={() => start(false)}>Start without spending</Button>}
           <Button disabled={blocked || short.length > 0} onClick={() => start(true)}>
-            {short.length ? "Missing materials" : plan && paid ? "Spend and start" : "Start project"}
+            {short.length ? "Missing materials" : paid ? "Spend and start" : "Start project"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -883,6 +886,7 @@ export function ProjectRow({ p }: { p: Project }) {
   const rooms = useGame((s) => s.game.ship.rooms);
   const room = rooms.find((r) => r.id === p.roomId);
   const patient = useGame((s) => s.game.characters.find((c) => c.id === p.patientId));
+  const bill = useGame((s) => projectBill(s.game, p));
   const edit = (label: string, fn: (x: Project, g: GameState) => void | string | string[]) =>
     act(label, (g) => fn(g.ship.projects.find((x) => x.id === p.id)!, g));
 
@@ -902,6 +906,12 @@ export function ProjectRow({ p }: { p: Project }) {
         {p.skill && `${p.skill} · Routine ${p.threshold} · `}{p.contributorLimit} contributor{p.contributorLimit > 1 ? "s" : ""} · {p.energy} Energy each{p.facility && ` · ${p.facility}`}
       </p>
       {p.materials && <p className="text-[11px] text-muted-foreground">{p.materials}</p>}
+      {bill.text && !p.done && (
+        <p className={cn("text-[11px]", bill.short.length ? "text-amber-300" : "text-muted-foreground")}>
+          Takes {bill.text}
+          {bill.short.length > 0 && ` · the hold is short ${bill.short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}`}
+        </p>
+      )}
       <fieldset
         disabled={!isGM}
         className={cn("flex flex-wrap gap-1.5", !isGM && READ_ONLY)}

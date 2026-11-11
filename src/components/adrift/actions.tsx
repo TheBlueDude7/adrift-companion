@@ -14,11 +14,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
-import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
+import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, MECH_MODULE_RECIPES, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
@@ -500,7 +500,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
   const projects = game.ship.projects.filter((p) => !p.done);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
-  const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage";
+  const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage" || def.effect === "mechmod";
   const pushing = extra && !existing;
   const clash = restPushConflict(view, pushing ? { ...draft, extra: true } : draft);
   const missing =
@@ -509,7 +509,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     (def.effect === "course" && !draft.target) ||
     (def.effect === "assist" && !draft.assists) ||
     (needsRecipe && !draft.crafts?.length) ||
-    ((def.effect === "calm" || def.effect === "bleed") && !draft.subjectId) ||
+    ((def.effect === "calm" || def.effect === "bleed" || def.effect === "surgery") && !draft.subjectId) ||
     (def.effect === "fit" && !draft.fit) ||
     (def.effect === "train" && !draft.trainSkill);
 
@@ -522,7 +522,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (def.effect !== "course" && def.effect !== "scan") d.target = null;
     if (def.effect !== "assist") d.assists = null;
     if (!needsRecipe) delete d.crafts;
-    if (def.effect !== "calm" && def.effect !== "bleed") d.subjectId = null;
+    if (def.effect !== "calm" && def.effect !== "bleed" && def.effect !== "surgery") d.subjectId = null;
     if (def.effect !== "fit") d.fit = null;
     if (def.effect !== "train") delete d.trainSkill;
     if (def.effect !== "search") delete d.thorough;
@@ -601,6 +601,15 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               note="Drawn from ship storage when the task is resolved. A failed attempt loses half the materials, rounded up."
             />
           )}
+          {def.effect === "mechmod" && (
+            <RecipePicker
+              label="Mech module"
+              recipes={MECH_MODULE_RECIPES}
+              value={draft.crafts ?? []}
+              onChange={(v) => set({ crafts: v })}
+              note="The finished module goes into the hold, and the Mechs tab fits it from there. A failed build loses half the materials, rounded up."
+            />
+          )}
           {def.effect === "salvage" && (
             <RecipePicker
               label="Item to take apart"
@@ -611,13 +620,13 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               note="The item is used up whether or not the salvage comes out. Toolkit charges never come back."
             />
           )}
-          {(def.effect === "calm" || def.effect === "bleed") && (
+          {(def.effect === "calm" || def.effect === "bleed" || def.effect === "surgery") && (
             <SubjectPicker
               c={c}
               value={draft.subjectId}
               onChange={(v) => set({ subjectId: v })}
               self={def.effect === "bleed"}
-              label={def.effect === "bleed" ? "Who is bleeding" : "Who to settle"}
+              label={def.effect === "bleed" ? "Who is bleeding" : def.effect === "surgery" ? "Who is on the table" : "Who to settle"}
             />
           )}
           {(def.effect === "course" || def.effect === "scan") && (
@@ -1042,6 +1051,8 @@ function CrewPlanCard({ c }: { c: Character }) {
   const busy = mine.filter((a) => a.status !== "cancelled").length;
   const rationed = taskAllowance(game, c.id);
   const noExtra = extraTaskBlocker(game, c);
+  const table = surgeryOn(game, c.id);
+  const surgeon = table ? game.characters.find((x) => x.id === table.characterId)?.name : null;
   return (
     <Card size="sm">
       <CardHeader>
@@ -1054,13 +1065,14 @@ function CrewPlanCard({ c }: { c: Character }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">
-        {mine.length === 0 && <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">No task planned yet.</p>}
+        {mine.length === 0 && !table && <p className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">No task planned yet.</p>}
+        {table && <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-center text-xs text-amber-200/90">On the table: {surgeon ?? "the surgeon"} is operating, so the segment isn&apos;t theirs.</p>}
         {mine.map((a) => <ActionRow key={a.id} a={a} />)}
         {/*
           Both triggers are the same component in the same place, so without distinct keys React keeps
           one instance across the swap — and the dialog submitting a task stays open as the Push one.
         */}
-        {canEditCharacter(c.id) &&
+        {canEditCharacter(c.id) && !table &&
           (busy === 0 || !rationed ? (
             <PlanDialog key="plan" c={c} trigger={<Button size="xs" variant="outline" className="justify-self-start"><PlusIcon /> Plan a{busy ? "nother" : ""} task</Button>} />
           ) : !noExtra ? (

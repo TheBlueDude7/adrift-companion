@@ -20,6 +20,8 @@ export type CraftRecipe = {
   onFailure?: { name: string; qty: number };
   charges?: number;
   armor?: number;
+  /** Takes two inventory slots to carry, which is every mech module. */
+  heavy?: boolean;
   /** What it does when it hits, for the weapons. Read from `notes`, which stays the prose version. */
   weapon?: WeaponProfile;
   notes: string;

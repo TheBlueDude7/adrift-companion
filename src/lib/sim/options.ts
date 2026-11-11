@@ -1,7 +1,7 @@
 import type { CraftRecipe } from "@/data/crafting";
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
 import { actionsNow, extraTaskBlocker, fitOptions, newAction, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
-import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
+import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import { uid } from "../dice";
 import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
 import type { Character, GameState, ProjectRequest, SegmentAction } from "../types";
@@ -41,7 +41,12 @@ const UNSUPPORTED: Partial<Record<NonNullable<TaskEffect>, string>> = {
 };
 
 const recipesFor = (effect: TaskEffect) =>
-  effect === "craft" ? FABRICATE_RECIPES : effect === "cook" ? COOK_RECIPES : effect === "medicine" ? MEDICINE_RECIPES : effect === "salvage" ? SALVAGE_RECIPES : [];
+  effect === "craft" ? FABRICATE_RECIPES
+  : effect === "cook" ? COOK_RECIPES
+  : effect === "medicine" ? MEDICINE_RECIPES
+  : effect === "salvage" ? SALVAGE_RECIPES
+  : effect === "mechmod" ? MECH_MODULE_RECIPES
+  : [];
 
 /**
  * Which skill makes a task Routine, and at what threshold.
@@ -74,6 +79,7 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
         .map((a) => make({ assists: a.id }));
     case "calm":
     case "bleed":
+    case "surgery":
       // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
       return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));
     case "craft": {
@@ -91,6 +97,7 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
     case "cook":
     case "medicine":
     case "salvage":
+    case "mechmod":
       return recipesFor(taskFor({ task }).effect)
         .filter((r) => !craftBlocker(g, r))
         .map((r) => make({ crafts: [r.name] }));

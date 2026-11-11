@@ -1,4 +1,5 @@
 import { MATERIALS, RECIPES } from "@/data/crafting";
+import type { Recipe } from "@/data/cybernetics";
 export const ATTRIBUTES = ["STR", "CON", "INT", "WIT"] as const;
 export type Attribute = (typeof ATTRIBUTES)[number];
 
@@ -475,6 +476,61 @@ export const PROJECT_TEMPLATES = [
   { name: "Xenoflora Cultivation", skill: "Wits + Botany", threshold: 7, required: 6, contributorLimit: 2, energy: 2, facility: "Expanded Hydroponics or better, and a Biological Lab", materials: "Needs a viable alien specimen, which only the GM can grant. Committed at the start: 1 extracted Research Trait, 2 Scrapped Biomass, 3 Chemical Mixture. On completion Hydroponics will take a Xenoflora sowing." },
   { name: "Custom Project", skill: "", threshold: 0, required: 4, contributorLimit: 2, energy: 2, facility: "", materials: "" },
 ] as const;
+
+export const PROJECT_TEMPLATE_BY_NAME = Object.fromEntries(PROJECT_TEMPLATES.map((p) => [p.name, p]));
+
+/** What a Project takes out of the hold, and at which moment. */
+export type ProjectCost = {
+  /** Spent the moment the project is started. */
+  upfront?: Recipe;
+  /** Spent for each point of Progress the work adds. */
+  per?: Recipe;
+  /** Per point of Progress, chosen by the ship's hull tier: one entry per entry in `HULL_TIERS`. */
+  perByHull?: Recipe[];
+  /** Spent when the last point of Progress lands. */
+  done?: Recipe;
+  /** Toolkit charges a contribution burns, on top of its materials. */
+  toolkit?: number;
+  /** One unit of any of these per contribution, whichever the hold has: a day's medication. */
+  either?: string[];
+};
+
+const p = (...parts: [number, string][]): Recipe => parts.map(([qty, name]) => ({ name, qty }));
+
+/**
+ * What each Project takes out of the hold. A template absent from here is labour only.
+ *
+ * Install Module and Upgrade Module are deliberately absent: their materials come from the module's
+ * own upgrade ladder, which depends on which module and which level, and are spent when the project
+ * starts. Everything here is fixed by the template, so it can be priced from the name alone — which
+ * is what lets a project already underway start paying its way.
+ */
+export const PROJECT_COSTS: Record<string, ProjectCost> = {
+  // Both hull jobs are priced by what the hull is made of, so a better ship costs rarer stock.
+  // Barely Standing isn't listed on the sheet and takes the same scrap as Patched.
+  "Expand Ship": { perByHull: [p([3, "Scrap Metal"]), p([3, "Scrap Metal"]), p([2, "Reinforced Steel"]), p([1, "Neutronium"])], toolkit: 1 },
+  "Hull Repair": {
+    perByHull: [
+      p([3, "Scrap Metal"], [1, "Basic Adhesive"]),
+      p([3, "Scrap Metal"], [1, "Basic Adhesive"]),
+      p([2, "Reinforced Steel"], [1, "Basic Adhesive"]),
+      p([1, "Neutronium"], [1, "Advanced Adhesive"]),
+    ],
+    toolkit: 1,
+  },
+  "Install Workshop (Grade I)": { upfront: p([1, "Basic Adhesive"]), per: p([2, "Scrap Metal"], [1, "Scrap Components"]) },
+  "Affliction Treatment": { either: ["Psychiatric Medication", "Special Brew"] },
+  "Mech Frame (Tier I)": { per: p([2, "Scrap Metal"], [1, "Scrap Components"]), toolkit: 1, done: p([2, "Basic Adhesive"]) },
+  "Mech Frame (Tier II)": { per: p([1, "Reinforced Steel"], [1, "Components"]), toolkit: 1, done: p([2, "Advanced Adhesive"]) },
+  "Mech Frame (Tier III)": { per: p([1, "Neutronium"], [1, "Quantum Components"]), toolkit: 1, done: p([3, "Advanced Adhesive"]) },
+  "Mech Upgrade (Tier I → II)": { per: p([1, "Reinforced Steel"], [1, "Components"]), toolkit: 1, done: p([2, "Advanced Adhesive"]) },
+  "Mech Upgrade (Tier II → III)": { per: p([1, "Neutronium"], [1, "Quantum Components"]), toolkit: 1, done: p([3, "Advanced Adhesive"]) },
+  "Cybernetic Research (Tier II)": { upfront: p([1, "Cybernetic Core"], [2, "Reinforced Steel"], [3, "Components"], [1, "Advanced Adhesive"]) },
+  "Cybernetic Research (Tier III)": { upfront: p([2, "Cybernetic Core"], [2, "Neutronium"], [3, "Quantum Components"], [2, "Advanced Adhesive"]) },
+  // The Research Trait the sheet also asks for isn't a tracked item — the GM grants the specimen and
+  // the trait together, which is already what gates this project — so only the stock is counted here.
+  "Xenoflora Cultivation": { upfront: p([2, "Scrapped Biomass"], [3, "Chemical Mixture"]) },
+};
 
 /** Resistance halves damage and Vulnerability adds half, both rounded down. Having both cancels out. */
 export function scaleDamage(amount: number, resistant: boolean, vulnerable: boolean) {

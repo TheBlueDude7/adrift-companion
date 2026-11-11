@@ -667,7 +667,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Turn Food into Fuel | 1 | Botany 4 | Convert 2 Food Units into 1 Fuel Unit using a Bioconverter. |
 | First Aid | 0 (free action) | Always Skilled: First Aid | Use a medkit to heal, and treat one Untreated Injury of any Severity. |
 | Stop Bleeding | 1 | First Aid | Use up a medkit to end one survivor’s Bleeding. |
-| Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. |
+| Surgery | 3 | Always Crisis: Surgery | Treat a Major or Deadly injury. The patient spends the segment on the table and takes no Task of their own. |
 | Craft Medicine | 1 | First Aid 3 or Surgery 5 | Produce medicine from a known recipe. |
 | Decontaminate | 1 | First Aid 5 or Biology 5 |   |
 | Analyze Known Biomass | 1 | Wits + Biology 5 | Extract known data from a studied specimen. |
@@ -676,6 +676,7 @@ The following thresholds establish the baseline for ordinary work aboard a funct
 | Scrap Biomass | 2 | Biology 3 | Recover biological crafting materials. |
 | Repair a Damaged Module | 2 | Mechanical Technician 5 | Repair a Damaged module. Restoring Hull HP is the Hull Repair project (Mechanical Technician 3 or Engineering 4). |
 | Fabricate Common Item | 2 | Mechanical Technician 3 for T1, 6 for T2, 9 for T3 items. | Create two items from known recipes for the listed Energy. At 6+ levels above every threshold, make a third item in the same segment, also covered. |
+| Fabricate Mech Module | 2 (3 for Tier III) | Mechanical Technician or Engineering 3 for Tier I, 5 for Tier II, 7 for Tier III | Build one mech module at a Workshop that handles its materials. It goes into the hold, ready to fit. A failure wastes half the materials, rounded up. |
 | Deconstruct Common Item | 1 | Scavenging 2 for T1, 4 for T2, 6 for T3 | Take an item in the hold apart for half the materials it was made from, rounded down; three quarters on a Strong Result. |
 | Upgrade Module | 2 | Engineering 4 | Advance an eligible module upgrade Project. |
 | Install Panels or Defenses | 2 | Engineering 3 or Mechanical Technician 3 | Bolt Makeshift Solar Panels, Traps, or a Defensive Gun into a room’s spare slot, from a Workshop. One fitting per room. A failure wastes half the materials, rounded up. |

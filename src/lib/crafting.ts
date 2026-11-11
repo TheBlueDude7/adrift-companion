@@ -1,7 +1,8 @@
 import { RECIPES, REFINING, recipeMaterialTier, type CraftRecipe, type Station } from "@/data/crafting";
 import type { Recipe } from "@/data/cybernetics";
+import { MECH_MODULES, MODULE_RECIPES, moduleItemName } from "@/data/mechs";
 import { ladderFor } from "@/data/ship-upgrades";
-import { SKILLS, type SkillKey } from "./rules";
+import { SKILLS, type ItemTier, type SkillKey } from "./rules";
 import { recipeText, shortfalls, spend, stockItem } from "./stock";
 import type { GameState } from "./types";
 
@@ -61,7 +62,7 @@ export function craftBlocker(g: GameState, recipe: CraftRecipe): string | null {
 export const scaleRecipe = (recipe: Recipe, n: number): Recipe => recipe.map((p) => ({ ...p, qty: p.qty * n }));
 
 export function stockOutput(g: GameState, recipe: CraftRecipe, name: string, qty: number) {
-  stockItem(g, name, qty, { category: recipe.category, tier: recipe.tier, maxCharges: recipe.charges, armor: recipe.armor, notes: recipe.notes });
+  stockItem(g, name, qty, { category: recipe.category, tier: recipe.tier, maxCharges: recipe.charges, armor: recipe.armor, heavy: recipe.heavy, notes: recipe.notes });
 }
 
 /** Recipes the Fabricate Common Item task can make. Kitchen recipes are cooked with Prepare Food instead. */
@@ -75,6 +76,31 @@ export const MEDICINE_RECIPES = RECIPES.filter((r) => r.category === "Medical" &
 
 /** Items a Deconstruct task can take apart. Nobody unpicks a cooked meal. */
 export const SALVAGE_RECIPES = RECIPES.filter((r) => r.station !== "kitchen");
+
+const MODULE_TIER_NAME: Record<1 | 2 | 3, ItemTier> = { 1: "Tier I", 2: "Tier II", 3: "Tier III" };
+
+/** Routine Thresholds the mech sheet sets for building a module, by its tier. */
+const MODULE_THRESHOLD: Record<1 | 2 | 3, number> = { 1: 3, 2: 5, 3: 7 };
+
+/**
+ * Mech modules as workbench recipes, so building one is an ordinary trip to the bench: the same
+ * station rules, the same shortfall checks, the same half-the-materials failure as anything else.
+ *
+ * The output is the module as an item in the hold, which is what the Mechs tab already installs
+ * from. Nothing about fitting one changes — only that it now has to be made first.
+ */
+export const MECH_MODULE_RECIPES: CraftRecipe[] = MECH_MODULES.map((m) => ({
+  name: moduleItemName(m),
+  category: "Equipment",
+  tier: MODULE_TIER_NAME[m.tier],
+  skill: `Mechanical Technician ${MODULE_THRESHOLD[m.tier]} or Engineering ${MODULE_THRESHOLD[m.tier]}`,
+  inputs: MODULE_RECIPES[m.tier],
+  toolkit: 1,
+  station: "workshop",
+  output: 1,
+  heavy: true,
+  notes: m.effect,
+}));
 
 /** Dice a rough galley costs every roll made in it: −4d6 Improvised, −2d6 Operational, none in a Processing Suite. */
 export const galleyPenalty = (level: number) => (level >= 3 ? 0 : level === 2 ? 2 : 4);
@@ -96,7 +122,9 @@ export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra 
   stockOutput(g, RECIPE_BY_NAME[made.name] ?? recipe, made.name, made.qty);
   return `${success ? "Cooked" : "Botched"} ${recipe.name}: ${made.qty}× ${made.name} added to ship storage (${spent}).`;
 }
-export const RECIPE_BY_NAME = Object.fromEntries(RECIPES.map((r) => [r.name, r])) as Record<string, CraftRecipe>;
+// Mech modules are in the lookup but not in `FABRICATE_RECIPES`, so the bench knows how to price
+// one without the Fabricate menu growing by sixty entries. They have their own task.
+export const RECIPE_BY_NAME = Object.fromEntries([...RECIPES, ...MECH_MODULE_RECIPES].map((r) => [r.name, r])) as Record<string, CraftRecipe>;
 
 const TIER_THRESHOLD: Record<string, number> = { "Tier I": 3, "Tier II": 6, "Tier III": 9 };
 

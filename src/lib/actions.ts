@@ -13,9 +13,10 @@ import { completeModuleWork } from "./modules";
 import { moveShip, shipMap } from "./power";
 import { FACILITY_BY_NAME, ROOM_FITTINGS } from "@/data/ship-upgrades";
 import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, takeOne } from "./stock";
-import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
+import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, PROJECT_COSTS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
 import { roomFromPreset } from "./seed";
 import type { CraftRecipe } from "@/data/crafting";
+import type { Recipe } from "@/data/cybernetics";
 import type { ActionStatus, Character, GameState, Line, Project, SegmentAction, SpaceTile, StarMap, StarNodeType } from "./types";
 
 export const taskFor = (a: Pick<SegmentAction, "task">): ShipboardTask => TASK_BY_NAME[a.task] ?? SHIPBOARD_TASKS.at(-1)!;
@@ -48,7 +49,7 @@ export function energyShort(g: GameState, a: SegmentAction) {
 /** What stops a Fabricate or Prepare Food task from working on its own: missing stations and a short hold. */
 export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const effect = taskFor(a).effect;
-  if ((effect !== "craft" && effect !== "cook") || !a.crafts?.length) return [];
+  if ((effect !== "craft" && effect !== "cook" && effect !== "mechmod") || !a.crafts?.length) return [];
   // A name nothing recognises used to cost nothing and pass as Routine, because every step that
   // reads a recipe skipped it quietly. Say so instead: the hold, the check and the station all
   // depend on knowing what's being made.
@@ -60,7 +61,11 @@ export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const limit = effect === "craft" ? (c ? fabricateLimit(c, a.crafts) : FABRICATE_ITEMS) : 1;
   const over =
     a.crafts.length > limit
-      ? [effect === "cook" ? "More than one recipe in a cook" : `More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`]
+      ? [
+          effect === "cook" ? "More than one recipe in a cook"
+          : effect === "mechmod" ? "More than one mech module in a segment"
+          : `More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`,
+        ]
       : [];
   return [...new Set([...unknown, ...over, ...blockers, ...short])];
 }
@@ -109,6 +114,14 @@ export function supplyProblems(g: GameState, a: SegmentAction): string[] {
     case "fit": {
       const f = a.fit?.name ? FACILITY_BY_NAME[a.fit.name] : undefined;
       return f ? shortfalls(g, f.cost, f.toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`) : [];
+    }
+    // A segment's work on a project costs a segment's materials, so the hold is checked for the one
+    // point of Progress this contribution means to add.
+    case "project": {
+      const project = a.projectId ? g.ship.projects.find((x) => x.id === a.projectId) : undefined;
+      if (!project) return [];
+      const { parts, toolkit } = projectCost(g, project);
+      return shortfalls(g, parts, toolkit).map((s) => `Hold is short ${s.need - s.have} ${s.name}`);
     }
     default:
       return [];
@@ -400,6 +413,21 @@ function salvageBlocker(g: GameState): string {
   return `${node.name} has already been picked over`;
 }
 
+/**
+ * The Surgery being performed on this survivor in the window they're acting in, if any.
+ *
+ * Being operated on is the one thing another survivor's task does to your segment. It isn't a task
+ * of theirs and it isn't rationed, so it can't be found among their own actions: it's found by
+ * looking for the surgeon.
+ */
+export function surgeryOn(g: GameState, characterId: string, day = g.day, segment = g.segment, turn = g.expedition?.turn) {
+  return (
+    g.actions.find(
+      (x) => x.subjectId === characterId && taskFor(x).effect === "surgery" && x.status !== "cancelled" && x.day === day && x.segment === segment && x.turn === turn,
+    ) ?? null
+  );
+}
+
 /** Thresholds that rise with the job: distance for courses and scans, module level for crops and the reactor. */
 function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { threshold: number; blocker: string | null } {
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
@@ -413,6 +441,13 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
   // A handful of tasks are marked as working anywhere, because a medkit works wherever it's opened.
   if (def.group !== "Expedition" && !def.anywhere && g.expedition?.crew.includes(a.characterId)) {
     return { threshold: def.threshold, blocker: `${def.name} needs the ship, and they're away on the expedition` };
+  }
+  // Someone open on the table does nothing else with the segment, whichever was planned first: the
+  // patient can't take a task while they're under, and a surgeon can't cut into one already working.
+  const table = surgeryOn(g, a.characterId, a.day, a.segment, a.turn);
+  if (table) {
+    const surgeon = g.characters.find((x) => x.id === table.characterId)?.name ?? "The surgeon";
+    return { threshold: def.threshold, blocker: `${surgeon} has them on the table, so the segment isn't theirs` };
   }
   switch (def.name) {
     // A room stands one ordinary Search. After that it takes new information, the right equipment,
@@ -436,6 +471,17 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
       if (!fitting?.fitting) return { threshold: def.threshold, blocker: "Pick solar panels, traps, or a defensive gun" };
       if (!room) return { threshold: def.threshold, blocker: "Pick the room it goes in" };
       if (room.fitting) return { threshold: def.threshold, blocker: `${room.name}'s spare slot already holds ${room.fitting}` };
+      return { threshold: def.threshold, blocker: null };
+    }
+    // The one task that spends someone else's segment, so the patient has to be named and has to be
+    // free. Whoever committed first keeps the segment; the other is withdrawn before this can stand.
+    case "Surgery": {
+      const patient = a.subjectId ? g.characters.find((x) => x.id === a.subjectId) : undefined;
+      if (!patient) return { threshold: def.threshold, blocker: "Pick who's on the table" };
+      if (patient.id === a.characterId) return { threshold: def.threshold, blocker: "Nobody operates on themselves" };
+      if (patient.dead) return { threshold: def.threshold, blocker: `${patient.name} is past surgery` };
+      const theirs = tasksInWindow(g, patient.id, a.day, a.segment, a.turn);
+      if (theirs.length) return { threshold: def.threshold, blocker: `${patient.name} is already committed to ${theirs[0].task} — withdraw it first` };
       return { threshold: def.threshold, blocker: null };
     }
     case "Plot Safe Course":
@@ -522,8 +568,18 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
       blocker ??= c ? trainingBlocker(c, a.trainSkill) : null;
     }
   }
-  if (def.effect === "craft" && c && a.crafts?.length) return craftTerms(c, a.crafts, energy);
-  if (def.effect === "cook" && c && a.crafts?.length) return cookTerms(g, c, a.crafts, energy);
+  // The bench paths carry the situational blocker through rather than starting clean, or a survivor
+  // two decks into a derelict could run the Workshop from there, and a patient could craft on the table.
+  if (def.effect === "craft" && c && a.crafts?.length) return craftTerms(c, a.crafts, energy, blocker);
+  if (def.effect === "cook" && c && a.crafts?.length) return cookTerms(g, c, a.crafts, energy, blocker);
+  // A mech module runs on the module's own tier: the recipe carries its threshold, and a Tier III
+  // build costs the extra Energy the mech sheet asks for.
+  if (def.effect === "mechmod" && c && a.crafts?.length) {
+    const recipe = RECIPE_BY_NAME[a.crafts[0]];
+    const terms = craftCheck(c, a.crafts, recipe?.tier === "Tier III" ? energy + 1 : energy, def, undefined, blocker ?? (recipe ? craftBlocker(g, recipe) : null));
+    if (c.pressure >= OVERTAXED) terms.routine = false;
+    return terms;
+  }
   if (def.name === "Plot Unsafe Course" && unscannedTarget(g, a)) mode = "crisis";
   // Labor has no skill: Strength is both the dice pool and the level measured against the threshold.
   if (labor) {
@@ -605,8 +661,8 @@ export function fabricateLimit(c: Character, crafts: string[]) {
  * The task's Energy covers every item the crafter is allowed: two normally, three for an Expert, and
  * one more again for a Redline overdrive. Only an item past that allowance pays the Energy again.
  */
-function craftTerms(c: Character, crafts: string[], energy: number): TaskTerms {
-  const terms = craftCheck(c, crafts, energy, TASK_BY_NAME["Fabricate Common Item"]);
+function craftTerms(c: Character, crafts: string[], energy: number, blocker: string | null): TaskTerms {
+  const terms = craftCheck(c, crafts, energy, TASK_BY_NAME["Fabricate Common Item"], undefined, blocker);
   if (c.pressure >= OVERTAXED) terms.routine = false;
   if (crafts.length <= 1) return terms;
   const extra = Math.max(0, crafts.length - fabricateLimit(c, crafts));
@@ -668,7 +724,7 @@ function craftCheck(c: Character, crafts: string[], energy: number, def: Shipboa
  * Cooking one recipe: Cooking at the recipe's own threshold, and the galley's own penalty on every
  * roll made in it, which also keeps the work off Routine until the crew has a Processing Suite.
  */
-function cookTerms(g: GameState, c: Character, crafts: string[], energy: number): TaskTerms {
+function cookTerms(g: GameState, c: Character, crafts: string[], energy: number, blocker: string | null): TaskTerms {
   const level = stationLevel(g, "kitchen");
   const penalty = galleyPenalty(level);
   const recipe = RECIPE_BY_NAME[crafts[0]];
@@ -678,7 +734,7 @@ function cookTerms(g: GameState, c: Character, crafts: string[], energy: number)
     energy,
     TASK_BY_NAME["Prepare Food"],
     penalty > 0 ? { dice: penalty, label: `${stationLevelName("kitchen", level)}` } : undefined,
-    recipe ? craftBlocker(g, recipe) : null,
+    blocker ?? (recipe ? craftBlocker(g, recipe) : null),
   );
   if (c.pressure >= OVERTAXED) terms.routine = false;
   return terms;
@@ -692,11 +748,57 @@ function restore(g: GameState, roomId: string | null) {
 }
 
 /** Add Progress to a Project and apply what completing it does. */
+/**
+ * What one contribution to a project takes out of the hold: the materials for the Progress it adds,
+ * plus its toolkit charges. Returns nothing for a project that's pure labour.
+ *
+ * The cost is read from the template the project's name came from, rather than stored on the project,
+ * so a campaign's projects started before any of this existed are priced the same as a new one.
+ */
+export function projectCost(g: GameState, p: Pick<Project, "name">, points = 1): { parts: Recipe; toolkit: number } {
+  const cost = PROJECT_COSTS[p.name];
+  if (!cost || points <= 0) return { parts: [], toolkit: 0 };
+  const per = cost.perByHull ? (cost.perByHull[g.ship.hullTier] ?? cost.perByHull.at(-1)!) : (cost.per ?? []);
+  const parts = per.map((part) => ({ ...part, qty: part.qty * points }));
+  // A day's medication is one unit of either drug. Whichever the hold has more of is the one asked
+  // for, so a crew with one of each isn't told they're short of both.
+  if (cost.either) {
+    const pick = [...cost.either].sort((a, b) => haveInStorage(g, b) - haveInStorage(g, a))[0];
+    parts.push({ name: pick, qty: points });
+  }
+  return { parts, toolkit: (cost.toolkit ?? 0) * points };
+}
+
+/** The materials a project's last point of Progress takes, on top of that point's own cost. */
+const completionCost = (p: Pick<Project, "name">): Recipe => PROJECT_COSTS[p.name]?.done ?? [];
+
+/**
+ * What this project will take out of the hold from here on, in words, and what the hold is short of.
+ * Built from what the app will actually spend rather than the sheet's prose, so the two can't drift.
+ */
+export function projectBill(g: GameState, p: Pick<Project, "name">) {
+  const { parts, toolkit } = projectCost(g, p);
+  const finishing = completionCost(p);
+  const lines: string[] = [];
+  if (parts.length || toolkit) lines.push(`${recipeText(parts, toolkit)} per Progress`);
+  if (finishing.length) lines.push(`${recipeText(finishing)} to finish`);
+  return { text: lines.join(", "), short: shortfalls(g, parts, toolkit) };
+}
+
 export function advanceProject(g: GameState, projectId: string, amount = 1): string[] {
   const x = g.ship.projects.find((p) => p.id === projectId);
   if (!x || x.done) return [];
+  const added = Math.min(x.required, x.progress + amount) - x.progress;
   x.progress = Math.min(x.required, x.progress + amount);
   const out = [`${x.name} advances to ${x.progress}/${x.required}.`];
+  // The work is paid for as it happens, so a project that stalls has only spent what it built with.
+  const spent = projectCost(g, x, added);
+  const finishing = x.progress >= x.required ? completionCost(x) : [];
+  if (spent.parts.length || spent.toolkit || finishing.length) {
+    spend(g, [...spent.parts, ...finishing], spent.toolkit);
+    const bill = recipeText([...spent.parts, ...finishing], spent.toolkit);
+    if (bill !== "Nothing") out.push(`The work takes ${bill} out of the hold.`);
+  }
   if (x.name === "Hull Repair") {
     g.ship.hullHp = Math.min(HULL_TIERS[g.ship.hullTier].maxHp, g.ship.hullHp + amount);
     if (g.ship.hullHp > 0) g.ship.catastrophicEvents = 0;
@@ -882,7 +984,9 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
       out.push(parts.length ? `${recipe.name} comes apart into ${recipeText(parts)}, added to ship storage.` : `${recipe.name} comes apart, but nothing usable survives.`);
     }
   }
-  if (def.effect === "medicine") {
+  // Medicines and mech modules are both one recipe made at the bench, and a failure costs half the
+  // materials either way. A finished module lands in the hold for the Mechs tab to fit.
+  if (def.effect === "medicine" || def.effect === "mechmod") {
     for (const name of a.crafts ?? []) {
       const recipe = RECIPE_BY_NAME[name];
       if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted"));
