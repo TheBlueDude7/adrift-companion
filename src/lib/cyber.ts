@@ -68,30 +68,37 @@ export const cyberMaxEnergy = (c: Character) => installed(c).filter(working).red
 
 /**
  * Implants doing their work. A mech suppresses the Structural and Damage systems, so a pilot in a
- * frame fights with the frame's numbers and not their own plating.
+ * frame fights with the frame's numbers and not their own plating — except for the ones the frame's
+ * own Cybernetic Integration Ports keep connected, which are passed in by key.
  */
-const live = (inMech: boolean) => (x: Installed) => working(x) && (!inMech || CYBER_SYSTEM_BY_KEY[x.def.system].mech !== "Suppressed");
+const live = (inMech: boolean, ported: string[] = []) => (x: Installed) =>
+  working(x) && (!inMech || ported.includes(x.inst.key) || CYBER_SYSTEM_BY_KEY[x.def.system].mech !== "Suppressed");
 
 /** Implants halving this damage type, named so the log can say which one did it. */
-export const cyberResists = (c: Character, type: DamageType, inMech = false) =>
-  installed(c).filter(live(inMech)).filter((x) => (x.def.resist ?? []).includes(type)).map((x) => x.def.name);
+export const cyberResists = (c: Character, type: DamageType, inMech = false, ported: string[] = []) =>
+  installed(c).filter(live(inMech, ported)).filter((x) => (x.def.resist ?? []).includes(type)).map((x) => x.def.name);
 
 /**
  * What a character's Damage systems do to their own attack of this type. Resistance doesn't stack
  * and neither does this: a Tier III integrates its Tier II, so only the strongest of them counts.
  */
-export function cyberAttack(c: Character, type: DamageType, inMech = false) {
-  const mine = installed(c).filter(live(inMech)).filter((x) => x.def.damage === type && x.def.attack);
+export function cyberAttack(c: Character, type: DamageType, inMech = false, ported: string[] = []) {
+  const mine = installed(c).filter(live(inMech, ported)).filter((x) => x.def.damage === type && x.def.attack);
   const best = mine.sort((a, b) => b.def.attack!.boost - a.def.attack!.boost)[0];
   if (!best) return { boost: 0, cover: 0, armor: 0, source: null as string | null };
   return { boost: best.def.attack!.boost, cover: best.def.attack!.cover ?? 0, armor: best.def.attack!.armor ?? 0, source: best.def.name };
 }
 
-/** Whether an implant keeps working while its owner pilots a mech. */
-export function mechTag(x: Installed): MechTag | "Replacement" {
+/** Whether an implant keeps working while its owner pilots a mech, given what that mech has ported. */
+export function mechTag(x: Installed, ported: string[] = []): MechTag | "Replacement" | "Ported" {
   if (x.inst.replacement) return "Replacement";
+  if (ported.includes(x.inst.key)) return "Ported";
   return CYBER_SYSTEM_BY_KEY[x.def.system].mech;
 }
+
+/** Implants a frame would suppress, which is what a Cybernetic Integration Port is there to choose from. */
+export const suppressedImplants = (c: Character | undefined) =>
+  c ? installed(c).filter((x) => mechTag(x) === "Suppressed" || mechTag(x) === "GM decides") : [];
 
 function matches(x: Installed, req: CyberReq) {
   if (x.inst.replacement) return false;

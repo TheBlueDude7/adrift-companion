@@ -1,9 +1,10 @@
 import { newAction, taskPool } from "../src/lib/actions";
 import { attackBlocker, attackPool, deathCheck, defenseOf, newThreat, resolveAttack, sightline, UNARMED, type AttackResult } from "../src/lib/combat";
-import { maxHp } from "../src/lib/derive";
+import { damageResistance, maxHp } from "../src/lib/derive";
 import { uid } from "../src/lib/dice";
 import { movePlan, moveTo, scout, startExpedition, zoneDistance, zoneOf } from "../src/lib/expedition";
 import { actionBlocker, clearOverwatch, DECK_SIZE, declareOverwatch, endFight, nextTurn, overwatchFor, reserveReaction, spendAction, spent, startFight, takeReaction } from "../src/lib/fight";
+import { plantHazard, PRESET_BY_KEY } from "../src/lib/hazards";
 import { pushLog } from "../src/lib/log";
 import { marksOn } from "../src/lib/marks";
 import { applyDamage } from "../src/lib/mechanics";
@@ -941,6 +942,56 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
   check("a damaged implant lends nothing", frame(["total-mech-integration"], { damaged: true }).plugged, 0);
   check("nor does a Replacement", frame(["total-mech-integration"], { replacement: true }).plugged, 0);
   check("and another system's Tier III is no help to the frame", frame(["full-skeletal-lattice"]).plugged, 0);
+}
+
+{
+  // A hazard catches whoever is still standing in it when their turn ends, which is the half that
+  // costs nobody an action — including on a threat's own turn.
+  const { g } = world();
+  const [vale] = g.characters;
+  vale.armor = 0;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const here = zoneOf(g.expedition!, vale.id)!;
+  const t = newThreat("Drone", 20, 0);
+  t.zone = here.id;
+  g.threats.push(t);
+  plantHazard(g, here.id, { ...PRESET_BY_KEY["burning-zone"], source: "Inferno Projector" });
+  startFight(g, { crew: [vale.id], threats: [t.id], threatsShareCard: true });
+  const before = [vale.hp, t.stats!.hp];
+  const lines: (string | Line)[] = [];
+  // Round the whole order, so every combatant's turn ends once.
+  for (let i = 0; i < DECK_SIZE + 1 && g.fight; i++) lines.push(...nextTurn(g));
+  check("the fire catches the crew when their turn ends", before[0] - vale.hp > 0, true);
+  check("and the Drone on its own turn, for nothing", before[1] - t.stats!.hp > 0, true);
+  check("the damage to a threat stays the GM's", text(lines.filter((l): l is Line => typeof l !== "string" && !!l.gm)).some((x) => /Drone takes \d+ Fire damage from the burning zone/.test(x)), true);
+  check("but the crew is told the Drone is burning", text(lines.filter((l) => typeof l === "string" || !l.gm)).some((x) => x === "Drone is now Burning."), true);
+}
+
+{
+  // The Cybernetic Integration Port: one suppressed implant keeps working inside the frame.
+  const piloted = (port: { choice?: string; damaged?: boolean } | null) => {
+    allSixes();
+    const { g, shooterId } = world();
+    const c = g.characters[0];
+    c.cybernetics = [{ id: uid(), key: "closed-thermal-reactor", location: CYBER_BY_KEY["closed-thermal-reactor"].name, replacement: false, damaged: false, lineage: [], choice: "" }];
+    const m = newMech("Dray", "utility", 1, []);
+    m.pilotId = c.id;
+    m.deployed = true;
+    if (port) m.modules.push({ id: uid(), key: "cybernetic-integration-port", damaged: !!port.damaged, choice: port.choice });
+    g.mechs.push(m);
+    const id = give(g, shooterId, "Rocket Launcher");
+    const t = newThreat("Drone", 30, 0);
+    g.threats.push(t);
+    resolveAttack(g, shooterId, t.id, id, { ...shot, zones: 0 });
+    return { lost: 30 - t.stats!.hp, resisted: damageResistance(g, c, "Fire").length };
+  };
+  check("a frame suppresses a Fire system, so the rocket is bare", piloted(null).lost, 6);
+  check("and the pilot loses its Resistance too", piloted(null).resisted, 0);
+  check("a Port with nothing chosen connects nothing", piloted({}).lost, 6);
+  check("porting the implant brings its 40% back inside the frame", piloted({ choice: "closed-thermal-reactor" }).lost, 9);
+  check("and its Resistance with it", piloted({ choice: "closed-thermal-reactor" }).resisted, 1);
+  check("a damaged Port connects nothing", piloted({ choice: "closed-thermal-reactor", damaged: true }).lost, 6);
+  check("and a Port can't connect an implant the pilot doesn't have", piloted({ choice: "closed-circuit-nervous-system" }).lost, 6);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

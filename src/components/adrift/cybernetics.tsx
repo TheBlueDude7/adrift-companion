@@ -41,7 +41,7 @@ import {
   type Installed,
 } from "@/lib/cyber";
 import { uid } from "@/lib/dice";
-import { pilotedMech } from "@/lib/mechs";
+import { pilotedMech, portedImplants } from "@/lib/mechs";
 import { ATTRIBUTES } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
 import { useGame } from "@/lib/store";
@@ -73,12 +73,12 @@ function MaterialsLine({ recipe, className }: { recipe: { name: string; qty: num
   );
 }
 
-function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed: boolean }) {
+function CyberRow({ x, c, suppressed, ported = [] }: { x: Installed; c: Character; suppressed: boolean; ported?: string[] }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
   const { inst, def } = x;
-  const tag = mechTag(x);
+  const tag = mechTag(x, ported);
   const off = suppressed && (tag === "Suppressed" || tag === "GM decides");
   const edit = (label: string, fn: (g: GameState) => string) => act(label, fn);
   const upgradeCost = IMPLANT_RECIPES[1].map((p, i) => ({ name: p.name, qty: Math.max(0, p.qty - IMPLANT_RECIPES.replacement[i].qty) })).filter((p) => p.qty > 0);
@@ -103,7 +103,7 @@ function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed
         <Pill>{inst.location}</Pill>
         {inst.replacement && <Pill>Replacement</Pill>}
         {inst.damaged && <Pill tone="danger">Damaged</Pill>}
-        {suppressed && <Pill tone={off ? "warn" : "good"}>{off ? (tag === "GM decides" ? "In mech: GM decides" : "Suppressed in mech") : "Works in mech"}</Pill>}
+        {suppressed && <Pill tone={off ? "warn" : "good"} tip={tag === "Ported" ? "The frame's Cybernetic Integration Port keeps this one connected." : undefined}>{off ? (tag === "GM decides" ? "In mech: GM decides" : "Suppressed in mech") : tag === "Ported" ? "Ported: works in mech" : "Works in mech"}</Pill>}
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="icon-xs" variant="ghost" className="ml-auto" aria-label={`${def.name} actions`}><MoreHorizontalIcon /></Button>} />
           <DropdownMenuContent align="end" className="w-56">
@@ -169,7 +169,7 @@ export function CyberneticsPanel({ c }: { c: Character }) {
       {list.length === 0 ? (
         <EmptyState title="No cybernetics" body="Tier I implants are available from the start. Install them through Surgery in a Medical Bay." />
       ) : (
-        <div className="grid gap-2">{list.map((x) => <CyberRow key={x.inst.id} x={x} c={c} suppressed={!!mech} />)}</div>
+        <div className="grid gap-2">{list.map((x) => <CyberRow key={x.inst.id} x={x} c={c} suppressed={!!mech} ported={portedImplants(mech)} />)}</div>
       )}
     </div>
   );

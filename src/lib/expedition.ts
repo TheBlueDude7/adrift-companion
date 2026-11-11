@@ -2,6 +2,7 @@ import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
 import { actionBlocker, clearOverwatch, spendAction, type ActionKind } from "./fight";
+import { hazardToll } from "./hazards";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
 import { borderSprintable, borderWalkable, BUNDLE_BY_LABEL, SEGMENTS, type BorderState } from "./rules";
 import { stockItem } from "./stock";
@@ -173,6 +174,9 @@ export function moveTo(g: GameState, characterId: string, zoneId: string): (stri
   if (watched) out.push(watched);
   // A room run through is a room they've been in, so it stops being unexplored like any other.
   for (const z of first) out.push(...see(e, z!));
+  // Walking into a burning room costs you for walking in. A sprint passes through the middle zone
+  // too, so that one catches them on the way past.
+  for (const z of [plan.via, to].filter((x) => x)) out.push(...hazardToll(g, z!.id, { characterId }));
   return out;
 }
 

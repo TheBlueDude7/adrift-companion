@@ -169,7 +169,13 @@ export type Threat = {
   stats?: ThreatStats;
 };
 
-export type InstalledModule = { id: string; key: string; damaged: boolean };
+export type InstalledModule = {
+  id: string;
+  key: string;
+  damaged: boolean;
+  /** For a Cybernetic Integration Port, the key of the pilot's implant it keeps connected. */
+  choice?: string;
+};
 
 export type Mech = {
   id: string;
@@ -437,8 +443,34 @@ export type Zone = {
   searched: boolean;
   /** Clues, lore and salvage waiting here. A player's copy carries only the ones they've found. */
   finds: Find[];
+  /** Fire, chemicals or spores left standing in the zone. Absent on a zone nobody has burned. */
+  hazards?: ZoneHazard[];
   /** Absent in a player's copy. */
   secrets?: ZoneSecrets;
+};
+
+/**
+ * Something left standing in a zone that hurts whoever is in it, without anyone spending an action
+ * to make it happen — a Burning zone, a chemical cloud, a spore bloom. It is the only thing in the
+ * game that works on the enemy's turn, which is what makes a frame or a colony that plants one worth
+ * more than its damage on paper.
+ *
+ * It catches a creature twice over: once for walking in, and again for still being there when their
+ * turn ends. Cover is no help against something you are standing in, so only Resistance and Armor
+ * reduce it.
+ */
+export type ZoneHazard = {
+  id: string;
+  name: string;
+  /** Damage each time it catches someone, before Resistance and Armor. Zero for one that only applies conditions. */
+  damage: number;
+  type: DamageType;
+  /** What it applies to whoever it catches, by condition name. */
+  conditions: string[];
+  /** Rounds of fighting it has left, or absent for one that stands until something puts it out. */
+  rounds?: number;
+  /** Whatever made it, so the log can say what the crew is standing in. */
+  source: string;
 };
 
 /**

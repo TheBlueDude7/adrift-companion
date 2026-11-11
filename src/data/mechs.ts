@@ -43,6 +43,8 @@ export type MechModule = {
   armor?: number;
   inventory?: number;
   resist?: MechDamageType;
+  /** Keeps one of the pilot's otherwise suppressed implants connected, named on the installed module. */
+  port?: true;
 };
 
 const m = (category: ModuleCategory, name: string, slots: number, tier: 1 | 2 | 3, effect: string, extra: Partial<MechModule> = {}): MechModule => ({
@@ -145,7 +147,7 @@ export const MECH_MODULES: MechModule[] = [
   m("Control", "Manual Control Rig", 0, 1, "Standard mech controls. No additional benefit."),
   m("Control", "Neural Interface", 1, 2, "Interface and Frame-Compatible. +2d6 to Piloting and removes the penalty for operating a Damaged mech."),
   m("Control", "Predictive Combat Interface", 1, 3, "Once per Round, reserve a Reaction without spending a Fast Action."),
-  m("Control", "Cybernetic Integration Port", 1, 2, "Choose one normally suppressed cybernetic. It becomes Frame-Compatible while connected to this mech."),
+  m("Control", "Cybernetic Integration Port", 1, 2, "Choose one normally suppressed cybernetic. It becomes Frame-Compatible while connected to this mech.", { port: true }),
   m("Control", "Biological Accommodation Chamber", 2, 2, "Choose one passive biological upgrade. It stays functional inside the mech. Active attacks and extra Actions stay suppressed."),
   m("Control", "Alien Symbiosis Core", 2, 3, "One biological upgrade functions normally inside the mech, but gaining Pressure may also apply Overloaded, Enraged, or another listed side effect."),
 ];

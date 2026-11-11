@@ -1,4 +1,5 @@
 import { d } from "./dice";
+import { hazardToll, tickHazards } from "./hazards";
 import { applyCondition, endRound } from "./mechanics";
 import type { Combatant, Fight, GameState, Line, Overwatch } from "./types";
 
@@ -225,6 +226,9 @@ export function nextTurn(g: GameState): (string | Line)[] {
       c.conditions = c.conditions.filter((y) => y.id !== caught.id);
       out.push(`${c.name} has their wits back: Surprised ends.`);
     }
+    // Still standing in it when the turn ends, which is the second half of what a hazard catches.
+    const where = x.kind === "crew" ? g.expedition?.at[x.id] : g.threats.find((y) => y.id === x.id)?.zone;
+    if (where) out.push(...hazardToll(g, where, x.kind === "crew" ? { characterId: x.id } : { threatId: x.id }));
   }
   prune(g, f);
   if (!f.order.length) {
@@ -244,7 +248,7 @@ export function nextTurn(g: GameState): (string | Line)[] {
     delete x.reaction;
     delete x.acted;
   }
-  return [...out, ...endRound(g), `— Round ${f.round} —`, ...lapsed(g, f), ...upLine(g, f)];
+  return [...out, ...endRound(g), ...tickHazards(g), `— Round ${f.round} —`, ...lapsed(g, f), ...upLine(g, f)];
 }
 
 export function endFight(g: GameState): (string | Line)[] {

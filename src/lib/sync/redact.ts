@@ -57,7 +57,8 @@ function publicExpedition(e: Expedition): Expedition {
     .filter((z) => seen.has(z.id) || edge.has(z.id))
     .map((z) =>
       z.seen
-        ? { id: z.id, name: z.name, look: z.look, cover: z.cover, seen: true, secured: z.secured, searched: z.searched, finds: z.finds.filter((f) => f.found) }
+        // Hazards are not a secret: a crew standing in a burning room can see that it is burning.
+        ? { id: z.id, name: z.name, look: z.look, cover: z.cover, seen: true, secured: z.secured, searched: z.searched, finds: z.finds.filter((f) => f.found), ...(z.hazards?.length ? { hazards: z.hazards } : {}) }
         : { id: z.id, name: "Somewhere else", look: "", cover: "none" as const, seen: false, secured: false, searched: false, finds: [] },
     );
   return {

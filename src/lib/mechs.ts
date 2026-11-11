@@ -12,6 +12,14 @@ export function mechModules(m: Mech) {
 }
 
 /**
+ * Implants this frame keeps connected that it would otherwise suppress — one per working Cybernetic
+ * Integration Port, by implant key, so the nomination survives the implant being replaced in surgery.
+ * A damaged Port connects nothing, and a Port nobody has chosen for connects nothing either.
+ */
+export const portedImplants = (m: Mech | undefined) =>
+  m ? mechModules(m).filter((x) => x.def.port && !x.inst.damaged).flatMap((x) => (x.inst.choice ? [x.inst.choice] : [])) : [];
+
+/**
  * Armor Points the mech's plating provides when it's intact: the frame's own, which no damage can take
  * away for good, plus every working Defensive module. Damaged modules protect nothing.
  */

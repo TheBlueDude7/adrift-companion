@@ -15,7 +15,7 @@ import {
 } from "./rules";
 import { cyberAttack, cyberAttr, cyberMaxEnergy, cyberMaxHp, cyberResists } from "./cyber";
 import { deadlineWhen, injuryMaxHp, injuryPenalty, segmentsLeft } from "./injuries";
-import { mechModules, mechStats, pilotedMech } from "./mechs";
+import { mechModules, mechStats, pilotedMech, portedImplants } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
 export function skillLevel(c: Character, key: SkillKey) {
@@ -81,13 +81,16 @@ export function maxWillpower(c: Character) {
  */
 export function damageResistance(g: GameState, c: Character, type: DamageType | null) {
   if (!type) return [];
-  const inMech = !!pilotedMech(g, c.id);
+  const mech = pilotedMech(g, c.id);
   const ruled = c.conditions.filter((x) => x.name === `Resistant: ${type}`).map((x) => x.name);
-  return [...cyberResists(c, type, inMech), ...ruled];
+  return [...cyberResists(c, type, !!mech, portedImplants(mech)), ...ruled];
 }
 
 /** What a survivor's own Damage system adds to an attack of its type that they're making. */
-export const damageSystem = (g: GameState, c: Character, type: DamageType) => cyberAttack(c, type, !!pilotedMech(g, c.id));
+export function damageSystem(g: GameState, c: Character, type: DamageType) {
+  const mech = pilotedMech(g, c.id);
+  return cyberAttack(c, type, !!mech, portedImplants(mech));
+}
 
 export const HEAVY_SLOTS = 2;
 

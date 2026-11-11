@@ -3,6 +3,7 @@ import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
 import { addFind, endExpedition, findsWaiting, markExpeditionTurn, moveTo, recordSearch, revealFind, scout, setBorderState, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { clearHazard, hazardsIn, hazardTollAll, plantHazard, PRESET_BY_KEY, tickHazards } from "../src/lib/hazards";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
 import { DEFAULT_ITEM_TEMPLATES } from "../src/lib/rules";
@@ -334,6 +335,95 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("but a room two doors away isn't mentioned at all", seen.zones.some((z) => z.id === e.zones.find((x) => x.name === "Maintenance Crawl")!.id), false);
   check("doors the crew can see are described", seen.borders.length, e.borders.filter((b) => [b.a, b.b].some((id) => e.zones.find((z) => z.id === id)?.seen)).length);
   check("and the crew's own positions are no secret", Object.keys(seen.at).length, 2);
+}
+
+// Standing hazards: the one thing in the game that hurts people without anyone spending an action.
+{
+  const g = world();
+  const [vale] = g.characters;
+  vale.armor = 0;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const e = g.expedition!;
+  const next = e.zones.find((z) => z.name === "Spinal Corridor")!;
+  const burning = PRESET_BY_KEY["burning-zone"];
+  const planted = plantHazard(g, next.id, { ...burning, source: "Inferno Projector" });
+  check("a hazard is left standing in the room", hazardsIn(next).length, 1);
+  check("and the log says what it does", said(planted, /leaves burning zone in the Spinal Corridor: 2 Fire Damage, Burning and Illuminated/), true);
+  check("it says it won't go out on its own", said(planted, /stands until something puts it out/), true);
+
+  const before = vale.hp;
+  const walked = moveTo(g, vale.id, next.id);
+  check("walking in costs them 2", before - vale.hp, 2);
+  check("and it says what caught them", said(walked, /burning zone in the Spinal Corridor catches Vale/), true);
+  check("with the conditions it carries", vale.conditions.map((x) => x.name).filter((n) => n === "Burning" || n === "Illuminated").sort(), ["Burning", "Illuminated"]);
+  check("a hazard with no limit doesn't burn out", text(tickHazards(g)), []);
+  check("so it's still standing there", hazardsIn(next).length, 1);
+  check("and the crew can see what they're standing in", playerView(g).expedition!.zones.find((z) => z.id === next.id)!.hazards?.length, 1);
+  check("putting it out says so", said(clearHazard(g, next.id, hazardsIn(next)[0].id), /burning zone in the Spinal Corridor is dealt with/), true);
+  check("and then it's gone", hazardsIn(next).length, 0);
+  check("a hazard that isn't there can't be put out", text(clearHazard(g, next.id, "nope")), ["That hazard isn't there."]);
+  check("and no zone takes one at all", text(plantHazard(g, "nowhere", { ...burning, source: "x" })), ["That zone isn't part of this site."]);
+}
+{
+  // Resistance works on a hazard the way it works on an attack. Cover doesn't: you are standing in it.
+  const g = world();
+  const [vale] = g.characters;
+  vale.armor = 0;
+  applyCondition(g, vale, "Resistant: Fire", "Scene", []);
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const next = g.expedition!.zones.find((z) => z.name === "Spinal Corridor")!;
+  plantHazard(g, next.id, { ...PRESET_BY_KEY["burning-zone"], source: "Inferno Projector" });
+  const before = vale.hp;
+  const walked = moveTo(g, vale.id, next.id);
+  check("Resistance halves what a hazard does", before - vale.hp, 1);
+  check("and the line names what gave it", said(walked, /Resistant: Fire gives Vale Fire Resistance/), true);
+}
+{
+  // One with a limit counts its Rounds down and goes out by itself.
+  const g = world();
+  const [vale] = g.characters;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const here = zoneOf(g.expedition!, vale.id)!;
+  plantHazard(g, here.id, { ...PRESET_BY_KEY["fire"], source: "The reactor" });
+  check("it says how long it lasts", hazardsIn(here)[0].rounds, 3);
+  tickHazards(g);
+  tickHazards(g);
+  check("two Rounds later it's nearly done", hazardsIn(here)[0].rounds, 1);
+  check("and the third puts it out", text(tickHazards(g)), ["The spreading fire in the Docking Collar burns itself out."]);
+  check("leaving the room clear", hazardsIn(here).length, 0);
+}
+{
+  // A hazard planted on top of people catches them where they stand, and a Sprint pays for the room
+  // it runs through as well as the one it ends in.
+  const g = world();
+  const [vale, okonkwo] = g.characters;
+  for (const c of [vale, okonkwo]) c.armor = 0;
+  startExpedition(g, { site: "", crew: [vale.id, okonkwo.id], siteId: "tanager" });
+  const e = g.expedition!;
+  const here = zoneOf(e, vale.id)!;
+  plantHazard(g, here.id, { ...PRESET_BY_KEY["burning-zone"], source: "Inferno Projector" });
+  const before = [vale.hp, okonkwo.hp];
+  const caught = hazardTollAll(g, here.id);
+  check("everyone already in the room pays", [before[0] - vale.hp, before[1] - okonkwo.hp], [2, 2]);
+  check("and both are named", [said(caught, /catches Vale/), said(caught, /catches Okonkwo/)], [true, true]);
+  // Already Burning, so the second helping of it costs the extra point that refreshing Burning costs.
+  check("standing in it again costs more", (hazardTollAll(g, here.id), before[0] - vale.hp), 5);
+}
+{
+  // A Sprint crosses two rooms, so a hazard in the one it runs through catches it on the way past.
+  const g = world();
+  const [vale] = g.characters;
+  vale.armor = 0;
+  startExpedition(g, { site: "", crew: [vale.id], siteId: "tanager" });
+  const e = g.expedition!;
+  const corridor = e.zones.find((z) => z.name === "Spinal Corridor")!;
+  const mess = e.zones.find((z) => z.name === "Mess Deck")!;
+  plantHazard(g, corridor.id, { ...PRESET_BY_KEY["burning-zone"], source: "Inferno Projector" });
+  const before = vale.hp;
+  const sprint = moveTo(g, vale.id, mess.id);
+  check("a Sprint through a burning room is caught on the way past", before - vale.hp, 2);
+  check("and it ends up where it was going", zoneOf(e, vale.id)?.name, "Mess Deck");
+  check("and it says which room caught them", said(sprint, /burning zone in the Spinal Corridor catches Vale/), true);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

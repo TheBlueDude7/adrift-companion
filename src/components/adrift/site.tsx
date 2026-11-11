@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { CrosshairIcon, DoorOpenIcon, EyeIcon, EyeOffIcon, FootprintsIcon, LightbulbIcon, PlusIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
+import { CrosshairIcon, DoorOpenIcon, EyeIcon, EyeOffIcon, FlameIcon, FootprintsIcon, LightbulbIcon, PlusIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FIND_BY } from "@/data/sites";
 import { addFind, findByLabel, findsWaiting, movePlan, moveTo, neighbours, revealFind, scout, setBorderState, zoneOf } from "@/lib/expedition";
+import { clearHazard, HAZARD_PRESETS, hazardLine, hazardsIn, hazardTollAll, plantHazard, PRESET_BY_KEY } from "@/lib/hazards";
 import { BORDER_STATES, type BorderState } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Border, Expedition, FindBy, GameState, Zone } from "@/lib/types";
@@ -71,6 +74,7 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
           </p>
         )}
         {isGM && zone.secrets?.note && <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">{zone.secrets.note}</p>}
+        {(hazardsIn(zone).length > 0 || (isGM && zone.seen)) && <Hazards zone={zone} />}
         {(zone.finds.length > 0 || (isGM && zone.seen)) && <Finds zone={zone} />}
 
         {zone.seen && (
@@ -157,6 +161,94 @@ function Finds({ zone }: { zone: Zone }) {
       ))}
       {isGM && zone.seen && <AddFindDialog zone={zone} />}
     </div>
+  );
+}
+
+/**
+ * What is standing in the room doing damage on its own. Shown to the crew as well as the GM, because
+ * a burning room is not a secret, and it is the one thing on the sheet that hurts people between turns.
+ */
+function Hazards({ zone }: { zone: Zone }) {
+  const { act } = useGame();
+  const { isGM } = usePerms();
+  const list = hazardsIn(zone);
+
+  return (
+    <div className="grid gap-1.5">
+      <Label className="text-xs">Standing hazards</Label>
+      {list.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nothing in here is burning.</p>
+      ) : (
+        list.map((h) => (
+          <div key={h.id} className="flex items-center gap-2 rounded-md border border-orange-500/30 bg-orange-500/5 p-2">
+            <FlameIcon className="size-3.5 shrink-0 text-orange-400" />
+            <p className="min-w-0 flex-1 text-xs">
+              <span className="font-medium">{h.name}</span> — {hazardLine(h)}, when someone walks in and again if they end their turn here.
+              <span className="text-muted-foreground"> {h.rounds === undefined ? "Stands until it's dealt with." : `${h.rounds} Round${h.rounds === 1 ? "" : "s"} left.`} ({h.source})</span>
+            </p>
+            {isGM && (
+              <Button size="xs" variant="ghost" onClick={() => act(`Clear ${h.name}`, (g) => clearHazard(g, zone.id, h.id), "day")}>
+                Put out
+              </Button>
+            )}
+          </div>
+        ))
+      )}
+      {isGM && zone.seen && <PlantHazardDialog zone={zone} />}
+    </div>
+  );
+}
+
+/** The GM leaving something in a room: a frame's incendiary, a colony's spores, or the site burning. */
+function PlantHazardDialog({ zone }: { zone: Zone }) {
+  const { act } = useGame();
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(HAZARD_PRESETS[0].key);
+  const [source, setSource] = useState("");
+  const [toll, setToll] = useState(true);
+  const preset = PRESET_BY_KEY[key];
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setKey(HAZARD_PRESETS[0].key); setSource(""); setToll(true); } }}>
+      <DialogTrigger render={<Button size="xs" variant="ghost" className="justify-self-start"><FlameIcon /> Leave a hazard here</Button>} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{zone.name}: leave something standing</DialogTitle>
+          <DialogDescription>It catches anyone who walks in, and anyone still here when their turn ends. It works on the threats&apos; turns too, which is the point of it.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label className="text-xs">What it is</Label>
+            <Select value={key} onValueChange={(v) => setKey(v ?? key)}>
+              <SelectTrigger size="sm"><SelectValue>{preset.name}</SelectValue></SelectTrigger>
+              <SelectContent>{HAZARD_PRESETS.map((h) => <SelectItem key={h.key} value={h.key}>{h.name} — {hazardLine(h)}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">{preset.from}. {preset.rounds === undefined ? "Stands until the crew deals with it." : `Lasts ${preset.rounds} Rounds.`}</p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs" htmlFor="hazard-source">What left it</Label>
+            <Input id="hazard-source" value={source} onChange={(ev) => setSource(ev.target.value)} placeholder={preset.from.split(",")[0]} />
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <Checkbox checked={toll} onCheckedChange={(v) => setToll(!!v)} />
+            Catch everyone already standing here
+          </label>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={() => {
+              act(`Leave ${preset.name.toLowerCase()} in ${zone.name}`, (g) => {
+                const out = plantHazard(g, zone.id, { name: preset.name, damage: preset.damage, type: preset.type, conditions: preset.conditions, rounds: preset.rounds, source: source.trim() || preset.from.split(",")[0] });
+                return toll ? [...out, ...hazardTollAll(g, zone.id)] : out;
+              }, "day");
+              setOpen(false);
+            }}
+          >
+            Leave it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
