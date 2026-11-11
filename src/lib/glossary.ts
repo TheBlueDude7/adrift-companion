@@ -1,6 +1,20 @@
 import { AFFLICTIONS, CONDITIONS } from "@/data/compendium";
+import { SHIPBOARD_TASKS, type ShipboardTask, type TaskMode } from "@/data/tasks";
 import { FESTER_DAYS, SURGERY_WINDOW } from "./injuries";
-import { ATTRIBUTE_NAMES, CONDITION_GROUPS, PRESSURE_STATES, SKILLS, STRESS_BANDS } from "./rules";
+import { ATTRIBUTE_NAMES, CONDITION_GROUPS, PRESSURE_STATES, SKILL_BY_KEY, SKILLS, STRESS_BANDS } from "./rules";
+
+export const TASK_MODE_LABEL: Record<TaskMode, string> = { routine: "Routine", skilled: "Skilled", crisis: "Crisis" };
+
+/** The skill a task asks for. Skilled and Crisis tasks always roll, so only a Routine task's threshold means anything. */
+export function taskRequirement(t: ShipboardTask) {
+  const threshold = t.mode === "routine" && t.threshold ? ` ${t.threshold}` : "";
+  if (t.labor) return `Strength${threshold} (Labor)`;
+  if (!t.skills.length) return null;
+  return `${t.skills.map((k) => SKILL_BY_KEY[k].name).join(" or ")}${threshold}`;
+}
+
+/** Task names that are ordinary words at the start of a sentence, so marking them would mislead. */
+const UNMARKED_TASKS = new Set(["Other"]);
 
 /** The colour family a keyword is written in. Untoned terms are plain rules vocabulary. */
 export type GlossaryTone = "physical" | "fire" | "chemical" | "electric" | "medical" | "combat" | "mind" | "pressure" | "environment" | "beneficial";
@@ -84,6 +98,13 @@ function build() {
   for (const c of CONDITIONS) add(c.name, { title: c.name, kind: "Condition", text: c.effect, ends: c.removal, tone: CONDITION_TONE.get(c.name) });
   // Afflictions named after a keyword need their own entry, or the keyword alone gets highlighted inside the name.
   for (const a of AFFLICTIONS) if (/\bPain\b/.test(a.name)) add(a.name, { title: a.name, kind: "Affliction", text: a.effect, tone: "mind" });
+  // Before skills, so "Surgery" reads as the operation rather than the skill: prose means the task far more often.
+  for (const t of SHIPBOARD_TASKS) {
+    if (UNMARKED_TASKS.has(t.name)) continue;
+    const terms = [TASK_MODE_LABEL[t.mode], t.energy ? `${t.energy} Energy` : "No Energy", taskRequirement(t), t.facility && `needs ${t.facility.label}`].filter(Boolean).join(" · ");
+    const alsoSkill = SKILLS.some((s) => s.name === t.name) ? " · also a skill" : "";
+    add(t.name, { title: t.name, kind: `Task · ${t.group}${alsoSkill}`, text: `${terms}. ${t.result}`, tone: t.group === "Medical" ? "medical" : undefined });
+  }
   for (const s of SKILLS) add(s.name, { title: s.name, kind: `Skill · ${ATTRIBUTE_NAMES[s.attr]}`, text: `Rolled with ${ATTRIBUTE_NAMES[s.attr]} + ${s.name} + Pressure Dice.`, tone: MEDICAL_SKILLS.has(s.name) ? "medical" : undefined });
   for (const m of MECHANICS) {
     const entry = { ...m.entry, tone: m.entry.tone ?? KIND_TONE[m.entry.kind] };

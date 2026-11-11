@@ -16,6 +16,7 @@ import {
   type TaskMode,
 } from "@/data/tasks";
 import { attributeValue, skillLevel } from "@/lib/derive";
+import { taskRequirement } from "@/lib/glossary";
 import { ATTRIBUTE_NAMES, SKILL_BY_KEY } from "@/lib/rules";
 import type { Character } from "@/lib/types";
 import { Pill } from "./common";
@@ -35,14 +36,6 @@ const MODES: { mode: TaskMode; label: string; tone: "good" | "warn" | "danger" }
 const MODE_BY_KEY = Object.fromEntries(MODES.map((m) => [m.mode, m])) as Record<TaskMode, (typeof MODES)[number]>;
 
 const skillNames = (t: ShipboardTask) => t.skills.map((k) => SKILL_BY_KEY[k].name);
-
-/** Skilled and Crisis tasks always roll, so only a Routine task's threshold means anything. */
-function requirement(t: ShipboardTask) {
-  const threshold = t.mode === "routine" && t.threshold ? ` ${t.threshold}` : "";
-  if (t.labor) return `Strength${threshold} (Labor)`;
-  if (!t.skills.length) return null;
-  return `${skillNames(t).join(" or ")}${threshold}`;
-}
 
 /** The best level and pool this survivor brings to the task, before Pressure, injuries and gear. */
 function bestFor(c: Character, t: ShipboardTask) {
@@ -76,7 +69,7 @@ function standing(c: Character, t: ShipboardTask): { text: string; tone: "good" 
 
 function TaskCard({ t, who }: { t: ShipboardTask; who?: Character }) {
   const mode = MODE_BY_KEY[t.mode];
-  const req = requirement(t);
+  const req = taskRequirement(t);
   const me = who && standing(who, t);
   return (
     <div className="grid gap-1.5 rounded-md border p-3 text-sm">
@@ -90,8 +83,8 @@ function TaskCard({ t, who }: { t: ShipboardTask; who?: Character }) {
         {t.facility && <Pill tone="warn">Needs {t.facility.label}</Pill>}
         {t.gmResolves && <Pill>GM resolves</Pill>}
       </div>
-      <p className="text-muted-foreground"><GlossaryText text={t.result} /></p>
-      {t.strong && !t.noStrong && <p className="text-xs"><span className="font-medium">Strong Result:</span> <span className="text-muted-foreground"><GlossaryText text={t.strong} /></span></p>}
+      <p className="text-muted-foreground"><GlossaryText text={t.result} skip={t.name} /></p>
+      {t.strong && !t.noStrong && <p className="text-xs"><span className="font-medium">Strong Result:</span> <span className="text-muted-foreground"><GlossaryText text={t.strong} skip={t.name} /></span></p>}
       {me && <p className="text-xs"><Pill tone={me.tone}>{me.text}</Pill></p>}
     </div>
   );
