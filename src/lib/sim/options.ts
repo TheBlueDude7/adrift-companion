@@ -1,6 +1,6 @@
 import type { CraftRecipe } from "@/data/crafting";
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
-import { actionsNow, extraTaskBlocker, fitOptions, newAction, openProjects, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
+import { actionsNow, extraTaskBlocker, fitOptions, newAction, openProjects, normalFabricateLimit, onTheTable as onTheTableFor, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import { uid } from "../dice";
 import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
@@ -137,14 +137,10 @@ function subject(g: GameState, a: SegmentAction): string {
 }
 
 /**
- * What's even on the table. Off the ship it's the Common Expedition Tasks and the handful of things
- * that work anywhere; aboard it's everything but those. Listing the rest only to refuse it would
- * bury the one report worth reading — the tasks that were nearly available.
+ * What's even on the table, which the task planner decides the same way. Listing the other half only
+ * to refuse it would bury the one report worth reading — the tasks that were nearly available.
  */
-const onTheTable = (g: GameState, c: Character) =>
-  away(g, c)
-    ? SHIPBOARD_TASKS.filter((t) => (t.group === "Expedition" ? t.name !== "Embark Expedition" : t.anywhere))
-    : SHIPBOARD_TASKS.filter((t) => t.group !== "Expedition" || t.name === "Embark Expedition");
+const onTheTable = (g: GameState, c: Character) => SHIPBOARD_TASKS.filter(onTheTableFor(g, c.id));
 
 export function legalOptions(g: GameState, c: Character): SimMenu {
   const options: SimOption[] = [];

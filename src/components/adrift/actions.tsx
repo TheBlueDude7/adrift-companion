@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, salvageTarget, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, onTheTable, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, salvageTarget, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { nextSegmentName, pendingForAction, pendingWork } from "@/lib/pending";
 import { BIO_TIER_LABEL } from "@/data/biology";
 import { CYBER_BY_KEY, TIER_LABEL } from "@/data/cybernetics";
@@ -505,11 +505,15 @@ function TaskPicker({ game, draft, onPick }: { game: GameState; draft: SegmentAc
   const q = query.trim().toLowerCase();
   const matches = (x: ShipboardTask) =>
     (!q || taskHaystack(x).includes(q)) && (ceiling === null || varies(x) || termsFor(x).energy <= ceiling);
+  // Where the survivor is standing: a galley menu has no zone to scout, and the search box shouldn't
+  // turn one up either.
+  const here = onTheTable(game, draft.characterId);
+  const offered = (x: ShipboardTask) => (!x.free || x.name === draft.task) && here(x) && matches(x);
   const groups = TASK_GROUPS.map((grp) => ({
     name: grp,
-    tasks: SHIPBOARD_TASKS.filter((x) => x.group === grp && (!x.free || x.name === draft.task) && (x.name === draft.task || matches(x))),
+    tasks: SHIPBOARD_TASKS.filter((x) => x.group === grp && (x.name === draft.task || offered(x))),
   })).filter((grp) => grp.tasks.length > 0);
-  const found = SHIPBOARD_TASKS.filter((x) => (!x.free || x.name === draft.task) && matches(x)).length;
+  const found = SHIPBOARD_TASKS.filter(offered).length;
   return (
     <div className="grid gap-1.5">
       <div className="flex flex-wrap items-center justify-between gap-2">

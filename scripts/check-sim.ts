@@ -2,7 +2,7 @@
 // tasks they may take. Run with the react-server condition, since the prompt builders are
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
-import { advanceProject, extraTaskBlocker, fitOptions, newAction, openProjects, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
+import { advanceProject, extraTaskBlocker, fitOptions, newAction, onTheTable, openProjects, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
 import { IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, moduleLevel, RECIPE_BY_NAME } from "../src/lib/crafting";
 import { CYBERNETICS, implantName } from "../src/data/cybernetics";
 import { MECH_MODULES } from "../src/data/mechs";
@@ -821,6 +821,26 @@ function bench(components: number) {
   resolveAction(g, hand.id, { status: "success", energy: 0, outcome: "" });
   check("an Assist's Progress lands in the same segment", g.ship.projects.find((p) => p.id === "job")?.progress, 1);
   check("and nothing about it is held back", pendingWork(g).length, 0);
+}
+
+// The task planner offers what the survivor could actually take. Aboard, the ten Common Expedition
+// Tasks were listed and then refused one by one, which is ten rows of menu nobody can act on.
+{
+  const g = world();
+  const c = g.characters[0];
+  const aboard = SHIPBOARD_TASKS.filter(onTheTable(g, c.id));
+  check("no zone tasks in a galley menu", aboard.filter((t) => t.group === "Expedition").map((t) => t.name), ["Embark Expedition"]);
+  check("and the rest of the board is untouched", aboard.length, SHIPBOARD_TASKS.filter((t) => t.group !== "Expedition").length + 1);
+
+  // Away, it's the other way about: the zone tasks, plus the few things that work anywhere.
+  startExpedition(g, { crew: [c.id], site: "The Perihelion" });
+  const afield = SHIPBOARD_TASKS.filter(onTheTable(g, c.id));
+  check("embarking isn't offered to someone already there", afield.some((t) => t.name === "Embark Expedition"), false);
+  check("the zone tasks are", afield.some((t) => t.name === "Search"), true);
+  check("and nothing needing the ship is", afield.filter((t) => t.group !== "Expedition" && !t.anywhere), []);
+
+  // Which is the same rule the simulator reports against, so the two menus can't drift apart.
+  check("the planner and the simulator agree", legalOptions(g, c).options.every((o) => afield.some((t) => t.name === o.task)), true);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

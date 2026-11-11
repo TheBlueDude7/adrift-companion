@@ -427,6 +427,20 @@ export function surgeryOn(g: GameState, characterId: string, day = g.day, segmen
   );
 }
 
+/**
+ * Which tasks are on the table at all, for a survivor standing where this one is standing. Off the
+ * ship it's the Common Expedition Tasks and the handful of things that work anywhere; aboard it's
+ * everything else, plus Embark, since taking it is how somebody leaves.
+ *
+ * `situational` below still refuses the other half if one is planned anyway, but a list is for
+ * choosing from: ten greyed-out zone tasks in a galley menu are ten rows nobody can act on.
+ */
+export function onTheTable(g: GameState, characterId: string): (t: ShipboardTask) => boolean {
+  const away = !!g.expedition?.crew.includes(characterId);
+  return (t) =>
+    away ? (t.group === "Expedition" ? t.name !== "Embark Expedition" : !!t.anywhere) : t.group !== "Expedition" || t.name === "Embark Expedition";
+}
+
 /** Thresholds that rise with the job: distance for courses and scans, module level for crops and the reactor. */
 function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { threshold: number; blocker: string | null } {
   const map = a.target ? g.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
