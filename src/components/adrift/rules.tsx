@@ -71,7 +71,7 @@ function parseRulebook(md: string): Section[] {
 
   const sections: Section[] = [{ title: "Introduction", part: true, blocks: [] }];
   for (const b of blocks) {
-    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Human Space)\b/.test(b.text), blocks: [], updated: b.updated });
+    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Backgrounds in Detail|Human Space)\b/.test(b.text), blocks: [], updated: b.updated });
     else sections[sections.length - 1].blocks.push(b);
   }
   return sections.filter((s) => s.blocks.length || s.part);

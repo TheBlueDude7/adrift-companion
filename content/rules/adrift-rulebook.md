@@ -610,7 +610,7 @@ A Crisis task is performed under immediate danger or has consequences too severe
 
 Before a Crisis roll, the GM states what failure will cause.
 
-## Combat Exception: Stunts
+### Combat Exception: Stunts
 
 Combat uses its own rules for additional successes.
 
@@ -622,7 +622,7 @@ Combat Stunts are intentionally more flexible because positioning, damage, contr
 
 Outside combat, additional successes do not create generic Stunts; they only matter when a task lists a Strong Result. Generic Stunts are for combat.
 
-#### Task Modifiers
+## Task Modifiers
 
 Use penalties only when circumstances meaningfully impair the attempt. Do not apply a penalty merely because a character is below a Routine Threshold; being below the threshold is already the reason a roll is required.
 
@@ -635,7 +635,7 @@ Use penalties only when circumstances meaningfully impair the attempt. Do not ap
 
 Modifiers normally stack to a maximum of -6d6 or +6d6. A task that has become impossible because a required component or capability is completely absent cannot be attempted until the crew changes the situation.
 
-#### Assistance
+## Assistance
 
 One character may spend a task assisting another character. The assistant must have at least 1 level in the relevant skill, the Strength to lend a back on physical Project work, or a clearly useful method of helping.
 
@@ -650,7 +650,7 @@ One character may spend a task assisting another character. The assistant must h
 - Assistance never turns a Crisis task into a Routine task.
 - Resolve Assists before the task they help, so the helped character knows their pool.
 
-### Standard Shipboard Tasks
+## Standard Shipboard Tasks
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
@@ -744,14 +744,14 @@ Xenoflora will not take root below Expanded Hydroponics. A ripe crop is not harv
 
 A strain resists automation rather than benefiting from it. **It needs Maintain Crops every single day, at every module level, including Self-Sustaining.** Miss a day and it does not stall like an ordinary crop: it slips containment. The crop is lost, the beds revert to Food, and the GM has something loose aboard the ship to run as they see fit.
 
-### The Competence Rule
+## The Competence Rule
 
 | THE COMPETENCE RULE |
 | --- |
 | If a trained survivor has the required skill, correct tools, a functioning facility, enough time, and a safe working environment, the task succeeds without a roll. |
 |   |
 
-### Projects
+## Projects
 
 Projects are tasks too large to finish in one segment. Building a room, upgrading a module, conducting research, and restoring a ruined reactor are all Projects.
 
@@ -771,7 +771,7 @@ Every Project lists: required Progress, relevant skill, Routine Threshold, facil
 | Cost: Paid once for each Progress according to the ship’s current Hull tier |
 | A character with Mechanical Technician 5 completes one Progress automatically in a safe segment. A less-skilled character may roll Mechanical Technician to attempt the same work. |
 
-### Events and Interruptions
+## Events and Interruptions
 
 The GM may introduce an event at the start of a segment, after tasks are committed, during resolution, or after tasks finish. The timing should follow the fiction and should be stated clearly.
 
@@ -780,7 +780,7 @@ The GM may introduce an event at the start of a segment, after tasks are committ
 - Characters whose tasks have not yet been resolved may reassign them when the event makes the original task impossible.
 - Warnings, sensor data, and visible countdowns should be provided whenever the crew could reasonably detect them.
 
-### Energy
+## Energy
 
 Energy measures how much meaningful work a character can perform before exhaustion. Energy is spent on shipboard tasks and other strenuous actions. Combat uses its own action economy and does not normally spend Energy unless a rule says otherwise.
 
@@ -802,7 +802,7 @@ Every Rest:
 - Restores all Energy.
 - Lowers Pressure by 1, but not below the Stress floor.
 
-### Daily Survival Requirements
+## Daily Survival Requirements
 
 At the End of Day, check each character’s Food, Water, Oxygen, and Sleep. Eating and drinking do not consume tasks and may occur during any segment.
 
@@ -821,7 +821,7 @@ A character may consume half a Food Unit instead of one full unit. At the beginn
 - Failure: Maximum Energy is reduced by 1 for that day.
 - Two consecutive days of rationing, whether the rolls succeed or fail, cause 1 Stress.
 
-### Pressure
+## Pressure
 
 Pressure represents immediate fear, adrenaline, tunnel vision, and survival instinct. It rises quickly during danger and fades when the immediate crisis passes.
 
@@ -869,7 +869,7 @@ If a character would gain Pressure while already Panicked, they immediately trig
 
 No reduction takes Pressure below the Stress floor, Rest included: at Stress 5+ Pressure can’t drop below Shaken, and at Stress 7+ not below Pressured.
 
-### Pushing
+## Pushing
 
 A character may Push when ordinary effort is not enough. Pushing is a deliberate decision, not an automatic response to failure.
 
@@ -889,7 +889,7 @@ A character at 0 Energy may still Push. Instead of the Energy, the Push costs an
 - Routine tasks do not require a reroll, but a character may Push to perform an extra Routine task.
 - A Panicked character may Push, but gaining Pressure while Panicked triggers the normal overflow consequence.
 
-### Stress
+## Stress
 
 Stress represents lasting psychological strain. It is tracked from 0 to 10 and does not disappear when danger ends or after ordinary sleep.
 
@@ -942,7 +942,7 @@ Stress is reduced through deliberate recovery, not ordinary Rest. Stress Recover
 
 Stress Recovery Progress is lost if the patient gains Stress before the Project is completed. A character may be the patient in only one Stress Recovery task per day.
 
-### Willpower
+## Willpower
 
 Willpower represents a character’s capacity to refuse collapse when the body or mind should give way. Base Maximum Willpower is 1. Every 3 Constitution above 1 increases Maximum Willpower by 1.
 
@@ -960,7 +960,7 @@ Spend 1 Willpower to do one of the following:
 
 Willpower cannot reduce Pressure directly. All spent Willpower is restored when the character completes a Stress Recovery Project or completes an Act. An Act is a chapter of the campaign built around one major goal or threat; the GM declares it complete when the crew resolves that goal, usually every 3–5 sessions.
 
-### Mind Breaks
+## Mind Breaks
 
 A Mind Break is a temporary loss of control caused by extreme Pressure. Unless a rule states otherwise, roll 1d6 when a Mind Break triggers. The effect lasts until the character falls unconscious, the immediate danger ends, or another character successfully stabilizes them with a Crisis First Aid or Entertainer task. If a Mind Break contests a forced action from an affliction, the Mind Break takes precedent.
 
@@ -1489,7 +1489,7 @@ Biological augmentations are living replacements and modifications created from 
 
 ## Chapter 4: Keeping Her Flying
 
-## Ship Mechanics
+### Ship Mechanics
 
 Your ship is not a backdrop. It is shelter, transportation, workshop, hospital, farm, weapons platform, and the last barrier between the crew and empty space.
 
@@ -3736,7 +3736,7 @@ Complete the following procedure:
 - Regain 20% of resources, rounded down, for this action
 - +1 to a later roll
 
-## WIT-Based Skill Stunts
+### WIT-Based Skill Stunts
 
 ### Perception
 
@@ -3782,7 +3782,17 @@ The GM may answer any question of the kind above in place of a listed effect. Sp
 - The lift lasts: the target cannot drop below their current Pressure for the rest of the day
 - Get something out of them: a truth, a confession, or a cooperation they had been withholding
 
-### Backgrounds
+## Backgrounds in Detail
+
+The eight Backgrounds in full. Chapter 1 covers choosing one and what a Background ability is; this is the reference for what each one actually does.
+
+Every entry is written the same way, so once you have read one you know where to look in the rest:
+
+- Attribute Bonuses and Skill Bonuses: what the work put in your body and your hands.
+- Signature Trait: the thing you can always do that nobody else at the table can.
+- Background Specialty: choose one of the three at character creation.
+
+The eight are Fleet Marine, Covert Operative, Ship Engineer, Medical Officer, Pilot, Xenobiology Researcher, Logistics and Quartermaster, and Terraformer.
 
 ## Fleet Marine
 
@@ -3988,9 +3998,7 @@ Once per expedition, you may temporarily repurpose one installed mech module as 
 
 The replacement must use no more Slots or Hardpoints than the original module.
 
-The repurposed module functions until the end of the current Scene.
-
-## Afterward
+The repurposed module functions until the end of the current Scene. Afterward:
 
 - It returns to its original function.
 - It becomes Damaged.
@@ -4051,7 +4059,7 @@ During that time:
 - They cannot recover HP.
 - Further damage may still kill them.
 
-## Combat Medic
+#### Combat Medic
 
 Once per combat, perform First Aid on an adjacent character as a Fast Action without making a roll or using a first aid kit.
 
@@ -4117,9 +4125,7 @@ Conditions caused by the event still apply unless they depended entirely on deal
 
 A mech gains one additional Module Slot while you are its pilot. In addition, mechs gain +4 mech hp while you use them.
 
-During installation, designate one module as the Pilot Module.
-
-## The Pilot Module
+During installation, designate one module as the Pilot Module. That module:
 
 - Functions normally while you pilot the mech.
 - Becomes inactive when another character pilots it.
@@ -4457,9 +4463,11 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | 5-6 | Major | Systemic Infection | −2d6 to Constitution rolls. Poisoned until Surgery. |
 | 6-6 | Deadly | Organ Failure | −2d6 to Constitution rolls. Poisoned and Drained. Surgery within four segments or die, and −2 Max HP afterward. |
 
-### Afflictions
+## Affliction Tables
 
-## Category 1: Phobias and Sensory Aversions
+Roll or choose on the category below that fits what happened. The first number is the category and the second is the row.
+
+### Category 1: Phobias and Sensory Aversions
 
 These Afflictions are triggered by specific environments, sensations, bodily signs, or survival threats.
 
@@ -4476,7 +4484,7 @@ These Afflictions are triggered by specific environments, sensations, bodily sig
 | 1–9 | Aversion to Silence | A completely silent or very quiet zone causes 1 Pressure at the end of each Expedition Turn. You automatically fail Stealth Tasks that require remaining entirely silent unless an ally is directly communicating with you. |
 | 1–10 | Fear of Medical Procedures | Suffer −3d6 when performing or receiving First Aid or Surgery. Beginning Surgery causes Frightened until the procedure ends. You cannot benefit from Immunity to Frightened during a medical procedure. |
 
-## Category 2: Threat and Damage-Type Distortions
+### Category 2: Threat and Damage-Type Distortions
 
 These Afflictions distort how the character interprets weapons, organisms, hazards, and incoming harm.
 
@@ -4493,7 +4501,7 @@ These Afflictions distort how the character interprets weapons, organisms, hazar
 | 2–9 | Pain Anticipation | When targeted by a visible damaging attack, you must Dodge or Block if able. If you choose not to or cannot, gain 1 Pressure before the attack resolves. |
 | 2–10 | Threat Misclassification | When encountering an unknown creature, the GM secretly selects one damage type you irrationally believe is effective. Until the creature is successfully Analyzed, suffer −2d6 when attacking it with any other damage type. Obvious evidence may contradict the belief, but does not remove the penalty. |
 
-## Category 3: Compulsions and Dependencies
+### Category 3: Compulsions and Dependencies
 
 These Afflictions create rituals, restrictions, and behaviors the character feels unable to ignore.
 
@@ -4510,7 +4518,7 @@ These Afflictions create rituals, restrictions, and behaviors the character feel
 | 3–9 | Sleep Disruption | Rest restores 1 less Energy. You may benefit from only one Rest per day. If you sleep outside Crew Quarters or another secure sleeping area, begin the next day Disoriented. |
 | 3–10 | Decontamination Ritual | After direct contact with an alien organism, Chemical hazard, bodily fluid, or Contaminated object, you must decontaminate at the next safe opportunity. Until then, you cannot willingly Rest, eat, transfer items, or provide physical Assistance. |
 
-## Category 4: Social and Identity Disturbances
+### Category 4: Social and Identity Disturbances
 
 These Afflictions change how the character relates to other survivors and understands their own role.
 
@@ -4527,7 +4535,7 @@ These Afflictions change how the character relates to other survivors and unders
 | 4–9 | Emotional Contagion | The first time a nearby ally gains Pressure each Scene, you also gain 1 Pressure. Immunity to Frightened does not prevent this effect. |
 | 4–10 | Reassurance Dependence | After you fail a Skilled or Crisis Task, you cannot attempt another non-defensive Task alone. An ally must Assist, communicate reassurance, or spend a Fast Action grounding you. Otherwise suffer −3d6. Suffer -1d6 to all Crisis Tasks. |
 
-## Category 5: Dissociation and Perceptual Distortion
+### Category 5: Dissociation and Perceptual Distortion
 
 These Afflictions interfere with memory, attention, sensory interpretation, and the character’s sense of reality.
 
@@ -4544,7 +4552,7 @@ These Afflictions interfere with memory, attention, sensory interpretation, and 
 | 5–9 | Tunnel Vision | After you attack, Mark, or Analyze a target, all other hostile creatures are treated as Hidden from you until your target leaves the Scene, becomes Downed, or you spend a Fast Action reassessing the situation. |
 | 5–10 | Temporal Dislocation | You begin the first Round of every combat Surprised. If you would already be Surprised, you also become Confused until the end of your first turn. |
 
-## Category 6: Severe Maladaptive States
+### Category 6: Severe Maladaptive States
 
 These afflictions represent major psychological deterioration. Their effects are intentionally severe and may significantly alter a character’s build or behavior.
 
@@ -4561,7 +4569,7 @@ These afflictions represent major psychological deterioration. Their effects are
 | 6–9 | Total Shutdown | When you become Overtaxed, also become Immobilized and Silenced. These conditions remain until an adjacent ally spends a Slow Action grounding you or your Pressure falls below Overtaxed. |
 | 6–10 | No Affliction Here! | Scot-free! |
 
-### Conditions
+## Conditions
 
 | Condition | Effect | Normal Removal |
 | --- | --- | --- |
@@ -5095,7 +5103,7 @@ New monsters, weapons, upgrades, and environments may create conditions beyond t
 
 The Human Century
 
-### Adrift Lore Expanded
+## Adrift Lore Expanded
 
 Humanity’s expansion beyond Earth lasted only one hundred years.
 
