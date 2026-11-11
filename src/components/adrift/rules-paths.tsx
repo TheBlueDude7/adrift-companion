@@ -2,8 +2,10 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { BrainIcon, CpuIcon, SearchIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CYBERNETICS,
   CYBER_LOAD,
@@ -67,6 +69,72 @@ function Panel({ title, icon, children }: { title: string; icon: ReactNode; chil
 const named = (keys: string[]) => keys.flatMap((k) => (MODULE_BY_KEY[k] ? [MODULE_BY_KEY[k]] : []));
 
 export function MechRules() {
+  return (
+    <Tabs defaultValue="frames">
+      <TabsList>
+        <TabsTrigger value="frames" className="px-3">How frames work</TabsTrigger>
+        <TabsTrigger value="modules" className="px-3">Every module</TabsTrigger>
+      </TabsList>
+      <TabsContent value="frames" className="pt-3"><FrameRules /></TabsContent>
+      <TabsContent value="modules" className="pt-3"><ModuleCatalogue /></TabsContent>
+    </Tabs>
+  );
+}
+
+/**
+ * Every module there is, by category.
+ *
+ * The pages above pick out the handful that each make a point, which makes it look as though the rest
+ * were thrown away. They weren't: this is the whole list, and it's read straight off `MECH_MODULES`,
+ * so a module can't exist in the app and be missing from the rules.
+ */
+function ModuleCatalogue() {
+  const [q, setQ] = useState("");
+  const n = q.trim().toLowerCase();
+  const [tier, setTier] = useState<CyberTier | null>(null);
+
+  const shown = MECH_MODULES.filter(
+    (m) => (!n || `${m.name} ${m.category} ${m.effect} ${m.weapon ?? ""}`.toLowerCase().includes(n)) && (!tier || m.tier === tier),
+  );
+
+  return (
+    <div className="grid gap-4">
+      <Search q={q} setQ={setQ} placeholder="Search every mech module…" />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button size="xs" variant={tier === null ? "default" : "outline"} onClick={() => setTier(null)}>All tiers</Button>
+        {TIERS.map((t) => (
+          <Button key={t} size="xs" variant={tier === t ? "default" : "outline"} onClick={() => setTier(t)}>{TIER_LABEL[t]}</Button>
+        ))}
+        <span className="ml-1 text-xs text-muted-foreground">{shown.length} of {MECH_MODULES.length}</span>
+      </div>
+
+      {MODULE_CATEGORIES.map((cat) => {
+        const list = shown.filter((m) => m.category === cat);
+        if (!list.length) return null;
+        return (
+          <Panel key={cat} title={cat} icon={<CpuIcon className="size-4 text-muted-foreground" />}>
+            <RuleTable
+              head={["Module", "Tier", "Slots", "Effect"]}
+              rows={list.map((m) => [
+                <span key="n">
+                  {m.name}
+                  {m.weapon && <span className="text-muted-foreground"> · {m.weapon}</span>}
+                </span>,
+                TIER_LABEL[m.tier],
+                m.slots === 0 ? "—" : m.slots,
+                m.effect,
+              ])}
+            />
+          </Panel>
+        );
+      })}
+
+      {!shown.length && <p className="py-6 text-center text-sm text-muted-foreground">No module matches that.</p>}
+    </div>
+  );
+}
+
+function FrameRules() {
   const [q, setQ] = useState("");
   const n = q.trim().toLowerCase();
   const matches = (s: string) => !n || s.toLowerCase().includes(n);
@@ -81,20 +149,15 @@ export function MechRules() {
 
       <Panel title="What a frame is for" icon={<CpuIcon className="size-4 text-muted-foreground" />}>
         <Note>
-          Surgery changes the person and a graft changes the body. A mech is the only path that changes the <em>room</em>, and that is what it should be bought
-          for. Three things no implant and no strain can do:
+          Surgery changes the person and a graft changes the body. A mech changes the <em>room</em>. Three things no implant and no strain can do:
         </Note>
         <Lines
           items={[
-            "Decide where the ways in and out are. A frame seals a border, collapses one, or tears a shut one open without a Task, which means it decides what the fight's shape is before the shooting starts.",
-            "Build cover for everyone. Cover belongs to the room, not to a sheet, so a barricade shelters the crew who arrive next turn as much as the pilot who raised it.",
-            "Hold a whole zone hostage. A hazard a frame leaves behind keeps hurting things on their turns, which is the only damage in the game that costs nobody an Action.",
+            "Decide where the ways in and out are. A frame seals a border, collapses one, or tears a shut one open without a Task.",
+            "Build cover. Cover belongs to the room rather than to a sheet, so a barricade shelters anyone standing in it, including whoever arrives later.",
+            "Leave something standing in a zone. A hazard a frame plants keeps working on every creature's own turn, including the ones that walk in after it left.",
           ]}
         />
-        <Note>
-          That last one is why frames scale into the endgame. Everyone is capped at one attack a turn, so a crew clearing a room full of xenos is not out-damaging
-          them — it is making the room do some of the killing, and standing somewhere the room can&apos;t reach back.
-        </Note>
       </Panel>
 
       {chassis.length > 0 && (
@@ -132,8 +195,8 @@ export function MechRules() {
       {room.length > 0 && (
         <Panel title="Owning the room" icon={<CpuIcon className="size-4 text-muted-foreground" />}>
           <Note>
-            Everything here edits the site rather than the frame. The GM&apos;s Site tab is where it lands: borders have a state, rooms have a Cover level, and
-            standing hazards are real, so the app charges the toll instead of the table remembering to.
+            Everything here edits the site rather than the frame, and the Site tab is where it lands: borders have a state, rooms have a Cover level, and standing
+            hazards are tracked, so the app charges the toll rather than the table remembering to.
           </Note>
           <RuleTable head={["Module", "Tier", "Slots", "What it does to the room"]} rows={room.map((m) => [m.name, TIER_LABEL[m.tier], m.slots, m.effect])} />
         </Panel>
@@ -142,14 +205,9 @@ export function MechRules() {
       {support.length > 0 && (
         <Panel title="Carrying the crew" icon={<CpuIcon className="size-4 text-muted-foreground" />}>
           <Note>
-            A frame is a large machine with four crew&apos;s worth of lifting in it, and that should be worth something to the four crew. These spend the mech&apos;s
-            size on somebody else: the Downed, the overloaded, and the one who needed a second shot this Round.
+            A frame is a large machine with four crew&apos;s worth of lifting in it. These spend that on somebody other than the pilot.
           </Note>
           <RuleTable head={["Module", "Tier", "Slots", "What the crew gets"]} rows={support.map((m) => [m.name, TIER_LABEL[m.tier], m.slots, m.effect])} />
-          <Note>
-            An Overwatch Relay is the exception worth naming twice. The action economy gives everyone one Slow and one Fast a turn, which means one attack and no
-            more; Overwatch is the only way to shoot outside your own turn, and this is the only thing in the game that hands it out for free.
-          </Note>
         </Panel>
       )}
 
@@ -171,7 +229,8 @@ export function MechRules() {
             <Lines items={MECH_COMPLICATIONS} />
           </div>
           <Note>
-            The full module list, by category, is on the Mech tab: {MODULE_CATEGORIES.join(", ")}. There are {MECH_MODULES.length} of them.
+            All {MECH_MODULES.length} modules are under &ldquo;Every module&rdquo; above, in {MODULE_CATEGORIES.length} categories: {MODULE_CATEGORIES.join(", ")}.
+            Fitting them to a frame is done on the Mechs tab.
           </Note>
         </Panel>
       )}
@@ -204,7 +263,7 @@ export function CyberRules() {
           items={[
             "Known technology. Unlike alien biology, the crew start knowing the whole tree — Tier I needs no research at all. What stops them is materials, a Workshop, a Medical Bay, and a surgeon.",
             "Load is the price. Each system contributes its deepest Tier, and the total is what the body is carrying.",
-            "Load is also the reward: it buys Dampening, which is the one resource in the game that removes variance rather than adding power.",
+            "Load is also what buys Dampening, so depth pays for itself in a way breadth doesn't.",
           ]}
         />
       </Panel>
@@ -226,8 +285,8 @@ export function CyberRules() {
             ]}
           />
           <Note>
-            Dampening also halves itself into Surge Dice: a biological survivor with wiring gets fewer of them, because the Surge the flesh feeds on is the same
-            Pressure the wiring is filtering out. Depth in both paths is a real trade, not a stack.
+            Half of a character&apos;s Dampening, rounded down, also comes off their Surge Dice: the Surge the flesh feeds on is the same Pressure the wiring is
+            filtering out.
           </Note>
         </Panel>
       )}
