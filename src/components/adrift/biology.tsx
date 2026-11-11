@@ -35,8 +35,8 @@ import {
   milestones,
   surgePool,
 } from "@/lib/biology";
-import { uid } from "@/lib/dice";
 import { useGame } from "@/lib/store";
+import { installBySurgery } from "@/lib/surgery";
 import type { Character, GameState } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
@@ -142,22 +142,23 @@ function GraftDialog({ c }: { c: Character }) {
   function graft() {
     if (!def) return;
     act(`Graft ${def.name}`, (g) => {
-      const who = char(g, c.id);
-      who.biology = [...(who.biology ?? []), { id: uid(), key: def.key, choice: choice.trim() }];
-      const out = [`${who.name} is grafted with a ${def.name} (${BIO_TIER_LABEL[def.tier]} ${def.tree === "adaptive" ? "Adaptive" : "Utility"}). It takes hold over a full Rest.`];
-      if (force) out.push(`The GM forced the graft (${blocker}).`);
+      const out: string[] = [];
+      installBySurgery(g, char(g, c.id), { kind: "bio", key: def.key, choice }, out, { forcedBy: blocker ?? undefined });
+      out.push("Recorded by the GM rather than performed as a Surgery.");
       return out;
     });
     setOpen(false);
   }
 
+  if (!isGM) return null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setKey(null); }}>
-      <DialogTrigger render={<Button size="sm" variant="outline"><DnaIcon /> Graft augmentation</Button>} />
+      <DialogTrigger render={<Button size="sm" variant="outline"><DnaIcon /> Graft augmentation (GM)</Button>} />
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Graft a biological augmentation</DialogTitle>
-          <DialogDescription>Only what the lab has grown can be grafted, at any tier, and a cultivation belongs to the whole crew once it exists. Nobody has a limit on how many they carry.</DialogDescription>
+          <DialogTitle>Graft an augmentation without a Surgery</DialogTitle>
+          <DialogDescription>The crew graft by planning a Surgery, which spends a segment and can fail. This writes one straight onto the sheet instead. Only what the lab has grown can be grafted, at any tier, and a cultivation belongs to the whole crew once it exists. Nobody has a limit on how many they carry.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-1">
           {BIO_TREES.map((t) => (

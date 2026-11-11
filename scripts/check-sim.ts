@@ -3,7 +3,8 @@
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
 import { advanceProject, extraTaskBlocker, fitOptions, newAction, openProjects, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
-import { MECH_MODULE_RECIPES } from "../src/lib/crafting";
+import { IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, RECIPE_BY_NAME } from "../src/lib/crafting";
+import { CYBERNETICS, implantName } from "../src/data/cybernetics";
 import { MECH_MODULES } from "../src/data/mechs";
 import { FACILITY_BY_NAME } from "../src/data/ship-upgrades";
 import { uid } from "../src/lib/dice";
@@ -568,16 +569,71 @@ function bench(components: number) {
   check("while a Makeshift Bench can't take its materials", taskTerms(g, build(vault.name)).blocker, "Tier III materials need an Advanced Fabricator");
 }
 
+// An implant is a thing that exists before anyone wears it: built at the bench around a Cybernetic
+// Core, kept in the hold, and cut in by a surgeon who can fail.
+{
+  check("every implant recipe is built around a Cybernetic Core", IMPLANT_ITEM_RECIPES.filter((r) => !r.inputs.some((i) => i.name === "Cybernetic Core")).map((r) => r.name), []);
+  check("and the Core itself only comes out of a Cybernetics Lab", RECIPE_BY_NAME["Cybernetic Core"].station, "cyberlab");
+  check("one recipe each, and a Replacement for every Tier I", IMPLANT_ITEM_RECIPES.length, CYBERNETICS.length + CYBERNETICS.filter((d) => d.tier === 1).length);
+  check("all of them known to the bench", IMPLANT_ITEM_RECIPES.every((r) => RECIPE_BY_NAME[r.name] === r), true);
+
+  const g = world();
+  const [medic, patient] = g.characters;
+  medic.skills.engineering = 4;
+  medic.skills.surgery = 5;
+  const limb = CYBERNETICS.find((d) => d.tier === 1 && d.system === "structural")!;
+  const item = implantName(limb);
+  const build = () => ({ ...newAction(g, medic, "Fabricate Implant"), crafts: [item] });
+
+  check("the bench knows the task", tasks(g).includes("Fabricate Implant") || skipped(g).some((s) => s.startsWith("Fabricate Implant")), true);
+  check("and without a Core it refuses", permissionReasons(g, build()).some((r) => r.includes("Cybernetic Core")), true);
+  for (const [name, qty] of [["Cybernetic Core", 1], ["Scrap Metal", 2], ["Scrap Components", 3], ["Basic Adhesive", 1]] as const) stockItem(g, name, qty, { category: "Material" });
+  check("stocked, it's Routine at Engineering 4", taskTerms(g, build()).routine, true);
+  check("at the 2 Energy the cybernetics rules ask", taskTerms(g, build()).energy, 2);
+  check("and clear to build", permissionReasons(g, build()), []);
+  resolveAction(g, (g.actions.push(build()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the implant lands in the hold", supplyCount(g, item), 1);
+  check("and the Core is spent", supplyCount(g, "Cybernetic Core"), 0);
+
+  // Nobody fits it by hand: it's a Surgery, with a patient, a theatre, and tools.
+  stockItem(g, "Surgical Tools", 1);
+  const install = { kind: "cyber" as const, key: limb.key };
+  const cut = () => ({ ...newAction(g, medic, "Surgery"), subjectId: patient.id, install });
+  check("the implant is what the Surgery is for", taskTerms(g, cut()).blocker, null);
+  check("and it's offered as one", legalOptions(g, medic).options.some((o) => o.action.install?.key === limb.key), true);
+  check("while an implant nobody built isn't", taskTerms(g, { ...cut(), install: { kind: "cyber", key: CYBERNETICS.find((d) => d.tier === 1 && d.system === "sensory")!.key } }).blocker?.startsWith("No "), true);
+
+  // A failure costs the segment and the patient's HP. The implant is still on the tray.
+  const lost: GameState = structuredClone(g);
+  resolveAction(lost, (lost.actions.push(cut()), lost.actions.at(-1)!.id), { status: "failed", energy: 0, outcome: "" });
+  check("a failed operation installs nothing", (lost.characters[1].cybernetics ?? []).length, 0);
+  check("and the implant is still in the hold", supplyCount(lost, item), 1);
+  check("but the patient paid for it", lost.characters[1].hp < patient.hp, true);
+
+  // The implant's tier decides the room, the way a recipe's materials decide the bench.
+  const rough: GameState = structuredClone(g);
+  for (const r of rough.ship.rooms.filter((r) => r.module === "Medical Bay")) r.condition = "Destroyed";
+  check("and a wrecked Medical Bay is nowhere to do it", taskTerms(rough, cut()).blocker, "A Tier I implant needs somewhere to operate: a Medical Bay, or a Mobile Surgical Cradle");
+
+  resolveAction(g, (g.actions.push(cut()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("a successful one fits it", (g.characters[1].cybernetics ?? []).map((i) => i.key), [limb.key]);
+  check("and takes it out of the hold", supplyCount(g, item), 0);
+  check("so it can't be fitted twice", taskTerms(g, cut()).blocker?.startsWith("No "), true);
+}
+
 // Surgery spends the patient's segment as well as the surgeon's.
 {
   const g = world();
   const [medic, patient] = g.characters;
   medic.skills.surgery = 5;
-  const cut = () => ({ ...newAction(g, medic, "Surgery"), subjectId: patient.id });
+  addInjury(g, patient, INJURY_TABLE.find((e) => e.name === "Crushed Torso")!, []);
+  stockItem(g, "Surgical Tools", 1);
+  const cut = () => ({ ...newAction(g, medic, "Surgery"), subjectId: patient.id, injuryId: patient.injuries[0].id });
 
   check("it needs to know who's on the table", taskTerms(g, { ...newAction(g, medic, "Surgery") }).blocker, "Pick who's on the table");
   check("and nobody operates on themselves", taskTerms(g, { ...newAction(g, medic, "Surgery"), subjectId: medic.id }).blocker, "Nobody operates on themselves");
-  check("with a patient named, it stands", taskTerms(g, cut()).blocker, null);
+  check("it also needs to know what it's for", taskTerms(g, { ...cut(), injuryId: null }).blocker, "Pick the injury to operate on, or the implant to install");
+  check("with a patient and an injury named, it stands", taskTerms(g, cut()).blocker, null);
 
   // Once the surgery is planned, the patient's own segment is gone.
   g.actions.push(cut());

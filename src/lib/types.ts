@@ -127,6 +127,26 @@ export type Character = {
  * One biological augmentation grown into a survivor. Unlike an implant it has no location and no
  * Load — what it costs is written into the upgrade, as a Backlash and usually as a hungrier body.
  */
+/**
+ * What a Surgery is putting in, when it's installing rather than operating on an injury.
+ *
+ * The same operation covers both paths: a cybernetic is cut in, a strain is grafted on, and either
+ * way somebody has to be opened up by a surgeon who can fail.
+ */
+export type SurgeryInstall = {
+  kind: "cyber" | "bio";
+  /** Key into CYBERNETICS or BIOLOGY. */
+  key: string;
+  /** Tier I cybernetics only: the cheaper build that restores function and grants nothing. */
+  replacement?: boolean;
+  /** Body location for a Tier I cybernetic. Upgrades take their prerequisite's. */
+  location?: string;
+  /** The installed implant a Tier II upgrade replaces, when the surgeon picks one. */
+  replaceId?: string;
+  /** Sensor modes, covered organs, and anything else chosen on the table. */
+  choice?: string;
+};
+
 export type InstalledBio = {
   id: string;
   /** Key into BIOLOGY. */
@@ -691,6 +711,8 @@ export type SegmentAction = {
   subjectId?: string | null;
   /** The patient's injury a Surgery operates on. */
   injuryId?: string | null;
+  /** What a Surgery installs, when it's fitting an implant instead of operating on an injury. */
+  install?: SurgeryInstall | null;
   /** Recipe names to fabricate, duplicates allowed. Cooking, medicine, and salvage use the first. */
   crafts?: string[];
   /** Skill a Train Skill task practices. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckIcon, ClipboardListIcon, DicesIcon, FlameIcon, HandIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,11 +15,14 @@ import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, salvageTarget, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
-import { operable } from "@/lib/surgery";
+import { BIO_TIER_LABEL } from "@/data/biology";
+import { CYBER_BY_KEY, TIER_LABEL } from "@/data/cybernetics";
+import { bioDef } from "@/lib/bio-catalogue";
+import { installable, installLabel, operable, surgeryInstallBlocker } from "@/lib/surgery";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
-import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, MECH_MODULE_RECIPES, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
+import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, fabricateCost, IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, galleyPenalty, MEDICINE_RECIPES, RECIPE_BY_NAME, recipeSkills, SALVAGE_RECIPES, salvageParts, stationLevel, stationLevelName } from "@/lib/crafting";
 import { maxEnergy, skillLevel } from "@/lib/derive";
 import { SPACE_TILES, SPACE_TILE_BY_KEY, cellKey, tileDistance, tileLabel } from "@/lib/maps";
 import { planMove, shipMap } from "@/lib/power";
@@ -28,7 +31,7 @@ import { haveInStorage, recipeText, shortfalls, toolkitCharges } from "@/lib/sto
 import { useGame } from "@/lib/store";
 import { resolveOwnTask, type TaskStep } from "@/lib/sync/client";
 import type { CraftRecipe } from "@/data/crafting";
-import type { Character, GameState, Line, SegmentAction, SpaceTile, StarMap, TilePos } from "@/lib/types";
+import type { Character, GameState, Line, SegmentAction, SpaceTile, StarMap, SurgeryInstall, TilePos } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { Dice, EmptyState, Pill, Stepper } from "./common";
@@ -296,6 +299,54 @@ function InjuryPicker({ patientId, value, onChange }: { patientId: string; value
   );
 }
 
+/**
+ * What a Surgery is for: a wound, a cybernetic, or a graft. The implants on offer are the ones that
+ * actually exist — a cybernetic in the hold, a strain the lab has grown — so the list is also the
+ * answer to why the crew can't have one yet.
+ */
+function InstallPicker({ surgeonId, patientId, value, onChange }: { surgeonId: string; patientId: string; value: SurgeryInstall | null | undefined; onChange: (v: SurgeryInstall | null) => void }) {
+  const game = useGame((s) => s.game);
+  const patient = game.characters.find((x) => x.id === patientId);
+  const options = useMemo(
+    () =>
+      (patient ? installable(game, patient) : []).map((x) => ({
+        x,
+        label: installLabel(x),
+        detail: x.kind === "cyber" ? `${TIER_LABEL[CYBER_BY_KEY[x.key].tier]} cybernetic · ${haveInStorage(game, installLabel(x))} in the hold` : `${BIO_TIER_LABEL[bioDef(x.key)!.tier]} ${bioDef(x.key)!.tree === "adaptive" ? "Adaptive" : "Utility"} strain · grown`,
+      })),
+    [game, patient],
+  );
+  if (!patient) return null;
+
+  const id = (x: SurgeryInstall) => `${x.kind}:${x.key}:${x.replacement ? "r" : ""}`;
+  const picked = value ? options.find((o) => id(o.x) === id(value)) : undefined;
+  const why = value ? surgeryInstallBlocker(game, patient, value, false, surgeonId) : null;
+
+  return (
+    <div className="grid gap-1.5">
+      <Label>Implant to install</Label>
+      {options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nothing to install: no cybernetic in the hold, and no strain grown in the lab. A Fabricate Implant task builds the first; a Biological Cultivation project grows the second.</p>
+      ) : (
+        <Select value={picked ? id(picked.x) : "none"} onValueChange={(v) => onChange(v === "none" ? null : (options.find((o) => id(o.x) === v)?.x ?? null))}>
+          <SelectTrigger className="w-full" aria-label="Implant to install"><SelectValue>{picked?.label ?? "Pick an implant"}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Pick an implant</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={id(o.x)} value={id(o.x)}>
+                {o.label}
+                <span className="text-muted-foreground"> · {o.detail}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {why && <p className="text-[11px] text-amber-200/90">{why}.</p>}
+      {value?.kind === "cyber" && !why && <p className="text-[11px] text-muted-foreground">The implant leaves the hold only if the operation succeeds. A failure costs the segment and the patient&apos;s HP.</p>}
+    </div>
+  );
+}
+
 /** What an Assist will and won't do for the task it's helping, before anyone spends a segment on it. */
 function AssistPreview({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);
@@ -528,7 +579,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
   const projects = openProjects(game);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
-  const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage" || def.effect === "mechmod";
+  const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage" || def.effect === "mechmod" || def.effect === "implant";
   const pushing = extra && !existing;
   const clash = restPushConflict(view, pushing ? { ...draft, extra: true } : draft);
   const missing =
@@ -538,7 +589,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     (def.effect === "assist" && !draft.assists) ||
     (needsRecipe && !draft.crafts?.length) ||
     ((def.effect === "calm" || def.effect === "surgery" || def.effect === "prep") && !draft.subjectId) ||
-    (def.effect === "surgery" && !draft.injuryId) ||
+    (def.effect === "surgery" && !draft.injuryId && !draft.install?.key) ||
     (def.effect === "fit" && !draft.fit) ||
     (def.effect === "train" && !draft.trainSkill);
 
@@ -553,6 +604,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (!needsRecipe) delete d.crafts;
     if (def.effect !== "calm" && def.effect !== "surgery" && def.effect !== "prep") d.subjectId = null;
     if (def.effect !== "surgery") d.injuryId = null;
+    if (def.effect !== "surgery" || !d.install?.key) d.install = null;
     if (def.effect !== "fit") d.fit = null;
     if (def.effect !== "train") delete d.trainSkill;
     if (def.effect !== "search") delete d.thorough;
@@ -640,6 +692,15 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               note="The finished module goes into the hold, and the Mechs tab fits it from there. A failed build loses half the materials, rounded up."
             />
           )}
+          {def.effect === "implant" && (
+            <RecipePicker
+              label="Implant"
+              recipes={IMPLANT_ITEM_RECIPES}
+              value={draft.crafts ?? []}
+              onChange={(v) => set({ crafts: v })}
+              note="Every implant is built around a Cybernetic Core, which only a Cybernetics Lab makes. The finished implant goes into the hold, and a Surgery installs it from there. A failed build loses half the materials, rounded up."
+            />
+          )}
           {def.effect === "salvage" && (
             <RecipePicker
               label="Item to take apart"
@@ -654,11 +715,23 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
             <SubjectPicker
               c={c}
               value={draft.subjectId}
-              onChange={(v) => set({ subjectId: v, injuryId: null })}
+              onChange={(v) => set({ subjectId: v, injuryId: null, install: null })}
               label={def.effect === "surgery" ? "Who is on the table" : def.effect === "prep" ? "Who is being prepped" : "Who to settle"}
             />
           )}
-          {def.effect === "surgery" && draft.subjectId && <InjuryPicker patientId={draft.subjectId} value={draft.injuryId} onChange={(v) => set({ injuryId: v })} />}
+          {def.effect === "surgery" && draft.subjectId && (
+            <>
+              <div className="flex flex-wrap gap-1">
+                <Button size="xs" variant={draft.install ? "outline" : "default"} onClick={() => set({ install: null })}>Operate on an injury</Button>
+                <Button size="xs" variant={draft.install ? "default" : "outline"} onClick={() => set({ injuryId: null, install: draft.install ?? { kind: "cyber", key: "" } })}>Install an implant</Button>
+              </div>
+              {draft.install ? (
+                <InstallPicker surgeonId={c.id} patientId={draft.subjectId} value={draft.install.key ? draft.install : null} onChange={(v) => set({ install: v ?? { kind: "cyber", key: "" } })} />
+              ) : (
+                <InjuryPicker patientId={draft.subjectId} value={draft.injuryId} onChange={(v) => set({ injuryId: v })} />
+              )}
+            </>
+          )}
           {(def.effect === "course" || def.effect === "scan") && (
             <TargetPicker move={def.effect === "course"} value={draft.target ? { x: draft.target.x, y: draft.target.y } : null} onChange={(p) => { const m = shipMap(game); set({ target: p && m ? { mapId: m.id, ...p } : null }); }} />
           )}

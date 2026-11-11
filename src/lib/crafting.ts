@@ -1,5 +1,5 @@
 import { RECIPES, REFINING, recipeMaterialTier, type CraftRecipe, type Station } from "@/data/crafting";
-import type { Recipe } from "@/data/cybernetics";
+import { CYBERNETICS, CYBER_SYSTEM_BY_KEY, IMPLANT_RECIPES, implantName, type CyberTier, type Recipe } from "@/data/cybernetics";
 import { MECH_MODULES, MODULE_RECIPES, moduleItemName } from "@/data/mechs";
 import { ladderFor } from "@/data/ship-upgrades";
 import { SKILLS, type ItemTier, type SkillKey } from "./rules";
@@ -102,6 +102,37 @@ export const MECH_MODULE_RECIPES: CraftRecipe[] = MECH_MODULES.map((m) => ({
   notes: m.effect,
 }));
 
+/** Routine Thresholds the cybernetics rules set for building an implant, by its tier. */
+const IMPLANT_THRESHOLD: Record<CyberTier, number> = { 1: 4, 2: 6, 3: 8 };
+
+/**
+ * Cybernetic implants as workbench recipes, so an implant is a thing that exists in the hold rather
+ * than something a surgery dialog conjures when it needs one.
+ *
+ * Every one of them is built around a Cybernetic Core, which only a Cybernetics Lab can make, so the
+ * whole path runs through a room the crew has to build: Lab for the Core, Workshop for the implant,
+ * Medical Bay for the Surgery that puts it in. A Tier I implant also has a Replacement recipe, which
+ * is the cheaper build that restores function and grants nothing.
+ */
+export const IMPLANT_ITEM_RECIPES: CraftRecipe[] = CYBERNETICS.flatMap((d) => {
+  const base = (replacement: boolean): CraftRecipe => ({
+    name: implantName(d, replacement),
+    category: "Equipment",
+    tier: MODULE_TIER_NAME[d.tier],
+    skill:
+      d.tier === 3
+        ? `Engineering ${IMPLANT_THRESHOLD[3]}`
+        : `Engineering ${IMPLANT_THRESHOLD[d.tier]} or Mechanical Technician ${IMPLANT_THRESHOLD[d.tier]}`,
+    inputs: IMPLANT_RECIPES[replacement ? "replacement" : d.tier],
+    toolkit: 1,
+    station: "workshop",
+    output: 1,
+    notes: `${MODULE_TIER_NAME[d.tier]} ${CYBER_SYSTEM_BY_KEY[d.system].name} cybernetic.${replacement ? " Replacement: restores function, grants nothing, and can't be upgraded until it's made Enhanced." : ""} ${d.effects.join(" ")}`,
+  });
+  // Only Tier I implants can be fitted as Replacements, so only they get the cheaper recipe.
+  return d.tier === 1 ? [base(false), base(true)] : [base(false)];
+});
+
 /** Dice a rough galley costs every roll made in it: −4d6 Improvised, −2d6 Operational, none in a Processing Suite. */
 export const galleyPenalty = (level: number) => (level >= 3 ? 0 : level === 2 ? 2 : 4);
 
@@ -122,9 +153,10 @@ export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra 
   stockOutput(g, RECIPE_BY_NAME[made.name] ?? recipe, made.name, made.qty);
   return `${success ? "Cooked" : "Botched"} ${recipe.name}: ${made.qty}× ${made.name} added to ship storage (${spent}).`;
 }
-// Mech modules are in the lookup but not in `FABRICATE_RECIPES`, so the bench knows how to price
-// one without the Fabricate menu growing by sixty entries. They have their own task.
-export const RECIPE_BY_NAME = Object.fromEntries([...RECIPES, ...MECH_MODULE_RECIPES].map((r) => [r.name, r])) as Record<string, CraftRecipe>;
+// Mech modules and implants are in the lookup but not in `FABRICATE_RECIPES`, so the bench knows how
+// to price one without the Fabricate menu growing by a hundred and fifty entries. They have their
+// own tasks.
+export const RECIPE_BY_NAME = Object.fromEntries([...RECIPES, ...MECH_MODULE_RECIPES, ...IMPLANT_ITEM_RECIPES].map((r) => [r.name, r])) as Record<string, CraftRecipe>;
 
 const TIER_THRESHOLD: Record<string, number> = { "Tier I": 3, "Tier II": 6, "Tier III": 9 };
 

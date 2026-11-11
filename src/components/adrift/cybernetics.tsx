@@ -42,10 +42,10 @@ import {
   upgradeTargets,
   type Installed,
 } from "@/lib/cyber";
-import { uid } from "@/lib/dice";
+import { installBySurgery } from "@/lib/surgery";
 import { pilotedMech, portedImplants } from "@/lib/mechs";
 import { ATTRIBUTES } from "@/lib/rules";
-import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
+import { haveInStorage, recipeText, shortfalls, spend, stockItem } from "@/lib/stock";
 import { useGame } from "@/lib/store";
 import type { Character, GameState } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
@@ -54,7 +54,8 @@ import { EmptyState, Pill } from "./common";
 
 const char = (g: GameState, id: string) => g.characters.find((c) => c.id === id)!;
 
-type Source = "storage" | "fabricate" | "untracked";
+/** Where the GM's override gets the hardware: out of the hold, or from nowhere. */
+type Source = "storage" | "untracked";
 
 function MaterialsLine({ recipe, className }: { recipe: { name: string; qty: number }[]; className?: string }) {
   const game = useGame((s) => s.game);
@@ -185,6 +186,10 @@ export function CyberneticsPanel({ c }: { c: Character }) {
   );
 }
 
+/**
+ * The GM's way to put an implant in without an operation: a correction, a prisoner's existing chrome,
+ * a backstory. The crew's way is the Surgery task, which costs a segment and can fail.
+ */
 function InstallDialog({ c }: { c: Character }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
@@ -195,7 +200,7 @@ function InstallDialog({ c }: { c: Character }) {
   const [replacement, setReplacement] = useState(false);
   const [replaceId, setReplaceId] = useState("none");
   const [choice, setChoice] = useState("");
-  const [source, setSource] = useState<Source>("fabricate");
+  const [source, setSource] = useState<Source>("storage");
   const { isGM } = usePerms();
 
   const def = key ? CYBER_BY_KEY[key] : null;
@@ -205,7 +210,6 @@ function InstallDialog({ c }: { c: Character }) {
   const free = def ? freeLocations(c, def) : [];
   const sides = def && force && free.length === 0 ? bodyLocations(def) : free;
   const targets = def ? upgradeTargets(c, def) : [];
-  const recipe = def ? IMPLANT_RECIPES[replacement ? "replacement" : def.tier] : [];
   const itemName = def ? implantName(def, replacement) : "";
   const inStorage = def ? haveInStorage(game, itemName) : 0;
   const plan = def ? planInstall(c, def, { location, replaceId: replaceId === "none" ? undefined : replaceId }) : null;
@@ -217,7 +221,7 @@ function InstallDialog({ c }: { c: Character }) {
     setLocation(freeLocations(c, d)[0] ?? bodyLocations(d)[0] ?? "");
     const t = upgradeTargets(c, d);
     setReplaceId(t[0]?.inst.id ?? "none");
-    setSource(haveInStorage(game, implantName(d)) > 0 ? "storage" : isGM && installBlocker(game, c, d) ? "untracked" : "fabricate");
+    setSource(haveInStorage(game, implantName(d)) > 0 ? "storage" : "untracked");
   }
 
   function install() {
@@ -225,33 +229,29 @@ function InstallDialog({ c }: { c: Character }) {
     act(`Install ${def.name}`, (g) => {
       const who = char(g, c.id);
       const out: string[] = [];
-      if (source === "storage") takeOne(g, itemName);
-      if (source === "fabricate") spend(g, recipe);
-      const absorbed = (who.cybernetics ?? []).filter((i) => plan.removes.includes(i.id));
-      who.cybernetics = [
-        ...(who.cybernetics ?? []).filter((i) => !plan.removes.includes(i.id)),
-        { id: uid(), key: def.key, location: plan.location, replacement, damaged: false, lineage: plan.lineage, choice: choice.trim() },
-      ];
-      out.push(`${who.name} receives a ${replacement ? "Replacement " : ""}${def.name} (${TIER_LABEL[def.tier]}, ${plan.location}) through Surgery.`);
-      if (force) out.push(`The GM forced the install (${blocker}).`);
-      if (absorbed.length) out.push(`It ${def.tier === 3 ? "integrates" : "replaces"} ${absorbed.map((i) => CYBER_BY_KEY[i.key]?.name ?? i.key).join(", ")}.`);
-      if (source === "storage") out.push(`Used the ${itemName} from the hold.`);
-      if (source === "fabricate") out.push(`Fabricated from ${recipeText(recipe)}.`);
+      installBySurgery(
+        g,
+        who,
+        { kind: "cyber", key: def.key, replacement, location, replaceId: replaceId === "none" ? undefined : replaceId, choice },
+        out,
+        { forcedBy: blocker ?? undefined, untracked: source === "untracked" },
+      );
+      out.push(`Recorded by the GM rather than performed as a Surgery${source === "untracked" ? ", with no implant spent for it" : ""}.`);
       return out;
     });
     setOpen(false);
   }
 
-  const short = shortfalls(game, recipe);
-  const canInstall = !!def && (!blocker || force) && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0) && (source !== "fabricate" || short.length === 0) && (source !== "untracked" || isGM);
+  const canInstall = isGM && !!def && (def.tier === 1 ? sides.length > 0 : true) && (source !== "storage" || inStorage > 0);
+  if (!isGM) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setKey(null); }}>
-      <DialogTrigger render={<Button size="sm" variant="outline"><CpuIcon /> Install cybernetic</Button>} />
+      <DialogTrigger render={<Button size="sm" variant="outline"><CpuIcon /> Install cybernetic (GM)</Button>} />
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Install a cybernetic</DialogTitle>
-          <DialogDescription>Tier I technology is available from the start. Tier II and III need crew research first. Upgrades replace or integrate the implants they build on.</DialogDescription>
+          <DialogTitle>Install a cybernetic without a Surgery</DialogTitle>
+          <DialogDescription>The crew install implants by planning a Surgery, which spends a segment and can fail. This writes one straight onto the sheet instead, for the implants a survivor already arrived with and for fixing the record.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-1">
           {CYBER_SYSTEMS.map((s) => (
@@ -308,7 +308,7 @@ function InstallDialog({ c }: { c: Character }) {
                     )}
                     {def.tier === 1 && (
                       <label className="flex items-start gap-2 text-xs">
-                        <Checkbox checked={replacement} onCheckedChange={(v) => { setReplacement(!!v); setSource(haveInStorage(game, implantName(def, !!v)) > 0 ? "storage" : "fabricate"); }} />
+                        <Checkbox checked={replacement} onCheckedChange={(v) => { setReplacement(!!v); setSource(haveInStorage(game, implantName(def, !!v)) > 0 ? "storage" : "untracked"); }} />
                         <span>
                           Standard Replacement: restores normal function only.{def.replacement && ` ${def.replacement}`} No Enhanced abilities or Load, half the materials, and it can&apos;t be upgraded to Tier II until it&apos;s made Enhanced.
                         </span>
@@ -342,18 +342,16 @@ function InstallDialog({ c }: { c: Character }) {
                       <Label>Implant</Label>
                       <Select value={source} onValueChange={(v) => setSource(v as Source)}>
                         <SelectTrigger size="sm" className="w-full">
-                          <SelectValue>{source === "storage" ? `Use ${itemName} from the hold` : source === "fabricate" ? "Fabricate it now from ship storage" : "Don't track materials"}</SelectValue>
+                          <SelectValue>{source === "storage" ? `Take the ${itemName} from the hold` : "Don't take one from the hold"}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="storage" disabled={inStorage === 0}>Use {itemName} from the hold ({inStorage})</SelectItem>
-                          <SelectItem value="fabricate">Fabricate it now from ship storage</SelectItem>
-                          {isGM && <SelectItem value="untracked">Don&apos;t track materials</SelectItem>}
+                          <SelectItem value="storage" disabled={inStorage === 0}>Take the {itemName} from the hold ({inStorage})</SelectItem>
+                          <SelectItem value="untracked">Don&apos;t take one from the hold</SelectItem>
                         </SelectContent>
                       </Select>
-                      {source === "fabricate" && <MaterialsLine recipe={recipe} />}
-                      {source === "fabricate" && def.tier > 1 && <p className="text-[11px] text-muted-foreground">Fabricate: {FABRICATE_TASK[def.tier]}.</p>}
+                      <p className="text-[11px] text-muted-foreground">An implant is built at the bench with a Fabricate Implant task: {FABRICATE_TASK[def.tier]}. Every one of them needs a Cybernetic Core from the Cybernetics Lab.</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Install: {SURGERY_TASK[def.tier]}. On failure the implant stays intact.</p>
+                    <p className="text-[11px] text-muted-foreground">The crew&apos;s route is a Surgery: {SURGERY_TASK[def.tier]}. On a failure the implant goes back in the hold intact.</p>
                   </>
                 )}
               </>

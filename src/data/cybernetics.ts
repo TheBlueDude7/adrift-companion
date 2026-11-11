@@ -484,4 +484,6 @@ export const SURGERY_TASK: Record<CyberTier, string> = {
   3: "Surgery (always Crisis), 3 Energy, 2 segments, Grade III Medical Bay, Advanced Surgical Toolkit",
 };
 
-export const implantName = (def: Pick<CyberDef, "name">, replacement = false) => `${def.name} implant${replacement ? " (Replacement)" : ""}`;
+/** The item an implant is in the hold. One of them is already called an Implant, so it keeps its name. */
+export const implantName = (def: Pick<CyberDef, "name">, replacement = false) =>
+  `${def.name}${/implant$/i.test(def.name) ? "" : " implant"}${replacement ? " (Replacement)" : ""}`;

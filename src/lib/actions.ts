@@ -8,7 +8,7 @@ import { recordSearch } from "./expedition";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { conditionPenalty, type ConditionAsk } from "./conditions";
 import { buyTime, deadlineWhen, injuryPenalty } from "./injuries";
-import { operable, performSurgery, PREP_DICE, prepped, surgeryInjuryBlocker, surgicalToolsFor, theatreFor } from "./surgery";
+import { operable, performSurgery, PREP_DICE, prepped, surgeryInjuryBlocker, surgeryInstallBlocker, surgicalToolsFor, theatreFor } from "./surgery";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip, shipMap } from "./power";
@@ -50,7 +50,7 @@ export function energyShort(g: GameState, a: SegmentAction) {
 /** What stops a Fabricate or Prepare Food task from working on its own: missing stations and a short hold. */
 export function craftProblems(g: GameState, a: SegmentAction): string[] {
   const effect = taskFor(a).effect;
-  if ((effect !== "craft" && effect !== "cook" && effect !== "mechmod") || !a.crafts?.length) return [];
+  if ((effect !== "craft" && effect !== "cook" && effect !== "mechmod" && effect !== "implant") || !a.crafts?.length) return [];
   // A name nothing recognises used to cost nothing and pass as Routine, because every step that
   // reads a recipe skipped it quietly. Say so instead: the hold, the check and the station all
   // depend on knowing what's being made.
@@ -65,6 +65,7 @@ export function craftProblems(g: GameState, a: SegmentAction): string[] {
       ? [
           effect === "cook" ? "More than one recipe in a cook"
           : effect === "mechmod" ? "More than one mech module in a segment"
+          : effect === "implant" ? "More than one implant in a segment"
           : `More than ${limit} item${limit > 1 ? "s" : ""} (a third needs ${EXPERT_MARGIN} levels above every recipe's threshold)`,
         ]
       : [];
@@ -481,15 +482,26 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
       if (patient.dead) return { threshold: def.threshold, blocker: `${patient.name} is past surgery` };
       const theirs = tasksInWindow(g, patient.id, a.day, a.segment, a.turn);
       if (theirs.length) return { threshold: def.threshold, blocker: `${patient.name} is already committed to ${theirs[0].task} — withdraw it first` };
+      const toolsBlocker = g.expedition?.crew.includes(a.characterId) ? "Needs Surgical Tools in the surgeon's own pack" : "Needs Surgical Tools in the surgeon's pack or the hold";
+      // An operation is either about a wound or about putting something in. An install brings its own
+      // conditions — the implant has to exist, the patient has to be eligible, and the tier decides
+      // what the theatre has to be — so it answers for itself and the injury rules never apply.
+      if (a.install) {
+        const why = surgeryInstallBlocker(g, patient, a.install, false, a.characterId);
+        return { threshold: def.threshold, blocker: why ?? (surgicalToolsFor(g, a.characterId) ? null : toolsBlocker) };
+      }
       const injury = surgeryInjuryBlocker(patient, patient.injuries.find((i) => i.id === a.injuryId));
       if (injury) return { threshold: def.threshold, blocker: injury };
-      if (!surgicalToolsFor(g, a.characterId)) return { threshold: def.threshold, blocker: g.expedition?.crew.includes(a.characterId) ? "Needs Surgical Tools in the surgeon's own pack" : "Needs Surgical Tools in the surgeon's pack or the hold" };
+      if (!surgicalToolsFor(g, a.characterId)) return { threshold: def.threshold, blocker: toolsBlocker };
       return { threshold: def.threshold, blocker: null };
     }
     case "Prep for Surgery": {
       const patient = a.subjectId ? g.characters.find((x) => x.id === a.subjectId) : undefined;
       if (!patient) return { threshold: def.threshold, blocker: "Pick who's being prepped" };
-      if (!operable(patient).length) return { threshold: def.threshold, blocker: `${patient.name} has nothing that needs Surgery` };
+      // Prepping is for whatever the knife is about: a wound that needs closing, or an implant already
+      // booked onto the table today.
+      const booked = g.actions.some((x) => x.task === "Surgery" && x.subjectId === patient.id && x.day === a.day && !!x.install);
+      if (!operable(patient).length && !booked) return { threshold: def.threshold, blocker: `${patient.name} has nothing that needs Surgery` };
       return { threshold: def.threshold, blocker: null };
     }
     case "Plot Safe Course":
@@ -584,7 +596,9 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   if (def.effect === "cook" && c && a.crafts?.length) return cookTerms(g, c, a.crafts, energy, blocker);
   // A mech module runs on the module's own tier: the recipe carries its threshold, and a Tier III
   // build costs the extra Energy the mech sheet asks for.
-  if (def.effect === "mechmod" && c && a.crafts?.length) {
+  // An implant runs the same way: the recipe carries the threshold its tier asks for, and a Tier III
+  // build costs the extra Energy the cybernetics rules ask for.
+  if ((def.effect === "mechmod" || def.effect === "implant") && c && a.crafts?.length) {
     const recipe = RECIPE_BY_NAME[a.crafts[0]];
     const terms = craftCheck(c, a.crafts, recipe?.tier === "Tier III" ? energy + 1 : energy, def, undefined, blocker ?? (recipe ? craftBlocker(g, recipe) : null));
     if (c.pressure >= OVERTAXED) terms.routine = false;
@@ -1011,7 +1025,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
   }
   // Medicines and mech modules are both one recipe made at the bench, and a failure costs half the
   // materials either way. A finished module lands in the hold for the Mechs tab to fit.
-  if (def.effect === "medicine" || def.effect === "mechmod") {
+  if (def.effect === "medicine" || def.effect === "mechmod" || def.effect === "implant") {
     for (const name of a.crafts ?? []) {
       const recipe = RECIPE_BY_NAME[name];
       if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted"));

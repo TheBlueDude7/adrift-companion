@@ -1,10 +1,10 @@
 import type { CraftRecipe } from "@/data/crafting";
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
 import { actionsNow, extraTaskBlocker, fitOptions, newAction, openProjects, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
-import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
+import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import { uid } from "../dice";
 import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
-import { operable } from "../surgery";
+import { installable, installLabel, operable } from "../surgery";
 import type { Character, GameState, ProjectRequest, SegmentAction } from "../types";
 
 /** One thing this survivor could actually do right now, already filled in enough to submit. */
@@ -47,6 +47,7 @@ const recipesFor = (effect: TaskEffect) =>
   : effect === "medicine" ? MEDICINE_RECIPES
   : effect === "salvage" ? SALVAGE_RECIPES
   : effect === "mechmod" ? MECH_MODULE_RECIPES
+  : effect === "implant" ? IMPLANT_ITEM_RECIPES
   : [];
 
 /**
@@ -83,9 +84,14 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
       // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
       return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));
     case "surgery":
+      // Both things an operation can be: closing a wound, and fitting something that's waiting in the
+      // hold or grown in the lab.
       return g.characters
         .filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c))
-        .flatMap((x) => operable(x).map((i) => make({ subjectId: x.id, injuryId: i.id })));
+        .flatMap((x) => [
+          ...operable(x).map((i) => make({ subjectId: x.id, injuryId: i.id })),
+          ...installable(g, x).map((install) => make({ subjectId: x.id, install })),
+        ]);
     case "craft": {
       // One Fabricate task makes two items for the one Energy — three for an Expert — and offering
       // only a single recipe at a time quietly threw that away, so a crew that needed two power
@@ -102,6 +108,7 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
     case "medicine":
     case "salvage":
     case "mechmod":
+    case "implant":
       return recipesFor(taskFor({ task }).effect)
         .filter((r) => !craftBlocker(g, r))
         .map((r) => make({ crafts: [r.name] }));
@@ -122,6 +129,7 @@ function subject(g: GameState, a: SegmentAction): string {
   if (a.fit) return `${a.fit.name} in ${g.ship.rooms.find((r) => r.id === a.fit!.roomId)?.name ?? "a room"}`;
   const treated = a.subjectId ? g.characters.find((x) => x.id === a.subjectId) : null;
   const injury = a.injuryId ? treated?.injuries.find((i) => i.id === a.injuryId) : null;
+  if (treated && a.install) return `${installLabel(a.install)} into ${treated.name}`;
   if (treated) return injury ? `${treated.name}'s ${injury.name}` : treated.name;
   const helping = a.assists ? g.actions.find((x) => x.id === a.assists) : null;
   if (helping) return `${g.characters.find((x) => x.id === helping.characterId)?.name ?? "someone"} on ${helping.task}`;

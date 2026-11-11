@@ -328,7 +328,9 @@ export function CyberRules() {
           />
           <Lines
             items={[
-              "Two steps: build the implant as an item, then install it with a Surgery Task. Surgery is always a Crisis task, so experience never removes the roll.",
+              "Three rooms, in order. The Cybernetics Lab makes a Cybernetic Core, which every implant recipe needs. A Fabricate Implant task at the Workshop turns one into an implant, which sits in the hold as an item anyone can carry, trade, or lose. A Surgery in the Medical Bay puts it in.",
+              "Surgery is always a Crisis task, so experience never removes the roll. The implant leaves the hold only when the operation succeeds; a failure costs the segment and the patient's HP and leaves the implant intact.",
+              "The implant's tier sets the room: Tier I anywhere a surgeon can work, Tier II an Operational Medical Bay, Tier III a Medical Bay built up to Advanced Care.",
               "An Enhancement adds its bonuses. A Replacement restores what an Injury took and gives no bonus, and it's cheaper to build.",
               "A damaged implant stops giving its bonus until it's repaired, which is Engineering rather than medicine.",
               `There are ${CYBERNETICS.length} implants, and every one of them is on the Cybernetics tab from the first day of the campaign.`,
