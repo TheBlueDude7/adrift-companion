@@ -342,7 +342,7 @@ const QUICK: QuickCard[] = [
         <Lines items={[
           "Roll an Injury when one hit takes 3+ HP after Cover and Armor, or when a character drops to 0 HP.",
           "Roll 2d6. The first die is Severity (1–3 Minor, 4–5 Major, 6 Deadly); the second is Location.",
-          "Minor: −1d6 to the rolls it lists. Major: −2d6, the listed condition until Surgery, and Bleeding. Deadly: Surgery within four segments or the character dies, or a permanent loss. Every Major or Deadly injury without Surgery is also Pain, −1 Maximum Energy, and a Major one left 3 days without Surgery festers into a Deadly one.",
+          "Minor: −1d6 to the rolls it lists. Major: −2d6, the listed condition until Surgery, and Bleeding. Deadly: Surgery within four segments or the character dies, or a permanent loss. Every Major or Deadly injury without Surgery is also Pain, −1 Maximum Energy, and a Major one left 3 days without Surgery Festers into a Deadly one.",
           "Cap: 2 Minor and 1 Major at a time. Going over the cap, or rolling an injury you already have, makes it one step worse in the same location.",
           "Untreated injuries cost 1 HP each at End of Day. First Aid's first 6 makes any injury Treated, and on a Deadly injury buys one more segment. Only Surgery turns a Major or Deadly injury into a Treated Minor one: always a Crisis task, it needs Surgical Tools, and the Medical Bay sets its penalty (−3d6 without one) and how far the patient's HP drops when it begins. A failure leaves the injury as it was.",
           "Natural recovery: on every Rest, roll Constitution + days since the oldest Treated Minor injury. Any 6 heals it. Permanent losses don't heal naturally.",

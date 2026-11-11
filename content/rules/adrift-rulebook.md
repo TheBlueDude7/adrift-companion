@@ -1088,7 +1088,7 @@ The penalty lasts until the Injury heals, even once it is Treated.
 
 Pain: every Major or Deadly Injury that hasn't had Surgery costs 1 Maximum Energy. The point comes back the moment the Surgery succeeds.
 
-Festering: a Major Injury left 3 days without Surgery, counting the day it happened, festers at that End of Day. It becomes a Deadly Injury, and its four-segment Surgery window opens from the next Morning.
+Festering: a Major Injury left 3 days without Surgery, counting the day it happened, Festers at that End of Day. It becomes a Deadly Injury, and its four-segment Surgery window opens from the next Morning.
 
 Injuries do not otherwise reduce Maximum HP or Maximum Energy, or increase the Energy cost of unrelated Tasks, unless the Injury says so.
 

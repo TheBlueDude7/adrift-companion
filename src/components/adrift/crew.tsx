@@ -35,6 +35,7 @@ import {
   wornArmor,
 } from "@/lib/derive";
 import { INJURY_BY_CODE, INJURY_TABLE } from "@/data/injuries";
+import { GLOSSARY } from "@/lib/glossary";
 import { convertLegacy, effectiveSeverity, FESTER_DAYS, injuryMaxHpSources, injuryPain, operate, suggestConversion } from "@/lib/injuries";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
@@ -70,6 +71,7 @@ import { claimCharacter } from "@/lib/sync/client";
 import { toast } from "sonner";
 import { ApplyConditionDialog, ConditionChips, conditionTip, QuickConditions, SceneControls } from "./conditions";
 import { attrHue, EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
+import { GlossaryText, GlossaryTip } from "./glossary";
 import { DiceRoller } from "./dice-roller";
 import { AddItemDialog, ItemList } from "./inventory";
 import { BiologyPanel } from "./biology";
@@ -230,7 +232,7 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           extra={(() => {
             const pain = injuryPain(c);
             const notes = [c.survival.energyPenalty > 0 && `−${c.survival.energyPenalty} max today`, pain > 0 && `−${pain} Pain`].filter(Boolean).join(", ");
-            if (notes) return <span className="text-[11px] text-amber-300" title={pain > 0 ? "Pain: each Major or Deadly injury costs 1 Maximum Energy until it has Surgery." : undefined}>{notes}</span>;
+            if (notes) return <span className="text-[11px] text-amber-300"><GlossaryText text={notes} /></span>;
             return c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined;
           })()}
         />
@@ -454,10 +456,10 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                 ) : (
                   <span className="text-xs text-muted-foreground">{effectiveSeverity(inj)} {inj.location}{inj.operated && ` (was ${inj.severity})`}</span>
                 )}
-                {inj.festered && !inj.operated && <Tip content={`Went ${FESTER_DAYS} days without Surgery and became Deadly.`}><Pill className="border-rose-500/50 text-rose-300">Festered</Pill></Tip>}
+                {inj.festered && !inj.operated && <GlossaryTip entry={GLOSSARY.get("Festering")!}><Pill className="border-rose-500/50 text-rose-300">Festered</Pill></GlossaryTip>}
                 {!inj.legacy && !inj.operated && inj.severity === "Major" && (
-                  <span className="text-xs text-amber-300/80" title={`A Major injury left ${FESTER_DAYS} days without Surgery, counting the day it happened, festers into a Deadly one at that End of Day.`}>
-                    · festers {(() => { const nights = inj.dayReceived + FESTER_DAYS - today; return nights <= 1 ? "tonight" : `in ${nights} nights`; })()}
+                  <span className="text-xs text-amber-300/80">
+                    · <GlossaryText text={`Festers ${(() => { const nights = inj.dayReceived + FESTER_DAYS - today; return nights <= 1 ? "tonight" : `in ${nights} nights`; })()}`} />
                   </span>
                 )}
                 <span className="text-xs text-muted-foreground">· day {inj.dayReceived}</span>

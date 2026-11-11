@@ -15,7 +15,7 @@ Every Untreated injury costs 1 HP at End of Day, whatever its severity.
 ## What leaving a wound unoperated costs
 
 - **Pain.** Every Major or Deadly injury that hasn't had Surgery costs 1 Maximum Energy. The point returns the moment the Surgery succeeds. First Aid doesn't ease it.
-- **Festering.** A Major injury left 3 days without Surgery, counting the day it happened, festers at that End of Day. It becomes a Deadly injury, and its four-segment Surgery window opens from the next Morning. A wound taken on day 1 festers at the End of Day on day 3.
+- **Festering.** A Major injury left 3 days without Surgery, counting the day it happened, Festers at that End of Day. It becomes a Deadly injury, and its four-segment Surgery window opens from the next Morning. A wound taken on day 1 festers at the End of Day on day 3.
 - **The Deadly clock.** A Deadly injury that demands Surgery kills the character once its window passes: the segment it happened in and the three after it, rolling into the next day if it must.
 
 ## First Aid: stabilise

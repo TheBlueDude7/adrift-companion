@@ -59,7 +59,7 @@ function injuryRow(i: Injury, segment: number, day: number): Row {
     text: (
       <>
         <p><GlossaryText text={i.effect} /></p>
-        {notes.length > 0 && <p className="mt-0.5 text-foreground/80">{notes.join(" ")}</p>}
+        {notes.length > 0 && <p className="mt-0.5 text-foreground/80"><GlossaryText text={notes.join(" ")} /></p>}
       </>
     ),
     tone: i.deadline || i.state === "Untreated" ? "danger" : "warn",

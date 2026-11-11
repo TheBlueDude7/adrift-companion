@@ -38,6 +38,8 @@ const Lines = ({ items }: { items: string[] }) => (
   <ul className="grid list-disc gap-1 pl-5 text-sm">{items.map((t, i) => <li key={i}><GlossaryText text={t} /></li>)}</ul>
 );
 
+const glossed = (rows: string[][]) => rows.map((r) => r.map((t, i) => <GlossaryText key={i} text={t} />));
+
 const icon = (I: typeof HeartPulseIcon) => <I className="size-4 text-muted-foreground" />;
 
 export function MedicalRules() {
@@ -50,11 +52,11 @@ export function MedicalRules() {
         </Note>
         <RuleTable
           head={["Severity", "Penalty", "Until Surgery", "Clock"]}
-          rows={[
+          rows={glossed([
             ["Minor", `−${INJURY_PENALTY.Minor}d6 to the rolls it lists`, "—", "Heals on a Rest once Treated"],
             ["Major", `−${INJURY_PENALTY.Major}d6 to the rolls it lists`, "Its condition, Bleeding when it lands, Pain", `Festers into Deadly after ${FESTER_DAYS} days`],
             ["Deadly", `−${INJURY_PENALTY.Deadly}d6 to the rolls it lists`, "Bleeding when it lands, Pain", `Dies after ${SURGERY_WINDOW} segments, or a permanent loss`],
-          ]}
+          ])}
         />
         <Lines items={["Every Untreated injury costs 1 HP at End of Day, whatever its severity.", "A Treated Minor injury heals on a Rest (natural recovery). A permanent loss never does."]} />
       </Panel>
@@ -63,7 +65,7 @@ export function MedicalRules() {
         <Lines
           items={[
             "Pain: every Major or Deadly injury that hasn't had Surgery costs 1 Maximum Energy. The point comes back the moment the Surgery succeeds. First Aid doesn't ease it.",
-            `Festering: a Major injury left ${FESTER_DAYS} days without Surgery, counting the day it happened, festers at that End of Day. It becomes a Deadly injury, and its ${SURGERY_WINDOW}-segment Surgery window opens from the next Morning.`,
+            `Festering: a Major injury left ${FESTER_DAYS} days without Surgery, counting the day it happened, Festers at that End of Day. It becomes a Deadly injury, and its ${SURGERY_WINDOW}-segment Surgery window opens from the next Morning.`,
             `The Deadly clock: a Deadly injury that demands Surgery kills once its window passes — the segment it happened in and the ${SURGERY_WINDOW - 1} after it, rolling into the next day if it must.`,
           ]}
         />
