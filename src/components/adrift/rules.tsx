@@ -13,8 +13,10 @@ import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN } from "@/data/tasks";
 import { MEDKITS } from "@/lib/actions";
 import { MIND_BREAKS, PRESSURE_STATES, severityFromRoll, STRESS_BANDS } from "@/lib/rules";
 import { cn } from "@/lib/utils";
+import { RuleTable } from "./common";
 import { GlossaryText } from "./glossary";
 import { AffectingPanel } from "./rules-affecting";
+import { CyberRules, MechRules } from "./rules-paths";
 import { DamageTry, InjuryTry, PoolTry } from "./rules-tryit";
 
 const SEVERITY_FACES = [1, 2, 3, 4, 5, 6];
@@ -126,12 +128,16 @@ export function RulesTab() {
       <TabsList>
         <TabsTrigger value="quick" className="px-3">Quick reference</TabsTrigger>
         <TabsTrigger value="book" className="px-3">Rulebook</TabsTrigger>
+        <TabsTrigger value="mechs" className="px-3">Mechs</TabsTrigger>
+        <TabsTrigger value="cyber" className="px-3">Cybernetics</TabsTrigger>
         <TabsTrigger value="me" className="px-3">What&apos;s affecting me</TabsTrigger>
       </TabsList>
       <TabsContent value="quick" className="pt-3"><QuickReference updates={updates} /></TabsContent>
       <TabsContent value="book" className="pt-3">
         {data ? <Rulebook markdown={data.markdown} /> : <p className="py-8 text-center text-sm text-muted-foreground">{error ? "The rulebook couldn't be loaded." : "Loading the rulebook…"}</p>}
       </TabsContent>
+      <TabsContent value="mechs" className="pt-3"><MechRules /></TabsContent>
+      <TabsContent value="cyber" className="pt-3"><CyberRules /></TabsContent>
       <TabsContent value="me" className="pt-3"><AffectingPanel /></TabsContent>
     </Tabs>
   );
@@ -229,23 +235,6 @@ function RuleBlock({ id, block: b }: { id: string; block: Block }) {
   if (b.kind === "ul") return <ul id={id} className="grid list-disc gap-1 pl-5">{b.items.map((t, i) => <li key={i}><GlossaryText text={t} /></li>)}</ul>;
   if (b.kind === "table") return <div id={id} className="scroll-mt-4"><RuleTable head={b.head} rows={b.rows.map((r) => r.map((t, i) => <GlossaryText key={i} text={t} />))} /></div>;
   return <p id={id} className="scroll-mt-4"><GlossaryText text={b.text} /></p>;
-}
-
-function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
-  return (
-    <div className="overflow-x-auto rounded border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left">
-          <tr>{head.map((c, i) => <th key={i} className="px-2.5 py-1.5 font-semibold">{c}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t align-top">{r.map((c, j) => <td key={j} className="px-2.5 py-1.5">{c}</td>)}</tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 type QuickCard = { title: string; find: string; body: ReactNode; wide?: boolean };

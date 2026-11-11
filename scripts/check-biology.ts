@@ -8,11 +8,11 @@ const BIOLOGY = biologyCatalogue();
 const BIO_BY_KEY = Object.fromEntries(BIOLOGY.map((d) => [d.key, d]));
 import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, certaintyLive, expressionsLive, grown, growBlocker, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
 import { PROJECT_TEMPLATE_BY_NAME } from "../src/lib/rules";
-import { CYBER_BY_KEY } from "../src/data/cybernetics";
-import { dampening } from "../src/lib/cyber";
+import { CYBER_BY_KEY, DAMPENING_STRESS_COST, dampeningForLoad } from "../src/data/cybernetics";
+import { cyberLoad, dampening, dampeningLeft } from "../src/lib/cyber";
 import { maxEnergy, maxHp } from "../src/lib/derive";
 import { uid } from "../src/lib/dice";
-import { damageSteps } from "../src/lib/mechanics";
+import { changePressure, changeStress, damageSteps, endScene } from "../src/lib/mechanics";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import type { Character } from "../src/lib/types";
 
@@ -202,6 +202,53 @@ const chrome = (c: Character, keys: string[]) => {
   check("the dead grow nothing", growBlocker(g, c, BIO_BY_KEY["ripper-tendons"]), "They're dead");
   check("an unknown key is simply not there", grown(survivor(["no-such-thing"])).length, 0);
   check("and a survivor with no biology at all is fine", [grown(undefined).length, bioMaxHp(newCharacter("X", null, null, "gm"))], [0, 0]);
+}
+
+// Dampening: the cybernetic answer to variance, and the one place the two paths pull against each other.
+{
+  check("the ladder runs the whole way up now", [0, 3, 6, 9, 12, 15, 18, 21].map(dampeningForLoad), [0, 1, 2, 3, 4, 5, 6, 6]);
+  check("and a point of it is still worth half a Surge Die", [1, 2, 3, 4, 5, 6].map(dampenSurge), [0, 1, 1, 2, 2, 3]);
+
+  // A point a level against Pressure, spent as it arrives rather than banked for one big discount.
+  const c = chrome(newCharacter("Wire", null, null, "gm"), ["full-skeletal-lattice", "panoptic-sensorium", "autonomous-survival-core"]);
+  const damp = dampening(c);
+  check("three Tier III systems is Load 9 and Dampening 3", [cyberLoad(c), damp], [9, 3]);
+  const out: string[] = [];
+  const g = createInitialState();
+  g.characters = [c];
+  changePressure(g, c, 1, out);
+  check("the first level of Pressure is held off entirely", c.pressure, 0);
+  check("and the pool says so", dampeningLeft(c), damp - 1);
+  check("the log tells the table what absorbed it", out.some((l) => /Dampening holds off 1 level of Pressure/.test(l)), true);
+
+  // Stress costs two a point, so a shallow build can't filter it at all.
+  const shallow = chrome(newCharacter("Thin", null, null, "gm"), ["cyber-limb"]);
+  check("one Tier I implant is Load 1 and no Dampening", [cyberLoad(shallow), dampening(shallow)], [1, 0]);
+  const said: string[] = [];
+  changeStress(shallow, 1, said);
+  check("so the Stress lands in full", shallow.stress, 1);
+
+  const deep = chrome(newCharacter("Deep", null, null, "gm"), ["full-skeletal-lattice", "panoptic-sensorium", "autonomous-survival-core", "affective-partition"]);
+  check("a fourth system reaches Load 12, which the old ladder flatly ignored", [cyberLoad(deep), dampening(deep)], [12, 4]);
+  const before = dampeningLeft(deep);
+  const heard: string[] = [];
+  changeStress(deep, 1, heard);
+  check("a deep build filters a point of Stress", deep.stress, 0);
+  check("at twice the price of Pressure", before - dampeningLeft(deep), DAMPENING_STRESS_COST);
+
+  // The pool is the Scene's, and the Scene is what gives it back.
+  deep.dampeningUsed = dampening(deep);
+  check("a spent pool stops absorbing", dampeningLeft(deep), 0);
+  const scene = createInitialState();
+  scene.characters = [deep];
+  endScene(scene);
+  check("and the Scene ending refills it", dampeningLeft(deep), dampening(deep));
+
+  // Relief must not be charged for: losing Stress is not something wiring has to pay to allow.
+  const relieved = chrome(newCharacter("Calm", null, null, "gm"), ["full-skeletal-lattice", "panoptic-sensorium", "autonomous-survival-core"]);
+  relieved.stress = 4;
+  changeStress(relieved, -2, said);
+  check("and clearing Stress costs no Dampening", [relieved.stress, dampeningLeft(relieved)], [2, dampening(relieved)]);
 }
 
 // Nothing here disturbs a crew that never touches the path.

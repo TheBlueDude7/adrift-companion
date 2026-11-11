@@ -111,6 +111,8 @@ export type Character = {
   /** Loadmaster's shared pool: the characters on the expedition, including the Quartermaster. */
   pool?: string[];
   cybernetics?: InstalledCyber[];
+  /** Dampening spent so far this Scene, against Pressure and Stress. Cleared when the Scene ends. */
+  dampeningUsed?: number;
   biology?: InstalledBio[];
   /**
    * Temporary HP, which every biological augmentation is worth a couple of at the start of a combat.

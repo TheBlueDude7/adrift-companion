@@ -16,6 +16,7 @@ import {
   CYBER_BY_KEY,
   CYBER_SYSTEMS,
   CYBER_SYSTEM_BY_KEY,
+  DAMPENING_STRESS_COST,
   FABRICATE_TASK,
   IMPLANT_RECIPES,
   SURGERY_TASK,
@@ -29,6 +30,7 @@ import {
   cyberAttr,
   cyberLoad,
   dampening,
+  dampeningLeft,
   freeLocations,
   installBlocker,
   installed,
@@ -153,6 +155,7 @@ export function CyberneticsPanel({ c }: { c: Character }) {
   const list = installed(c);
   const load = cyberLoad(c);
   const damp = dampening(c);
+  const left = dampeningLeft(c);
   const mech = pilotedMech(game, c.id);
   const bonuses = ATTRIBUTES.map((a) => [a, cyberAttr(c, a)] as const).filter(([, n]) => n);
 
@@ -160,12 +163,19 @@ export function CyberneticsPanel({ c }: { c: Character }) {
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Pill tone={load >= 6 ? "warn" : "muted"}>Cybernetic Load {load}</Pill>
-        <Pill tone={damp ? "info" : "muted"}>Dampening {damp}</Pill>
+        <Pill tone={damp ? "info" : "muted"} tip={damp ? "Spent automatically as Pressure and Stress arrive. Refreshes when the Scene ends." : undefined}>
+          Dampening {left}{left !== damp ? ` of ${damp}` : ""}
+        </Pill>
         {bonuses.map(([a, n]) => <Pill key={a} tone="good">+{n} {a}</Pill>)}
         {mech && <Pill tone="warn">Piloting {mech.name}</Pill>}
         <div className="ml-auto"><InstallDialog c={c} /></div>
       </div>
-      {damp > 0 && <p className="text-xs text-muted-foreground">Once per Scene, when {c.name.split(" ")[0]} would gain Pressure, reduce it by {damp} (minimum 0).</p>}
+      {damp > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {damp} Dampening a Scene, spent as it&apos;s needed: a point holds off a level of Pressure, and {DAMPENING_STRESS_COST} hold off a point of Stress. The app spends it for{" "}
+          {c.name.split(" ")[0]} as the fear arrives, so what wiring buys is a narrower range of bad days rather than a better one.
+        </p>
+      )}
       {list.length === 0 ? (
         <EmptyState title="No cybernetics" body="Tier I implants are available from the start. Install them through Surgery in a Medical Bay." />
       ) : (

@@ -15,6 +15,8 @@ export const HAZARD_PRESETS: { key: string; name: string; from: string; damage: 
   { key: "spore-cloud", name: "Spore cloud", from: "Blackout Spore Colony", damage: 0, type: "Chemical", conditions: ["Blinded", "Silenced"] },
   { key: "mist-cloud", name: "Hallucinogenic mist", from: "Hallucinogenic Mist Colony", damage: 0, type: "Chemical", conditions: ["Blinded", "Disoriented"] },
   { key: "webbed-ground", name: "Webbed terrain", from: "Adhesive Web Organ", damage: 0, type: "Physical", conditions: ["Restrained"] },
+  { key: "razorwire", name: "Razorwire", from: "Razorwire Deployer", damage: 1, type: "Physical", conditions: ["Restrained"] },
+  { key: "frozen-zone", name: "Frozen zone", from: "Cryogenic Dispersal Array", damage: 2, type: "Chemical", conditions: ["Slowed"] },
   { key: "fire", name: "Spreading fire", from: "The site itself", damage: 2, type: "Fire", conditions: ["Burning"], rounds: 3 },
 ];
 

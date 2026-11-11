@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FIND_BY } from "@/data/sites";
-import { addFind, findByLabel, findsWaiting, movePlan, moveTo, neighbours, revealFind, scout, setBorderState, zoneOf } from "@/lib/expedition";
+import { addFind, findByLabel, findsWaiting, movePlan, moveTo, neighbours, revealFind, scout, setBorderState, setZoneCover, zoneOf } from "@/lib/expedition";
 import { clearHazard, HAZARD_PRESETS, hazardLine, hazardsIn, hazardTollAll, plantHazard, PRESET_BY_KEY } from "@/lib/hazards";
-import { BORDER_STATES, type BorderState } from "@/lib/rules";
+import { BORDER_STATES, type BorderState, type Cover } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Border, Expedition, FindBy, GameState, Zone } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
@@ -75,6 +75,7 @@ function ZoneCard({ zone, mover }: { zone: Zone; mover: string | null }) {
         )}
         {isGM && zone.secrets?.note && <p className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">{zone.secrets.note}</p>}
         {(hazardsIn(zone).length > 0 || (isGM && zone.seen)) && <Hazards zone={zone} />}
+        {isGM && zone.seen && <CoverRow zone={zone} />}
         {(zone.finds.length > 0 || (isGM && zone.seen)) && <Finds zone={zone} />}
 
         {zone.seen && (
@@ -249,6 +250,34 @@ function PlantHazardDialog({ zone }: { zone: Zone }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * What the room offers to hide behind, which a frame can change and a collapse can take away.
+ *
+ * It's set on the room rather than on anyone's sheet, so everyone standing here gets it, and the
+ * crew who walk in next turn get it too.
+ */
+function CoverRow({ zone }: { zone: Zone }) {
+  const { act } = useGame();
+  return (
+    <div className="grid gap-1.5">
+      <Label className="text-xs">Cover in this room</Label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(Object.keys(COVER_LABEL) as Cover[]).map((k) => (
+          <Button
+            key={k}
+            size="xs"
+            variant={zone.cover === k ? "default" : "outline"}
+            onClick={() => act(`Cover in the ${zone.name}`, (g) => setZoneCover(g, zone.id, k), "day")}
+          >
+            {COVER_LABEL[k]}
+          </Button>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">Counts against Ballistic damage for everyone in here. A Barricade Extruder builds it; a collapse takes it away.</p>
+    </div>
   );
 }
 

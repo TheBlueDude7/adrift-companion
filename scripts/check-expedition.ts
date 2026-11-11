@@ -1,8 +1,9 @@
 import { newAction, resolveAction, taskPool, taskTerms } from "../src/lib/actions";
+import { MECH_ROOM_MODULES, MECH_SUPPORT_MODULES, MODULE_BY_KEY } from "../src/data/mechs";
 import { SITES, siteProblems } from "../src/data/sites";
 import { TASK_BY_NAME } from "../src/data/tasks";
 import { maxEnergy } from "../src/lib/derive";
-import { addFind, endExpedition, findsWaiting, markExpeditionTurn, moveTo, recordSearch, revealFind, scout, setBorderState, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
+import { addFind, endExpedition, findsWaiting, markExpeditionTurn, moveTo, recordSearch, revealFind, scout, setBorderState, setZoneCover, startExpedition, TURNS_PER_SEGMENT, zoneDistance, zoneOf } from "../src/lib/expedition";
 import { clearHazard, hazardsIn, hazardTollAll, plantHazard, PRESET_BY_KEY, tickHazards } from "../src/lib/hazards";
 import { applyCondition } from "../src/lib/mechanics";
 import { createInitialState, itemFromTemplate, newCharacter } from "../src/lib/seed";
@@ -223,6 +224,27 @@ check("and so is a room nothing leads to", siteProblems({ id: "x", name: "X", ca
   check("the GM hears what's really there", secret(scout(g, zone("Cargo Hold").id)), ["Cargo Hold: Start the creature here, behind the container wall. It knows the crawlway and the crew do not."]);
   check("and scouting counts as seeing it", zone("Cargo Hold").seen, true);
   check("a survivor who stayed aboard can't be moved", said(moveTo(g, bystander(g).id, zone("Bridge").id), /isn't on this expedition/), true);
+
+  // A frame changing the room rather than its own sheet. Cover belongs to the zone, so it's there
+  // for whoever walks in next, which is the thing no implant and no graft can do.
+  check("the bridge was authored with consoles to duck behind", zone("Bridge").cover, "strong");
+  check("a Siege Mortar takes a room's cover away", said(setZoneCover(g, zone("Bridge").id, "none", "a Siege Mortar"), /drops to no cover at all, worked by a Siege Mortar/), true);
+  check("which is state, not a note", zone("Bridge").cover, "none");
+  check("a Barricade Extruder builds it back", text(setZoneCover(g, zone("Bridge").id, "partial", "a Barricade Extruder")), ["The Bridge goes up to Partial Cover, worked by a Barricade Extruder. Everyone standing in it shares that, and so does whoever walks in next."]);
+  check("and a second turn makes it Strong", [text(setZoneCover(g, zone("Bridge").id, "strong")).length, zone("Bridge").cover], [1, "strong"]);
+  check("setting it to what it already is says nothing", setZoneCover(g, zone("Bridge").id, "strong"), []);
+  check("and a room that isn't there refuses", said(setZoneCover(g, "nowhere", "strong"), /isn't part of this site/), true);
+
+  // The Rules tab's mech pages are built from these two lists, so a renamed module would quietly
+  // vanish out of the page that explains the path rather than breaking anything loudly.
+  check("every room-control module the rules page names exists", MECH_ROOM_MODULES.filter((k) => !MODULE_BY_KEY[k]), []);
+  check("and every support one", MECH_SUPPORT_MODULES.filter((k) => !MODULE_BY_KEY[k]), []);
+  check("the room-control set is weapons and engineering, not defence", [...new Set(MECH_ROOM_MODULES.map((k) => MODULE_BY_KEY[k].category))].sort(), ["Engineering", "Mobility", "Weapon"]);
+  // A hazard a frame leaves behind is the only damage in the game that costs nobody an Action, so
+  // every module that claims to leave one needs a preset the app can actually plant.
+  for (const key of ["razorwire", "frozen-zone", "burning-zone", "chemical-cloud"]) {
+    check(`the ${key} preset is there for the GM to plant`, !!PRESET_BY_KEY[key], true);
+  }
 
   // Two zones is as far as anyone goes in one move, and the second of them is a Sprint. With the
   // duct blocked above and the bulkhead down, nothing now joins the Bridge to the hold at all.

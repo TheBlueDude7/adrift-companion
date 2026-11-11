@@ -42,6 +42,29 @@ export function dampening(c: Character) {
   return dampeningForLoad(cyberLoad(c)) + bonus;
 }
 
+/**
+ * Dampening left to spend this Scene.
+ *
+ * Dampening is a pool now rather than a single big discount used once. It is spent a point at a time
+ * as fear and noise arrive, which is what makes the cybernetic path the one that removes variance:
+ * a wired crew member doesn't get a better outcome, they get a narrower range of them. It refreshes
+ * when the Scene ends, and nothing refills it sooner.
+ */
+export const dampeningLeft = (c: Character) => Math.max(0, dampening(c) - (c.dampeningUsed ?? 0));
+
+/**
+ * Spend Dampening to hold something off, returning how much of it was absorbed.
+ *
+ * Pressure costs a point a level. Stress costs two a point, because quieting the mind is harder than
+ * quieting the body — which also means deep Load is what it takes to filter Stress at all.
+ */
+export function spendDampening(c: Character, want: number, costEach: number) {
+  const affordable = Math.floor(dampeningLeft(c) / costEach);
+  const absorbed = Math.min(want, affordable);
+  if (absorbed > 0) c.dampeningUsed = (c.dampeningUsed ?? 0) + absorbed * costEach;
+  return absorbed;
+}
+
 export function cyberAttr(c: Character, attr: Attribute) {
   const list = installed(c).filter(working);
   let total = list.reduce((s, x) => s + (x.def.bonus?.attr?.[attr] ?? 0), 0);

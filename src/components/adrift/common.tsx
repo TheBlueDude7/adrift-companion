@@ -169,6 +169,24 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
   );
 }
 
+/** A plain rules table. Used by the rulebook renderer and by every panel that explains a path. */
+export function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
+  return (
+    <div className="overflow-x-auto rounded border">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50 text-left">
+          <tr>{head.map((c, i) => <th key={i} className="px-2.5 py-1.5 font-semibold">{c}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t align-top">{r.map((c, j) => <td key={j} className="px-2.5 py-1.5">{c}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-8 text-center">

@@ -438,8 +438,23 @@ export const SYSTEM_ATTR_BONUS: Record<CyberTier, number> = { 1: 0, 2: 1, 3: 2 }
  */
 export const INTERFACE_MECH_HP: Record<CyberTier, number> = { 1: 0, 2: 2, 3: 4 };
 
+/** One point of Dampening per this much Cybernetic Load. */
+export const LOAD_PER_DAMPENING = 3;
+
+/**
+ * The most Dampening anyone reaches, which is a Tier III system in all six branches.
+ *
+ * The ladder used to stop at 3 while the deepest legal build carried Load 18, so half of a lifetime's
+ * surgery bought nothing at all. It runs the whole way now: depth is the cybernetic promise, and the
+ * promise should keep being kept.
+ */
+export const DAMPENING_CAP = 6;
+
+/** Dampening points one point of Stress costs to filter out. Mental noise is harder to quiet than fear. */
+export const DAMPENING_STRESS_COST = 2;
+
 export function dampeningForLoad(load: number) {
-  return load >= 9 ? 3 : load >= 6 ? 2 : load >= 3 ? 1 : 0;
+  return Math.min(DAMPENING_CAP, Math.floor(load / LOAD_PER_DAMPENING));
 }
 
 export const TIER_LABEL: Record<CyberTier, string> = { 1: "Tier I", 2: "Tier II", 3: "Tier III" };

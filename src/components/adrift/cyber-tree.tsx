@@ -59,7 +59,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { CYBER_BY_KEY, CYBER_SYSTEMS, DAMAGE_BOOST, FABRICATE_TASK, IMPLANT_RECIPES, INTERFACE_MECH_HP, SURGERY_TASK, TIER_LABEL, dampeningForLoad, type CyberDef } from "@/data/cybernetics";
+import { CYBER_BY_KEY, CYBER_SYSTEMS, DAMAGE_BOOST, DAMPENING_CAP, DAMPENING_STRESS_COST, FABRICATE_TASK, IMPLANT_RECIPES, INTERFACE_MECH_HP, LOAD_PER_DAMPENING, SURGERY_TASK, TIER_LABEL, type CyberDef } from "@/data/cybernetics";
 import { researchTree, type TechBranch, type TechState } from "@/lib/cyber";
 import type { DamageType } from "@/lib/rules";
 import { recipeText } from "@/lib/stock";
@@ -419,7 +419,9 @@ export function CyberTreePanel() {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Pick any technology to see what it builds on and what builds on it. Load is the highest Tier installed in each system, added together: {[3, 6, 9].map((l) => `${l}+ gives Dampening ${dampeningForLoad(l)}`).join(", ")}.
+              Pick any technology to see what it builds on and what builds on it. Load is the highest Tier installed in each system, added together, and every{" "}
+              {LOAD_PER_DAMPENING} of it is a point of Dampening up to {DAMPENING_CAP} — which is a Tier III system in all six branches. Dampening is a pool each Scene: a point holds off a
+              level of Pressure, {DAMPENING_STRESS_COST} hold off a point of Stress.
             </p>
           )}
         </CardContent>

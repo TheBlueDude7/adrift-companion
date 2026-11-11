@@ -1,6 +1,8 @@
 import { AFFLICTIONS } from "@/data/compendium";
+import { DAMPENING_STRESS_COST } from "@/data/cybernetics";
 import { INJURY_BY_CODE } from "@/data/injuries";
 import { moduleLevel } from "./crafting";
+import { dampening, dampeningLeft, spendDampening } from "./cyber";
 import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
@@ -71,6 +73,13 @@ export function changeStress(c: Character, delta: number, out: string[]) {
     out.push(`${c.name} recovers ${-delta} Stress (now ${c.stress}).`);
     return;
   }
+  // Wiring filters the noise before it lands, at two points of Dampening for each point of Stress.
+  const filtered = spendDampening(c, delta, DAMPENING_STRESS_COST);
+  if (filtered) {
+    out.push(`${c.name}'s Dampening absorbs ${filtered} Stress (${dampeningLeft(c)} Dampening left this Scene).`);
+    delta -= filtered;
+    if (delta === 0) return;
+  }
   let applied = 0;
   for (let i = 0; i < delta; i++) {
     if (c.stress >= 10) {
@@ -106,6 +115,14 @@ export function changePressure(g: GameState, c: Character, delta: number, out: s
     out.push(`${c.name} is Strained: the first Pressure gain today adds an extra level.`);
   }
   c.survival.pressureGainedToday = true;
+  // Dampening takes the edge off after Strained has added its level, so being Strained costs the
+  // wiring an extra point rather than slipping past it.
+  const held = spendDampening(c, steps, 1);
+  if (held) {
+    out.push(`${c.name}'s Dampening holds off ${held} level${held === 1 ? "" : "s"} of Pressure (${dampeningLeft(c)} Dampening left this Scene).`);
+    steps -= held;
+    if (steps === 0) return;
+  }
   for (let i = 0; i < steps; i++) {
     if (c.pressure >= PANICKED) {
       out.push(`${c.name} gains Pressure while Panicked.`);
@@ -543,6 +560,11 @@ export function endScene(g: GameState): string[] {
     if (cleared.length) out.push(`${c.name}: ${cleared.map((b) => b.name).join(", ")} ended.`);
     for (const key of Object.keys(c.abilityUsed)) if (key.startsWith("combat:")) delete c.abilityUsed[key];
     delete c.damagePressureRound;
+    // Dampening is a per-Scene pool, so this is where the wiring gets its quiet back.
+    if (c.dampeningUsed) {
+      delete c.dampeningUsed;
+      out.push(`${c.name}'s Dampening resets to ${dampening(c)}.`);
+    }
     const reopened = c.injuries.find((i) => !i.legacy && i.name === "Internal Bleeding" && !i.operated);
     if (reopened && !c.dead) applyCondition(g, c, "Bleeding", "Ongoing", out, "From Internal Bleeding");
   }
