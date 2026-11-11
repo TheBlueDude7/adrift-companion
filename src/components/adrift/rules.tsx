@@ -17,6 +17,7 @@ import { RuleTable } from "./common";
 import { GlossaryText, ToneLegend } from "./glossary";
 import { AffectingPanel } from "./rules-affecting";
 import { MedicalRules } from "./rules-medical";
+import { TaskRules } from "./rules-tasks";
 import { CyberRules, MechRules } from "./rules-paths";
 import { DamageTry, InjuryTry, PoolTry } from "./rules-tryit";
 
@@ -129,6 +130,7 @@ export function RulesTab() {
       <TabsList>
         <TabsTrigger value="quick" className="px-3">Quick reference</TabsTrigger>
         <TabsTrigger value="book" className="px-3">Rulebook</TabsTrigger>
+        <TabsTrigger value="tasks" className="px-3">Tasks</TabsTrigger>
         <TabsTrigger value="medical" className="px-3">Medical</TabsTrigger>
         <TabsTrigger value="mechs" className="px-3">Mechs</TabsTrigger>
         <TabsTrigger value="cyber" className="px-3">Cybernetics</TabsTrigger>
@@ -138,6 +140,7 @@ export function RulesTab() {
       <TabsContent value="book" className="pt-3">
         {data ? <Rulebook markdown={data.markdown} /> : <p className="py-8 text-center text-sm text-muted-foreground">{error ? "The rulebook couldn't be loaded." : "Loading the rulebook…"}</p>}
       </TabsContent>
+      <TabsContent value="tasks" className="pt-3"><TaskRules /></TabsContent>
       <TabsContent value="medical" className="pt-3"><MedicalRules /></TabsContent>
       <TabsContent value="mechs" className="pt-3"><MechRules /></TabsContent>
       <TabsContent value="cyber" className="pt-3"><CyberRules /></TabsContent>
