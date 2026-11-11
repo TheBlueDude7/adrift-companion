@@ -431,12 +431,16 @@ export const CYBER_LOAD: Record<CyberTier, number> = { 1: 1, 2: 2, 3: 3 };
 export const SYSTEM_ATTR_BONUS: Record<CyberTier, number> = { 1: 0, 2: 1, 3: 2 };
 
 /**
- * What an Interface system adds to the Maximum HP of a mech its owner is piloting. Interface is the
- * one branch built around no Attribute, because the thing it improves isn't the body: a deeper
- * connection means the frame takes punishment that would have stopped a bolted-on pilot. So it has
- * the same ladder as the others, paid out in the frame.
+ * Armor Points an Interface system adds to a mech its owner is piloting. Interface is the one branch
+ * built around no Attribute, because the thing it improves isn't the body: a deeper connection means
+ * the frame moves as the pilot means it to. So it has the same ladder as the others, paid out in the
+ * frame.
+ *
+ * Armor rather than Mech HP, because what a connection buys is reaction, not mass. Plating blunts a
+ * hit by a point and loses a point doing it, so these are hits turned aside rather than punishment
+ * absorbed — and they come back with the plating when the frame is replated.
  */
-export const INTERFACE_MECH_HP: Record<CyberTier, number> = { 1: 0, 2: 2, 3: 4 };
+export const INTERFACE_MECH_ARMOR: Record<CyberTier, number> = { 1: 0, 2: 1, 3: 2 };
 
 /** One point of Dampening per this much Cybernetic Load. */
 export const LOAD_PER_DAMPENING = 3;

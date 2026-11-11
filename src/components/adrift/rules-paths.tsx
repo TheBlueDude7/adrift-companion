@@ -14,7 +14,7 @@ import {
   DAMPENING_CAP,
   DAMPENING_STRESS_COST,
   FABRICATE_TASK,
-  INTERFACE_MECH_HP,
+  INTERFACE_MECH_ARMOR,
   LOAD_PER_DAMPENING,
   SURGERY_TASK,
   SYSTEM_ATTR_BONUS,
@@ -271,17 +271,30 @@ export function CyberRules() {
       {!n && (
         <Panel title="Dampening" icon={<BrainIcon className="size-4 text-muted-foreground" />}>
           <Note>
-            One point per {LOAD_PER_DAMPENING} Cybernetic Load, up to {DAMPENING_CAP} — which is a Tier III system in all six branches, and the deepest anyone
-            legally goes.
+            Dampening is a number of points a wired character gets at the start of every Scene, and spends over the course of it to stop Pressure and Stress from
+            landing on them. How many depends on nothing but Cybernetic Load.
           </Note>
           <RuleTable head={["Cybernetic Load", "Dampening"]} rows={ladder.map((l) => [`${l}+`, dampeningForLoad(l)])} />
+          <Note>
+            One point for every {LOAD_PER_DAMPENING} Load, stopping at {DAMPENING_CAP}. Load {DAMPENING_CAP * LOAD_PER_DAMPENING} is a Tier III system in all six
+            branches, so {DAMPENING_CAP} is as far as anyone gets.
+          </Note>
+          <p className="text-sm font-medium">What the points buy</p>
+          <RuleTable
+            head={["To stop", "Costs"]}
+            rows={[
+              ["1 level of Pressure", "1 point"],
+              ["1 point of Stress", `${DAMPENING_STRESS_COST} points`],
+            ]}
+          />
           <Lines
             items={[
-              "It is a pool for the whole Scene, not a discount used once.",
-              "A point holds off one level of Pressure. It is spent after Strained has added its extra level, so a Strained character pays the wiring an extra point rather than slipping past it.",
-              `${DAMPENING_STRESS_COST} points hold off one point of Stress, because quieting the mind is harder than quieting the body — and that price is why only a deep build filters Stress at all.`,
-              "The app spends it automatically as the fear arrives and says so in the log. Clearing Pressure or Stress costs nothing.",
-              "It refreshes when the Scene ends, and nothing refills it sooner.",
+              "They are a pool, not a discount. Dampening 4 can stop four levels of Pressure, or two points of Stress, or two levels and one point — whatever the Scene throws, until the four are gone.",
+              "They are spent as the Pressure or Stress arrives, automatically, and the log says what was absorbed and what's left. Nothing is held in reserve and nothing has to be declared.",
+              "Pressure is dampened after Strained adds its extra level, so a Strained character pays a point for that level too.",
+              "Losing Pressure or Stress costs nothing. Dampening only ever pays to stop it arriving.",
+              "Stress that can't be paid for lands in full — there is no partial absorption, so a character with 1 point left takes the whole point of Stress.",
+              "The pool refills when the Scene ends, and at no other time. A Rest in the middle of a Scene does not restore it.",
             ]}
           />
           <Note>
@@ -300,7 +313,7 @@ export function CyberRules() {
           <Lines
             items={[
               `The deepest implant in a system raises its Attribute: ${TIERS.map((t) => `${TIER_LABEL[t]} +${SYSTEM_ATTR_BONUS[t]}`).join(", ")}.`,
-              `Interface has no Attribute, because what it improves isn't the body. It adds to a piloted mech's Maximum HP instead: ${TIERS.map((t) => `${TIER_LABEL[t]} +${INTERFACE_MECH_HP[t]}`).join(", ")}.`,
+              `Interface has no Attribute, because what it improves isn't the body. It lends Armor Points to a mech its owner is piloting instead: ${TIERS.map((t) => `${TIER_LABEL[t]} +${INTERFACE_MECH_ARMOR[t]}`).join(", ")}. They arrive with the pilot and leave with them.`,
               `A Damage system adds a share of your own hits of its type, rounded up and never less than 1: ${TIERS.map((t) => `${TIER_LABEL[t]} +${Math.round(DAMAGE_BOOST[t] * 100)}%`).join(", ")}. It also halves incoming damage of that type.`,
             ]}
           />

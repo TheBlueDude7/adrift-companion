@@ -59,7 +59,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { CYBER_BY_KEY, CYBER_SYSTEMS, DAMAGE_BOOST, DAMPENING_CAP, DAMPENING_STRESS_COST, FABRICATE_TASK, IMPLANT_RECIPES, INTERFACE_MECH_HP, LOAD_PER_DAMPENING, SURGERY_TASK, TIER_LABEL, type CyberDef } from "@/data/cybernetics";
+import { CYBER_BY_KEY, CYBER_SYSTEMS, DAMAGE_BOOST, DAMPENING_CAP, DAMPENING_STRESS_COST, FABRICATE_TASK, IMPLANT_RECIPES, INTERFACE_MECH_ARMOR, LOAD_PER_DAMPENING, SURGERY_TASK, TIER_LABEL, type CyberDef } from "@/data/cybernetics";
 import { researchTree, type TechBranch, type TechState } from "@/lib/cyber";
 import type { DamageType } from "@/lib/rules";
 import { recipeText } from "@/lib/stock";
@@ -292,7 +292,7 @@ function SystemPanel({
               <span className={cn("rounded px-2 py-0.5 font-heading text-[11px] font-semibold tracking-widest uppercase", theme.band)}>{TIER_LABEL[tier.tier]}</span>
               {system.attr && <span className="text-[11px] text-muted-foreground">+{tier.attrBonus} {system.attr}</span>}
               {/* Interface raises no Attribute; what it raises is the frame the pilot is plugged into. */}
-              {system.key === "interface" && <span className="text-[11px] text-muted-foreground">+{INTERFACE_MECH_HP[tier.tier]} mech HP</span>}
+              {system.key === "interface" && <span className="text-[11px] text-muted-foreground">+{INTERFACE_MECH_ARMOR[tier.tier]} mech Armor</span>}
               {system.key === "damage" && <span className="text-[11px] text-muted-foreground">+{Math.round(DAMAGE_BOOST[tier.tier] * 100)}% damage</span>}
               <span className="text-[11px] text-muted-foreground">Load {tier.load}</span>
               <span className="h-px flex-1 bg-border" />

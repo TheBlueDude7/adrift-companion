@@ -10,6 +10,7 @@ import { marksOn } from "../src/lib/marks";
 import { applyDamage } from "../src/lib/mechanics";
 import { newCharacter, createInitialState, itemFromTemplate } from "../src/lib/seed";
 import { mechStats, newMech } from "../src/lib/mechs";
+import { MECH_TIERS } from "../src/data/mechs";
 import { CYBER_BY_KEY } from "../src/data/cybernetics";
 import { DEFAULT_ITEM_TEMPLATES, PRESSURE_STATES, threatBand } from "../src/lib/rules";
 import { playerView } from "../src/lib/sync/redact";
@@ -933,15 +934,22 @@ const condition = (c: Character, name: string) => void c.conditions.push({ id: n
     g.mechs.push(m);
     return mechStats(g, m);
   };
-  const bare = frame([]).maxHp;
-  check("an unaugmented pilot lends the frame nothing", frame([]).plugged, 0);
+  const bare = frame([]);
+  check("an unaugmented pilot lends the frame nothing", bare.plugged, 0);
   check("a Tier I Interface system is still nothing", frame(["mech-control-interface"]).plugged, 0);
-  check("Tier II lends it 2 Mech HP", frame(["neural-mech-integration"]).maxHp - bare, 2);
-  check("Tier III lends it 4", frame(["total-mech-integration"]).maxHp - bare, 4);
-  check("and a Tier III integrating its Tier II doesn't lend both", frame(["neural-mech-integration", "total-mech-integration"]).plugged, 4);
+  check("Tier II lends it 1 Armor Point", frame(["neural-mech-integration"]).maxArmor - bare.maxArmor, 1);
+  check("Tier III lends it 2", frame(["total-mech-integration"]).maxArmor - bare.maxArmor, 2);
+  check("and it is Armor it lends, not Mech HP", frame(["total-mech-integration"]).maxHp - bare.maxHp, 0);
+  check("and a Tier III integrating its Tier II doesn't lend both", frame(["neural-mech-integration", "total-mech-integration"]).plugged, 2);
   check("a damaged implant lends nothing", frame(["total-mech-integration"], { damaged: true }).plugged, 0);
   check("nor does a Replacement", frame(["total-mech-integration"], { replacement: true }).plugged, 0);
   check("and another system's Tier III is no help to the frame", frame(["full-skeletal-lattice"]).plugged, 0);
+
+  // Armor is ablative, so the points are only worth having if the plating actually carries them.
+  // A frame rolls out plated to its frame value, and the pilot's connection lends on top of that.
+  const deep = frame(["total-mech-integration"]);
+  check("the frame's own plating is unchanged by who's inside", deep.maxArmor - deep.plugged, MECH_TIERS[1].armor);
+  check("and the pilot's points are part of what a replate restores", deep.maxArmor, MECH_TIERS[1].armor + 2);
 }
 
 {

@@ -1,6 +1,6 @@
 import { CHASSIS, MECH_DAMAGE_TYPES, MECH_TIERS, MODULE_BY_KEY, type MechModule } from "@/data/mechs";
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
-import { cyberMechHp } from "./cyber";
+import { cyberMechArmor } from "./cyber";
 import { uid } from "./dice";
 import { scaleDamage } from "./rules";
 import type { Character, GameState, Mech, MechChassis, MechDamageType } from "./types";
@@ -21,10 +21,13 @@ export const portedImplants = (m: Mech | undefined) =>
 
 /**
  * Armor Points the mech's plating provides when it's intact: the frame's own, which no damage can take
- * away for good, plus every working Defensive module. Damaged modules protect nothing.
+ * away for good, plus every working Defensive module, plus whatever the pilot's Interface system lends
+ * it. Damaged modules protect nothing.
+ *
+ * `pilot` is optional because a save migration has a frame before it has a crew to look through.
  */
-export const maxMechArmor = (m: Mech) =>
-  MECH_TIERS[m.tier].armor + mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0);
+export const maxMechArmor = (m: Mech, pilot?: Character) =>
+  MECH_TIERS[m.tier].armor + mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0) + cyberMechArmor(pilot);
 
 export function mechStats(g: GameState, m: Mech) {
   const chassis = CHASSIS[m.chassis];
@@ -33,16 +36,16 @@ export function mechStats(g: GameState, m: Mech) {
   const expert = isMechExpert(pilot);
   // What the pilot's own Interface implants lend the frame. Interface is Frame-Compatible by
   // definition, so unlike their other implants it is doing its work precisely while they're inside.
-  const plugged = cyberMechHp(pilot);
+  const plugged = cyberMechArmor(pilot);
   const mods = mechModules(m);
   const live = mods.filter((x) => !x.inst.damaged);
-  const maxArmor = maxMechArmor(m);
+  const maxArmor = maxMechArmor(m, pilot);
   const resist = Object.fromEntries(MECH_DAMAGE_TYPES.map((t) => [t, 0])) as Record<MechDamageType, number>;
   for (const t of m.tierResist) resist[t] += 1;
   for (const x of live) if (x.def.resist) resist[x.def.resist] += 1;
   return {
     chassis,
-    maxHp: chassis.hp + tier.hpBonus + live.reduce((s, x) => s + (x.def.hp ?? 0), 0) + (expert ? 4 : 0) + plugged,
+    maxHp: chassis.hp + tier.hpBonus + live.reduce((s, x) => s + (x.def.hp ?? 0), 0) + (expert ? 4 : 0),
     slots: tier.slots + (expert ? 1 : 0),
     usedSlots: mods.reduce((s, x) => s + x.def.slots, 0),
     hardpoints: chassis.hardpoints,

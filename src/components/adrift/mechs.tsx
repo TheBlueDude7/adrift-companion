@@ -27,7 +27,7 @@ import {
   type ModuleCategory,
 } from "@/data/mechs";
 import { CYBER_BY_KEY, TIER_LABEL } from "@/data/cybernetics";
-import { suppressedImplants } from "@/lib/cyber";
+import { cyberMechArmor, suppressedImplants } from "@/lib/cyber";
 import { uid } from "@/lib/dice";
 import { applyDamage, damageSteps } from "@/lib/mechanics";
 import { burnMechCells, cellList, mechCells } from "@/lib/power";
@@ -542,7 +542,7 @@ function MechCard({ mech }: { mech: Mech }) {
           <Pill>Noise: {s.chassis.noise}</Pill>
           {mech.external && <Pill tone="warn">Secured outside</Pill>}
           {s.expert && <Pill tone="good">Mech Expert: +1 slot, +4 HP</Pill>}
-          {s.plugged > 0 && <Pill tone="good" tip="The pilot's Interface system, which works precisely because they are inside a frame.">Interface: +{s.plugged} HP</Pill>}
+          {s.plugged > 0 && <Pill tone="good" tip="The pilot's Interface system, which works precisely because they are inside a frame. It lends the plating Armor Points, and takes them away again if they climb out.">Interface: +{s.plugged} Armor</Pill>}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -597,7 +597,22 @@ function MechCard({ mech }: { mech: Mech }) {
         <div className="grid gap-2 rounded-lg border p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">Pilot</Label>
-            <Select value={mech.pilotId ?? "none"} onValueChange={(v) => edit("Assign pilot", (m, g) => { m.pilotId = v === "none" ? null : (v as string); if (!m.pilotId) m.deployed = false; const who = g.characters.find((c) => c.id === m.pilotId); return who ? `${who.name} is assigned to pilot ${m.name}.` : `${m.name} has no pilot.`; })}>
+            <Select
+              value={mech.pilotId ?? "none"}
+              onValueChange={(v) => edit("Assign pilot", (m, g) => {
+                const before = mechStats(g, m).maxArmor;
+                m.pilotId = v === "none" ? null : (v as string);
+                if (!m.pilotId) m.deployed = false;
+                // A connection isn't plating that has to be bolted on, so the Armor an Interface
+                // system lends arrives with the pilot — and leaves with them.
+                const after = mechStats(g, m).maxArmor;
+                m.armor = Math.max(0, Math.min(after, m.armor + (after - before)));
+                const who = g.characters.find((c) => c.id === m.pilotId);
+                const lent = cyberMechArmor(who);
+                if (!who) return `${m.name} has no pilot.`;
+                return `${who.name} is assigned to pilot ${m.name}${lent ? `, and their Interface system lends the frame ${lent} Armor (${m.armor}/${after}).` : "."}`;
+              })}
+            >
               <SelectTrigger size="sm" className="w-44"><SelectValue>{pilot?.name ?? "No pilot"}</SelectValue></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No pilot</SelectItem>

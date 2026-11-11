@@ -5,7 +5,7 @@ import {
   CYBER_LOCATIONS,
   CYBER_SYSTEMS,
   CYBER_SYSTEM_BY_KEY,
-  INTERFACE_MECH_HP,
+  INTERFACE_MECH_ARMOR,
   SYSTEM_ATTR_BONUS,
   TIER_LABEL,
   dampeningForLoad,
@@ -79,13 +79,13 @@ export function cyberAttr(c: Character, attr: Attribute) {
 export const cyberMaxHp = (c: Character) => installed(c).filter(working).reduce((s, x) => s + (x.def.bonus?.maxHp ?? 0), 0);
 
 /**
- * Maximum Mech HP a pilot's Interface system lends the frame they're plugged into. Only the highest
- * tier counts, the way the Attribute ladder does: a Tier III integrates the Tier II beneath it.
+ * Armor Points a pilot's Interface system lends the frame they're plugged into. Only the highest tier
+ * counts, the way the Attribute ladder does: a Tier III integrates the Tier II beneath it.
  */
-export function cyberMechHp(c: Character | undefined) {
+export function cyberMechArmor(c: Character | undefined) {
   if (!c) return 0;
   const tier = Math.max(0, ...installed(c).filter(working).filter((x) => x.def.system === "interface").map((x) => x.def.tier));
-  return INTERFACE_MECH_HP[tier as CyberTier] ?? 0;
+  return INTERFACE_MECH_ARMOR[tier as CyberTier] ?? 0;
 }
 export const cyberMaxEnergy = (c: Character) => installed(c).filter(working).reduce((s, x) => s + (x.def.bonus?.maxEnergy ?? 0), 0);
 
