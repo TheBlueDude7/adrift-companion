@@ -28,7 +28,7 @@ export function surgicalToolsFor(g: GameState, surgeonId: string): ToolSource | 
  * Where the operation happens, by Medical Bay level. `keep` is the share of Max HP the patient drops to
  * when Surgery begins, on success and on failure; null means no drop at all.
  */
-const THEATRES = [
+export const THEATRES = [
   { label: "No Medical Bay", dice: -3, keep: { success: 1 / 2, failure: 1 / 2 } },
   { label: "Field Setup", dice: -2, keep: { success: 1 / 2, failure: 1 / 2 } },
   { label: "Operational Medical Bay", dice: -1, keep: { success: 3 / 4, failure: 1 / 2 } },
