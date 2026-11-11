@@ -14,7 +14,7 @@ import {
   type SkillKey,
 } from "./rules";
 import { cyberAttr, cyberMaxEnergy, cyberMaxHp } from "./cyber";
-import { injuryPenalty } from "./injuries";
+import { injuryMaxHp, injuryPenalty } from "./injuries";
 import { mechModules, mechStats, pilotedMech } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
@@ -56,7 +56,7 @@ export function rollBreakdown(c: Character, skill: SkillKey | null, attr: Attrib
 export function maxHp(c: Character) {
   const str = attributeValue(c, "STR");
   const con = attributeValue(c, "CON");
-  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c));
+  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c) + injuryMaxHp(c));
 }
 
 export function baseMaxEnergy(c: Character) {

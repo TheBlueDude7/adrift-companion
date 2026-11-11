@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
@@ -497,7 +497,7 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
   // An extra task is judged after the Push's 1 Energy is spent.
   const view = extra ? { ...game, characters: game.characters.map((x) => (x.id === c.id ? { ...x, energy: Math.max(0, x.energy - 1) } : x)) } : game;
   const reasons = permissionReasons(view, draft);
-  const projects = game.ship.projects.filter((p) => !p.done);
+  const projects = openProjects(game);
   const assistable = actionsNow(game).filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist");
   const set = (patch: Partial<SegmentAction>) => setDraft((d) => ({ ...d, ...patch }));
   const needsRecipe = def.effect === "craft" || def.effect === "cook" || def.effect === "medicine" || def.effect === "salvage" || def.effect === "mechmod";

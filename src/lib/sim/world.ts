@@ -1,6 +1,7 @@
 import "server-only";
 
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
+import { openProjects } from "../actions";
 import { characterAlerts, foodCount, hullTier, power, roomWorks, supplyCount } from "../derive";
 import { ITEM_CATEGORIES, PANICKED, PRESSURE_STATES, PROJECT_TEMPLATES } from "../rules";
 import type { GameState, Item, Zone } from "../types";
@@ -172,7 +173,7 @@ export function upgrades(g: GameState): string {
  * four survivors in a row don't each ask for the same hull repair.
  */
 export function projectAsks(g: GameState): string {
-  const open = g.ship.projects.filter((p) => !p.done).map((p) => p.name);
+  const open = openProjects(g).map((p) => p.name);
   const asked = g.projectRequests ?? [];
   const names = (id: string) => g.characters.find((c) => c.id === id)?.name ?? "someone";
   return [
@@ -224,7 +225,7 @@ export function pressing(g: GameState): string {
   const broken = g.ship.rooms.filter((r) => r.module && !roomWorks(r));
   if (broken.length) lines.push(`- Out of action: ${broken.map((r) => `${r.name} (${r.active ? r.condition.toLowerCase() : "switched off"})`).join(", ")}.`);
 
-  const stalled = g.ship.projects.filter((p) => !p.done && p.progress > 0);
+  const stalled = openProjects(g).filter((p) => p.progress > 0);
   if (stalled.length) lines.push(`- Started and unfinished: ${stalled.map((p) => `${p.name} (${p.progress} of ${p.required})`).join(", ")}.`);
 
   if (!lines.length) return "WHAT'S PRESSING\n\nNothing is on fire. This is when you get ahead: stores, repairs, a module, a course.";

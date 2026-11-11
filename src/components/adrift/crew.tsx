@@ -35,7 +35,7 @@ import {
   wornArmor,
 } from "@/lib/derive";
 import { INJURY_BY_CODE, INJURY_TABLE } from "@/data/injuries";
-import { convertLegacy, effectiveSeverity, operate, suggestConversion } from "@/lib/injuries";
+import { convertLegacy, effectiveSeverity, injuryMaxHpSources, operate, suggestConversion } from "@/lib/injuries";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
   ATTRIBUTES,
@@ -208,10 +208,18 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   const floor = pressureFloor(c.stress);
   const { isGM } = usePerms();
   const worn = useGame((s) => wornArmor(s.game, c.id));
+  const hpLost = injuryMaxHpSources(c);
   return (
     <div className="grid gap-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatBlock label="HP" value={c.hp} max={maxHp(c)} tone="hp" onChange={(v) => edit(`${c.name} HP → ${v}`, (x) => { x.hp = v; return `${x.name} HP set to ${v}.`; })} />
+        <StatBlock
+          label="HP"
+          value={c.hp}
+          max={maxHp(c)}
+          tone="hp"
+          onChange={(v) => edit(`${c.name} HP → ${v}`, (x) => { x.hp = v; return `${x.name} HP set to ${v}.`; })}
+          extra={hpLost.length > 0 ? <span className="truncate text-[11px] text-amber-300" title="An injury that names a Max HP loss takes it once the Surgery is done, for as long as the injury is on the sheet.">{hpLost.join(", ")} Max HP</span> : undefined}
+        />
         <StatBlock
           label="Energy"
           value={c.energy}

@@ -2,13 +2,17 @@
 // tasks they may take. Run with the react-server condition, since the prompt builders are
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
-import { advanceProject, extraTaskBlocker, fitOptions, newAction, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
+import { advanceProject, extraTaskBlocker, fitOptions, newAction, openProjects, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
 import { MECH_MODULE_RECIPES } from "../src/lib/crafting";
 import { MECH_MODULES } from "../src/data/mechs";
 import { FACILITY_BY_NAME } from "../src/data/ship-upgrades";
 import { uid } from "../src/lib/dice";
 import { startExpedition, markExpeditionTurn, moveTo, revealFind, scout, siteReport } from "../src/lib/expedition";
-import { FOOD_ITEMS, foodCount, hullTier, supplyCount } from "../src/lib/derive";
+import { FOOD_ITEMS, foodCount, hullTier, maxHp, supplyCount } from "../src/lib/derive";
+import { INJURY_TABLE } from "../src/data/injuries";
+import { addInjury, injuryMaxHpSources, operate } from "../src/lib/injuries";
+import { normalizeGame } from "../src/lib/maps";
+import { POWER_CELLS, burnDailyPower, powerDaysLeft } from "../src/lib/power";
 import { PANICKED } from "../src/lib/rules";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { combineCrafts, legalOptions, projectAsk } from "../src/lib/sim/options";
@@ -507,6 +511,14 @@ function bench(components: number) {
   for (const [name, qty] of [["Scrap Metal", 2], ["Scrap Components", 1]] as const) stockItem(nothing, name, qty, { category: "Material" });
   advanceProject(nothing, "frame", 0);
   check("and no Progress takes no materials", supplyCount(nothing, "Scrap Metal"), 2);
+
+  // A filed project keeps its record but stops asking for segments.
+  const filed: GameState = structuredClone(nothing);
+  check("an underway project is on the menu", openProjects(filed).map((p) => p.name), ["Mech Frame (Tier I)"]);
+  filed.ship.projects[0].archived = true;
+  check("archiving takes it off the menu", openProjects(filed), []);
+  check("without throwing the record away", filed.ship.projects.length, 1);
+  check("and nobody can work on it", taskTerms(filed, { ...newAction(filed, filed.characters[0], "Work on a project"), projectId: "frame" }).blocker, "Mech Frame (Tier I) has been filed away in the archive");
 }
 
 // Mech modules cost a segment at the bench, not a line on the Mechs tab.
@@ -579,6 +591,47 @@ function bench(components: number) {
   check("but produce counts", foodCount(g), 5);
   check("and nobody is told they're starving beside it", pressing(g).includes("Food: 5 rations"), true);
   check("it's eaten last of all, after the cooked meals", FOOD_ITEMS.at(-1), "Raw Food");
+}
+
+// Organ Failure is the one injury that costs Max HP, and only once the Surgery is behind them.
+{
+  const g = world();
+  const c = g.characters[0];
+  const before = maxHp(c);
+  const organ = INJURY_TABLE.find((e) => e.name === "Organ Failure")!;
+  check("it's the only injury that names a Max HP loss", INJURY_TABLE.filter((e) => e.maxHp).map((e) => e.name), ["Organ Failure"]);
+
+  addInjury(g, c, organ, []);
+  check("carrying it costs nothing yet", maxHp(c), before);
+
+  c.hp = before;
+  const out: string[] = [];
+  operate(c, c.injuries[0].id, out);
+  check("surviving it costs 2 Max HP", maxHp(c), before - 2);
+  check("and the HP above the new cap is gone", c.hp, before - 2);
+  check("the log says so", out.some((l) => l.includes(`Organ Failure leaves ${c.name} -2 Max HP`)), true);
+  check("and the sheet can show where it went", injuryMaxHpSources(c), ["Organ Failure -2"]);
+
+  c.injuries = [];
+  check("healing it gives the 2 back", maxHp(c), before);
+}
+
+// A cell holds as many days as it says it does. `normalizeGame` used to delete the grid's remaining
+// charge, and it runs on every load and every sync, so every cell burned out after a single night.
+{
+  const g = world();
+  g.items = g.items.filter((i) => !POWER_CELLS.some((c) => c.name === i.name));
+  stockItem(g, "Power Cell", 2, { category: "Equipment" });
+  g.ship.gridCell = "Power Cell";
+
+  const night = () => { const out: string[] = []; burnDailyPower(g, out); return out.join(" "); };
+  check("the first night loads a cell", night(), "🔌 A Power Cell is loaded into the grid (2 days of power). The grid has 1 day of charge left.");
+  check("and takes one cell out of the hold", supplyCount(g, "Power Cell"), 1);
+  check("the charge survives a reload", powerDaysLeft(normalizeGame(structuredClone(g))), 1);
+  check("the second night runs on the same cell", night(), "🔌 That charge is spent: tomorrow needs another Power Cell.");
+  check("so the hold still has the spare", supplyCount(g, "Power Cell"), 1);
+  check("the third night loads it", night().startsWith("🔌 A Power Cell is loaded"), true);
+  check("and that's the hold empty", supplyCount(g, "Power Cell"), 0);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

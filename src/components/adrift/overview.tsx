@@ -3,6 +3,7 @@
 import { AlertTriangleIcon, PlusIcon, ZapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { openProjects } from "@/lib/actions";
 import { characterAlerts, hullTier, maxEnergy, maxHp, power } from "@/lib/derive";
 import { PRESSURE_STATES, pressureTip, stressBand } from "@/lib/rules";
 import { useGame } from "@/lib/store";
@@ -20,7 +21,7 @@ export function OverviewTab({ onOpenCharacter, onGo }: { onOpenCharacter: (id: s
   const tier = hullTier(ship);
   const p = power(ship);
   const troubled = ship.rooms.filter((r) => r.condition !== "Operational");
-  const active = game.ship.projects.filter((x) => !x.done);
+  const active = openProjects(game);
 
   return (
     <div className="grid gap-5">

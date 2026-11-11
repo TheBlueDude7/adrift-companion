@@ -1,6 +1,6 @@
 import type { CraftRecipe } from "@/data/crafting";
 import { SHIPBOARD_TASKS, type TaskEffect } from "@/data/tasks";
-import { actionsNow, extraTaskBlocker, fitOptions, newAction, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
+import { actionsNow, extraTaskBlocker, fitOptions, newAction, openProjects, normalFabricateLimit, permissionReasons, restPushConflict, taskAllowance, taskFor, taskTerms, type TaskTerms } from "../actions";
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import { uid } from "../dice";
 import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
@@ -72,7 +72,7 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
   const make = (patch: Partial<SegmentAction> = {}): SegmentAction => ({ ...newAction(g, c, task), ...patch });
   switch (taskFor({ task }).effect) {
     case "project":
-      return g.ship.projects.filter((p) => !p.done).map((p) => make({ projectId: p.id }));
+      return openProjects(g).map((p) => make({ projectId: p.id }));
     case "assist":
       return actionsNow(g)
         .filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist")

@@ -21,6 +21,8 @@ export type InjuryDef = {
   bleed?: number;
   deadline?: boolean;
   permanent?: boolean;
+  /** Max HP the injury costs once it's been operated on, for as long as it stays on the sheet. */
+  maxHp?: number;
 };
 
 type Row = Omit<InjuryDef, "code" | "severity" | "location">;
@@ -72,7 +74,7 @@ const LOCATION_ROWS: Record<InjuryLocation, [Row, Row, Row, Row, Row, Row]> = {
     { name: "Mild Infection", effect: "−1d6 to Constitution rolls made to resist Poisoned or Contaminated." },
     { name: "Internal Bleeding", effect: "−2d6 to Constitution rolls. Bleeding again after every combat Scene until Surgery.", attrs: ["CON"] },
     { name: "Systemic Infection", effect: "−2d6 to Constitution rolls. Poisoned until Surgery.", attrs: ["CON"], conditions: ["Poisoned"] },
-    { name: "Organ Failure", effect: "−2d6 to Constitution rolls. Poisoned and Drained. Surgery within one segment or die, and −2 Max HP afterward.", attrs: ["CON"], conditions: ["Poisoned", "Drained"], deadline: true },
+    { name: "Organ Failure", effect: "−2d6 to Constitution rolls. Poisoned and Drained. Surgery within one segment or die, and −2 Max HP afterward.", attrs: ["CON"], conditions: ["Poisoned", "Drained"], deadline: true, maxHp: -2 },
   ],
 };
 

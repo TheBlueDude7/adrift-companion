@@ -178,7 +178,6 @@ export function normalizeGame(g: GameState): GameState {
       if (old) delete old.search;
     }
   }
-  delete (g.ship as { powerDays?: number }).powerDays;
   if (!g.research || !Array.isArray(g.research.cybernetics)) g.research = { cybernetics: [] };
   // Hydroponics grew food and nothing else, so `ready` was a plain count of Raw Food.
   const crop = g.ship.crop as (Omit<Crop, "ready"> & { ready: number | Crop["ready"] }) | undefined;

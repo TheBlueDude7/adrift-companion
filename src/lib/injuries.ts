@@ -1,6 +1,7 @@
 import { INJURY_BY_CODE, INJURY_LOCATIONS, INJURY_PENALTY, INJURY_TABLE, type InjuryDef } from "@/data/injuries";
 import { uid } from "./dice";
-import { applyCondition } from "./mechanics";
+import { maxHp } from "./derive";
+import { applyCondition, clampVitals } from "./mechanics";
 import { SEGMENTS, SKILL_BY_KEY, type Attribute, type InjurySeverity, type SkillKey } from "./rules";
 import type { Character, GameState, Injury } from "./types";
 
@@ -81,7 +82,26 @@ export function operate(c: Character, injuryId: string, out: string[]) {
   const def = INJURY_BY_CODE[injury.code];
   out.push(`${c.name}'s Surgery succeeds: ${injury.name} is now a Treated Minor injury (−1d6).${ended.length ? ` ${ended.map((x) => x.name).join(" and ")} end${ended.length === 1 ? "s" : ""}.` : ""}`);
   if (def?.permanent) out.push(`The loss is permanent: it won't heal naturally until replaced by a cybernetic or graft.`);
-  if (def?.name === "Organ Failure") out.push(`Organ Failure leaves ${c.name} with −2 Max HP; note it on their sheet.`);
+  if (def?.maxHp) {
+    clampVitals(c);
+    out.push(`${injury.name} leaves ${c.name} ${def.maxHp} Max HP for as long as they carry it: ${c.hp}/${maxHp(c)}.`);
+  }
+}
+
+/**
+ * Max HP the character's injuries cost them. Only an injury that names the loss takes any, and only
+ * once it's been operated on: Organ Failure reads "−2 Max HP afterward", and the afterward is the Surgery.
+ */
+export function injuryMaxHp(c: Character) {
+  return c.injuries.reduce((sum, i) => sum + (i.operated && i.location ? INJURY_BY_CODE[i.code]?.maxHp ?? 0 : 0), 0);
+}
+
+/** Where a character's Max HP loss comes from, for the sheet to show alongside the number. */
+export function injuryMaxHpSources(c: Character) {
+  return c.injuries.flatMap((i) => {
+    const cost = i.operated && i.location ? INJURY_BY_CODE[i.code]?.maxHp ?? 0 : 0;
+    return cost ? [`${i.name} ${cost}`] : [];
+  });
 }
 
 /** Natural recovery and Life Support can heal it: Minor now, and not a permanent loss. */

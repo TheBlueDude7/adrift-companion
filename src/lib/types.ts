@@ -290,6 +290,10 @@ export type Project = {
   module?: { name: string; level?: number } | null;
   notes: string;
   done: boolean;
+  /** Filed away: kept for the record, but out of the active list and off the crew's menu. An archived project that never finished was abandoned. */
+  archived?: boolean;
+  /** The day it was filed, so the archive can say when. */
+  archivedDay?: number;
 };
 
 export type Ship = {

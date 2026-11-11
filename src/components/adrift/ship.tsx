@@ -1,7 +1,7 @@
 "use client";
 
 import { READ_ONLY, usePerms } from "@/lib/use-perms";
-import { AlertTriangleIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, PencilIcon, PlusIcon, PowerIcon, SproutIcon, Trash2Icon, ZapIcon } from "lucide-react";
+import { AlertTriangleIcon, ArchiveIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, PencilIcon, PlusIcon, PowerIcon, RotateCcwIcon, SproutIcon, Trash2Icon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { rollPool, sixes, uid } from "@/lib/dice";
 import { hullTier, power, roomDraw, roomWorks } from "@/lib/derive";
 import {
@@ -26,7 +27,7 @@ import {
 } from "@/lib/rules";
 import { FACILITIES, FACILITY_BY_NAME, ladderFor, ROOM_FITTINGS, SOLAR_FUEL_PER_DAY, SOLAR_PANELS } from "@/data/ship-upgrades";
 import { upgradeThreshold } from "@/data/tasks";
-import { advanceProject, projectBill } from "@/lib/actions";
+import { advanceProject, openProjects, projectBill } from "@/lib/actions";
 import { CROP_DAYS, CROP_KINDS, CROP_KIND_BY_KEY, CROP_LEVEL_NAMES, XENO_STRAINS, type CropKindDef, cropKindOf, cropKindsFor, cropOf, cropStall, cropTending, cropYield, doseYield, growCrops, hydroponicsLevel, nextCropKind, readyTotal, strainLabel, strainOf } from "@/lib/crops";
 import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
 import { roomFromPreset } from "@/lib/seed";
@@ -668,7 +669,7 @@ function AddProjectDialog({ request }: { request?: ProjectRequest }) {
   const t = templates[tpl] ?? templates[0];
   const needsPatient = t.name === "Stress Recovery";
   const patient = game.characters.find((c) => c.id === patientId);
-  const inRecovery = new Set(game.ship.projects.filter((p) => !p.done && p.patientId).map((p) => p.patientId));
+  const inRecovery = new Set(openProjects(game).filter((p) => p.patientId).map((p) => p.patientId));
   const installing = t.name === "Install Module";
   const upgrading = t.name === "Upgrade Module";
   const rooms = installing ? game.ship.rooms.filter((r) => !r.module) : upgrading ? game.ship.rooms.filter((r) => nextRoomLevel(r)) : game.ship.rooms;
@@ -928,11 +929,87 @@ export function ProjectRow({ p }: { p: Project }) {
         </Button>
         <Button size="xs" variant="outline" disabled={p.progress <= 0} onClick={() => edit(`${p.name} −1`, (x) => { x.progress -= 1; x.done = false; return `${x.name} loses 1 Progress (${x.progress}/${x.required}).`; })}>Lose progress</Button>
         <Stepper value={p.required} min={1} max={30} size="xs" label="required progress" onChange={(v) => edit("Required", (x) => { x.required = v; x.done = x.progress >= v; })} />
-        <Button size="xs" variant="ghost" className="ml-auto" onClick={() => act("Remove project", (g) => { g.ship.projects = g.ship.projects.filter((x) => x.id !== p.id); return `${p.done ? "Archived" : "Abandoned"} project: ${p.name}.`; })}>
-          <Trash2Icon /> {p.done ? "Archive" : "Abandon"}
+        <Button
+          size="xs"
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => edit(p.done ? "Archive project" : "Abandon project", (x, g) => { x.archived = true; x.archivedDay = g.day; return `${x.done ? "Archived" : "Abandoned"} project: ${x.name}.`; })}
+        >
+          <ArchiveIcon /> {p.done ? "Archive" : "Abandon"}
         </Button>
       </fieldset>
     </div>
+  );
+}
+
+/** A filed project: one line of record, with the way back and the way out. */
+function ArchivedProjectRow({ p }: { p: Project }) {
+  const act = useGame((s) => s.act);
+  const { isGM } = usePerms();
+  const room = useGame((s) => s.game.ship.rooms.find((r) => r.id === p.roomId));
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 p-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{p.name}</p>
+        <p className="text-[11px] text-muted-foreground">
+          {p.done ? "Finished" : `Abandoned at ${p.progress}/${p.required}`}
+          {p.archivedDay !== undefined && ` · filed Day ${p.archivedDay}`}
+          {room && ` · ${room.name}`}
+        </p>
+      </div>
+      <Pill tone={p.done ? "good" : undefined}>{p.done ? "Complete" : "Abandoned"}</Pill>
+      {isGM && (
+        <>
+          <Button size="xs" variant="outline" onClick={() => act("Restore project", (g) => { const x = g.ship.projects.find((y) => y.id === p.id)!; x.archived = false; delete x.archivedDay; return `${x.name} comes back out of the archive${x.done ? "" : ` at ${x.progress}/${x.required}`}.`; })}>
+            <RotateCcwIcon /> Restore
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => act("Delete project", (g) => { g.ship.projects = g.ship.projects.filter((x) => x.id !== p.id); return `Deleted the record of ${p.name}.`; })}>
+            <Trash2Icon /> Delete
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Projects, split so finished and abandoned work keeps its record without crowding the live list. */
+function ProjectsSection() {
+  const projects = useGame((s) => s.game.ship.projects);
+  const { isGM } = usePerms();
+  const [tab, setTab] = useState("active");
+  const live = projects.filter((p) => !p.archived);
+  const filed = projects.filter((p) => p.archived);
+
+  return (
+    <section>
+      <SectionTitle action={isGM && <AddProjectDialog />}>Projects · {live.filter((p) => !p.done).length} active</SectionTitle>
+      <ProjectRequests />
+      <Tabs value={tab} onValueChange={(v) => setTab(v as string)}>
+        <TabsList className="mb-3">
+          <TabsTrigger value="active" className="px-3">Underway · {live.length}</TabsTrigger>
+          <TabsTrigger value="archive" className="px-3">Archive · {filed.length}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="active">
+          {live.length === 0 ? (
+            <EmptyState title="No projects underway" body="Track room construction, module installs, hull repairs, and Stress Recovery here." />
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {live.map((p) => <ProjectRow key={p.id} p={p} />)}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="archive">
+          {filed.length === 0 ? (
+            <EmptyState title="Nothing filed yet" body="Finished and abandoned projects end up here, so the ship keeps a record of what was built and what was given up on." />
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {filed.map((p) => <ArchivedProjectRow key={p.id} p={p} />)}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </section>
   );
 }
 
@@ -940,7 +1017,6 @@ export function ShipTab() {
   const { game, act } = useGame();
   const { isGM } = usePerms();
   const [preset, setPreset] = useState("none");
-  const projects = game.ship.projects;
   return (
     <div className="grid gap-5">
       <fieldset disabled={!isGM} className={cn("grid min-w-0 gap-5 lg:grid-cols-2", !isGM && READ_ONLY)} title={isGM ? undefined : "Only the GM can change hull and power"}>
@@ -976,17 +1052,7 @@ export function ShipTab() {
         )}
       </section>
 
-      <section>
-        <SectionTitle action={isGM && <AddProjectDialog />}>Projects · {projects.filter((p) => !p.done).length} active</SectionTitle>
-        <ProjectRequests />
-        {projects.length === 0 ? (
-          <EmptyState title="No projects underway" body="Track room construction, module installs, hull repairs, and Stress Recovery here." />
-        ) : (
-          <div className="grid gap-2 lg:grid-cols-2">
-            {projects.map((p) => <ProjectRow key={p.id} p={p} />)}
-          </div>
-        )}
-      </section>
+      <ProjectsSection />
 
       <CyberResearchCard />
     </div>

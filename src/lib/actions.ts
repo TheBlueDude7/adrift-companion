@@ -202,6 +202,9 @@ export function assistEffect(g: GameState, a: SegmentAction): AssistEffect {
   return { dice, progress, problems, warnings, notes };
 }
 
+/** The Projects a segment can still be spent on: unfinished, and not filed away in the archive. */
+export const openProjects = (g: GameState) => g.ship.projects.filter((p) => !p.done && !p.archived);
+
 /** The Project a task adds Progress to: its own, or the one its Assist helps. */
 function projectWorkedOn(g: GameState, a: SegmentAction): Project | null {
   const work = taskFor(a).effect === "assist" ? assistTarget(g, a) : a;
@@ -531,6 +534,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
   let attrOverride = def.attr ?? null;
   blocker ??= facilityBlocker(g, def.facility);
   const project = a.projectId ? g.ship.projects.find((p) => p.id === a.projectId) : undefined;
+  if (def.effect === "project" && project?.archived) blocker ??= `${project.name} has been filed away in the archive`;
   if (def.effect === "project" && project) {
     const options = projectSkills(project);
     const pick = c && options.length ? options.reduce((b, o) => (skillLevel(c, o.skill) - o.threshold > skillLevel(c, b.skill) - b.threshold ? o : b)) : options[0];
