@@ -347,7 +347,7 @@ export const CYBERNETICS: CyberDef[] = [
     effects: [
       "Retain Physical Resistance. Become Immune to Prone and ordinary forced movement.",
       "Your Physical attacks deal +40% Damage, rounded up, and strip two additional points of the target's worn Armor.",
-      "Once per combat, after dealing Physical Damage, apply Crippled, Immobilized, or Disarmed without spending an additional success.",
+      "Once per combat, after dealing Physical Damage, apply Crippled, Immobilized, Disarmed, or Bleeding without spending an additional success.",
       "Drawback: Electric Damage automatically applies Conductive to you.",
     ],
   },
@@ -392,7 +392,7 @@ export const CYBERNETICS: CyberDef[] = [
     resist: ["Chemical"], attack: { boost: DAMAGE_BOOST[2] },
     effects: [
       "Gain Chemical Resistance. Immune to ordinary Poisoned. Resistance to Contaminated.",
-      "Your Chemical attacks deal +20% Damage, rounded up, and Poisoned and Corroded you apply last one additional Round.",
+      "Your Chemical attacks deal +20% Damage, rounded up. Poisoned you apply deals 1 more Chemical Damage at the end of each Round than it otherwise would, and Corroded you apply lasts through two Armor reductions instead of one.",
       "Once per Scene, when you would become Poisoned or Contaminated, store the substance instead (one at a time).",
       "Slow Action: expel it to deal 1 Chemical Damage to a target in your zone, apply Poisoned, or apply Corroded to equipment or a Mechanical target.",
     ],
@@ -402,7 +402,7 @@ export const CYBERNETICS: CyberDef[] = [
     resist: ["Chemical"], attack: { boost: DAMAGE_BOOST[3] },
     effects: [
       "Immune to Chemical Damage through breathing, skin contact, ingestion, or ordinary wounds, and to Poisoned and Contaminated. Direct injection, Surgery, or effects designed to bypass filtration ignore this.",
-      "Your Chemical attacks deal +40% Damage, rounded up, and Poisoned and Corroded you apply last two additional Rounds. Once per Scene, after dealing Chemical Damage, apply both Poisoned and Corroded.",
+      "Your Chemical attacks deal +40% Damage, rounded up. Poisoned you apply deals 2 more Chemical Damage at the end of each Round than it otherwise would, and Corroded you apply lasts through three Armor reductions. Once per Scene, after dealing Chemical Damage, apply both Poisoned and Corroded.",
       "Drawback: biological healing and ordinary medication restore 1 less HP or provide one fewer benefit, to a minimum of 0.",
     ],
   },

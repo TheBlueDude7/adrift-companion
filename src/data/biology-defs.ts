@@ -112,7 +112,7 @@ export const BIO_DEFS: BioDef[] = [
     expression: "While Fortified, also become Immune to Pinned and Prone.",
     backlash: "Become Exposed when the carapace retracts.",
   }),
-  b("adaptive", 2, "Ripper Tendons", ["Physical"], ["Add Surge Dice to Physical attacks.", "A Biological 6 applies Bleeding."], {
+  b("adaptive", 2, "Ripper Tendons", ["Physical"], ["Add Surge Dice to Physical attacks.", "A Biological 6 applies Bleeding.", "While you are Overtaxed or Panicked, Bleeding you cause deals 2 Damage instead of 1."], {
     expression: "After dealing Physical Damage, move one zone or apply Staggered.",
     backlash: "One attacking limb becomes Crippled until the end of the Scene.",
   }),
@@ -154,7 +154,7 @@ export const BIO_DEFS: BioDef[] = [
     expression: "While ignoring Blinded, detect Hidden movement in your zone.",
     backlash: "Become Deafened as your other senses overload.",
   }),
-  b("adaptive", 2, "Thermal Exchange Organ", ["Fire"], ["Add Surge Dice to Fire attacks and attempts to endure heat.", "A Biological 6 applies Burning."], {
+  b("adaptive", 2, "Thermal Exchange Organ", ["Fire"], ["Add Surge Dice to Fire attacks and attempts to endure heat.", "A Biological 6 applies Burning.", "While you are Overtaxed or Panicked, Burning you cause deals 2 Fire Damage instead of 1."], {
     expression: "Become Fortified against Fire and heat while Overtaxed or Panicked.",
     backlash: "Become Overheated and Burning.",
   }),
@@ -192,7 +192,7 @@ export const BIO_DEFS: BioDef[] = [
     expression: "Fire through every target in a straight line using one roll.",
     backlash: "Take 2 Physical Damage and become Immobilized until your next turn.",
   }),
-  b("adaptive", 3, "Razorstorm Colony", ["Ballistic", "Physical"], ["Once per Scene, launch a zone-wide storm of hardened fragments.", "Add Surge Dice to attacks against every exposed creature in the chosen zone.", "Biological 6s apply Bleeding or Pinned."], {
+  b("adaptive", 3, "Razorstorm Colony", ["Ballistic", "Physical"], ["Once per Scene, launch a zone-wide storm of hardened fragments.", "Add Surge Dice to attacks against every exposed creature in the chosen zone.", "Biological 6s apply Bleeding or Pinned.", "A creature already Bleeding when the storm reaches it takes +2 Damage from it."], {
     expression: "After firing, harden the remaining growths and become Fortified.",
     backlash: "Become Immobilized while the colony regrows.",
   }),
@@ -205,7 +205,7 @@ export const BIO_DEFS: BioDef[] = [
     expression: "You become Hidden while inside your own cloud and can perceive biological creatures within it.",
     backlash: "Become Blinded and Silenced when the cloud disperses.",
   }),
-  b("adaptive", 3, "Predator Veil", ["Sensory", "Control"], ["Add Surge Dice to Stealth, pursuit, and attacks from Hidden.", "A Biological 6 applies Marked automatically."], {
+  b("adaptive", 3, "Predator Veil", ["Sensory", "Control"], ["Add Surge Dice to Stealth, pursuit, and attacks from Hidden.", "A Biological 6 applies Marked automatically, and two make the target Frightened of you."], {
     expression: "At two or more Stress, your first hostile Action from Hidden does not immediately end Hidden.",
     backlash: "Become Compelled to continue pursuing the most recently Marked creature.",
   }),

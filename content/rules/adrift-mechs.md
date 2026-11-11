@@ -772,7 +772,7 @@ Deals 5 Physical Damage against a Grappled target, 3 Physical Damage otherwise. 
 Vibroblade Assembly
 1
 II
-Deals 3 Physical Damage and may apply Bleeding without spending an additional success when exploiting Physical Vulnerability.
+Deals 3 Physical Damage. One additional success applies Bleeding, or none when exploiting Physical Vulnerability. A target already Bleeding takes +1 Damage from the blade.
 Fire Modules
 Module
 Slots
@@ -781,7 +781,7 @@ Effect
 Incinerator
 1
 I
-Deals 2 Fire Damage in the same or an adjacent zone. May apply Burning or Illuminated.
+Deals 2 Fire Damage in the same or an adjacent zone. A hit applies Smoldering, so the next Fire Damage sets the target Burning; an additional success applies Burning or Illuminated outright.
 Thermal Lance
 1
 II
@@ -815,7 +815,7 @@ Effect
 Chemical Projector
 1
 I
-Deals 2 Chemical Damage and may apply Corroded or Poisoned.
+Deals 2 Chemical Damage and may apply Corroded or Poisoned. Poison from the projector deals 1 Chemical Damage at the end of each Round until it is removed.
 Corrosive Jet
 1
 II
