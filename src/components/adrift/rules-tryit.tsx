@@ -10,7 +10,7 @@ import { rollBreakdown } from "@/lib/derive";
 import { rollPool, sixes } from "@/lib/dice";
 import { injuryFor, resolveInjuryRoll } from "@/lib/injuries";
 import { damageSteps } from "@/lib/mechanics";
-import { ATTRIBUTES, ATTRIBUTE_NAMES, PRESSURE_STATES, SKILLS, SKILL_BY_KEY, SEGMENTS, type Attribute, type SkillKey } from "@/lib/rules";
+import { ATTRIBUTES, ATTRIBUTE_NAMES, PRESSURE_STATES, SKILLS, SKILL_BY_KEY, type Attribute, type SkillKey } from "@/lib/rules";
 import { useGame } from "@/lib/store";
 import type { Character } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
@@ -120,7 +120,6 @@ const d6 = () => 1 + Math.floor(Math.random() * 6);
 
 export function InjuryTry() {
   const { alive, initial } = useRulesCharacters();
-  const segment = useGame((s) => s.game.segment);
   const [who, setWho] = useState(initial);
   const [severity, setSeverity] = useState(4);
   const [location, setLocation] = useState(4);
@@ -155,7 +154,7 @@ export function InjuryTry() {
           {hits.length > 0 && <li>−{INJURY_PENALTY[entry.severity]}d6 to {hits.join(", ")}, applied automatically.</li>}
           {entry.severity !== "Minor" && <li className="text-rose-300">Starts Bleeding.</li>}
           {entry.conditions?.map((n) => <li key={n}>{n} until Surgery.</li>)}
-          {entry.deadline && <li className="text-rose-300">Needs Surgery by the end of the next segment (right now that&apos;s {SEGMENTS[Math.min(segment + 1, SEGMENTS.length - 1)]}), or the character dies.</li>}
+          {entry.deadline && <li className="text-rose-300">Needs Surgery within four segments, counting this one, or the character dies.</li>}
           {entry.permanent && <li>A permanent loss: it never heals naturally and needs a cybernetic or graft.</li>}
           <li className="text-muted-foreground">Untreated, it costs 1 HP at End of Day.</li>
         </ul>

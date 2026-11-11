@@ -64,10 +64,10 @@ export const UPGRADE_LADDERS: Record<string, { blurb: string; levels: UpgradeLev
   "Medical Bay": {
     blurb: "Surgery or bust, that's what I always say.",
     levels: [
-      { name: "Base Setup", cost: r([2, "Scrap Metal"], [4, "Scrap Components"], [3, "Basic Adhesive"]), toolkit: 2, effect: "No surgery can happen here." },
-      { name: "Field Setup", cost: r([3, "Scrap Metal"], [6, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, grade: "Grade I", effect: "Surgery is enabled. All surgery rolls get −2d6." },
+      { name: "Base Setup", cost: r([2, "Scrap Metal"], [4, "Scrap Components"], [3, "Basic Adhesive"]), toolkit: 2, effect: "Not yet a theatre: Surgery here is as hard as with no Medical Bay at all, −3d6, and drops the patient to half their Max HP." },
+      { name: "Field Setup", cost: r([3, "Scrap Metal"], [6, "Scrap Components"], [1, "Basic Adhesive"]), toolkit: 3, grade: "Grade I", effect: "Surgery rolls get −2d6 instead of −3d6. The patient still drops to half their Max HP." },
       { name: "Operational", cost: r([2, "Reinforced Steel"], [6, "Scrap Components"], [2, "Basic Adhesive"]), toolkit: 3, grade: "Grade II", effect: "Surgery rolls get −1d6. Successful surgeries only drop the patient to three-quarters of their Max HP, not half." },
-      { name: "Sterile Suite", cost: r([4, "Reinforced Steel"], [6, "Scrap Components"], [2, "Advanced Adhesive"]), toolkit: 4, grade: "Grade III", effect: "All surgeries only drop the patient to three-quarters of their Max HP, not half." },
+      { name: "Sterile Suite", cost: r([4, "Reinforced Steel"], [6, "Scrap Components"], [2, "Advanced Adhesive"]), toolkit: 4, grade: "Grade III", effect: "Surgery rolls take no penalty, and all surgeries only drop the patient to three-quarters of their Max HP, not half." },
       { name: "Advanced Care", cost: r([3, "Neutronium"], [6, "Quantum Components"], [4, "Advanced Adhesive"]), toolkit: 0, grade: "Experimental", effect: "Surgery no longer lowers the patient's HP, success or fail." },
     ],
   },

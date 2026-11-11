@@ -10,11 +10,13 @@ import {
   SKILLS,
   stressBand,
   type Attribute,
+  type DamageType,
   type SkillKey,
 } from "./rules";
-import { cyberAttr, cyberMaxEnergy, cyberMaxHp } from "./cyber";
-import { deadlineWhen, injuryMaxHp, injuryPenalty, segmentsLeft } from "./injuries";
-import { mechModules, mechStats, pilotedMech } from "./mechs";
+import { bioMaxEnergy, bioMaxHp } from "./biology";
+import { cyberAttack, cyberAttr, cyberMaxEnergy, cyberMaxHp, cyberResists } from "./cyber";
+import { deadlineWhen, injuryMaxHp, injuryPain, injuryPenalty, segmentsLeft } from "./injuries";
+import { mechModules, mechStats, pilotedMech, portedImplants } from "./mechs";
 import type { Character, GameState, Item, Room, Ship } from "./types";
 
 export function skillLevel(c: Character, key: SkillKey) {
@@ -55,21 +57,40 @@ export function rollBreakdown(c: Character, skill: SkillKey | null, attr: Attrib
 export function maxHp(c: Character) {
   const str = attributeValue(c, "STR");
   const con = attributeValue(c, "CON");
-  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c) + injuryMaxHp(c));
+  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c) + bioMaxHp(c) + injuryMaxHp(c));
 }
 
 export function baseMaxEnergy(c: Character) {
   const con = attributeValue(c, "CON");
-  return 3 + Math.floor((con - 1) / 2);
+  return 4 + Math.floor((con - 1) / 2);
 }
 
 export function maxEnergy(c: Character) {
-  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) - c.survival.energyPenalty);
+  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) + bioMaxEnergy(c) - c.survival.energyPenalty - injuryPain(c));
 }
 
 export function maxWillpower(c: Character) {
   const con = attributeValue(c, "CON");
   return Math.max(0, 1 + Math.floor((con - 1) / 3) + c.maxWillpowerMod);
+}
+
+/**
+ * Why a hit of this damage type is halved on a survivor, or nothing when it isn't. Two sources: an
+ * implant that grants the Resistance, and a Resistant: Type condition, which is where a Xenoflora
+ * dose and the GM's own rulings land. Resistance has no levels, so the first source does the whole
+ * job and the others are here only for the log to name.
+ */
+export function damageResistance(g: GameState, c: Character, type: DamageType | null) {
+  if (!type) return [];
+  const mech = pilotedMech(g, c.id);
+  const ruled = c.conditions.filter((x) => x.name === `Resistant: ${type}`).map((x) => x.name);
+  return [...cyberResists(c, type, !!mech, portedImplants(mech)), ...ruled];
+}
+
+/** What a survivor's own Damage system adds to an attack of its type that they're making. */
+export function damageSystem(g: GameState, c: Character, type: DamageType) {
+  const mech = pilotedMech(g, c.id);
+  return cyberAttack(c, type, !!mech, portedImplants(mech));
 }
 
 export const HEAVY_SLOTS = 2;

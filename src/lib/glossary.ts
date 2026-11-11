@@ -1,7 +1,48 @@
-import { CONDITIONS } from "@/data/compendium";
-import { ATTRIBUTE_NAMES, PRESSURE_STATES, SKILLS, STRESS_BANDS } from "./rules";
+import { AFFLICTIONS, CONDITIONS } from "@/data/compendium";
+import { FESTER_DAYS, SURGERY_WINDOW } from "./injuries";
+import { ATTRIBUTE_NAMES, CONDITION_GROUPS, PRESSURE_STATES, SKILLS, STRESS_BANDS } from "./rules";
 
-export type GlossaryEntry = { title: string; kind: string; text: string; ends?: string };
+/** The colour family a keyword is written in. Untoned terms are plain rules vocabulary. */
+export type GlossaryTone = "physical" | "fire" | "chemical" | "electric" | "medical" | "combat" | "mind" | "pressure" | "environment" | "beneficial";
+
+export const TONE_LABEL: Record<GlossaryTone, string> = {
+  physical: "Physical, Ballistic & bodily",
+  fire: "Fire",
+  chemical: "Chemical",
+  electric: "Electric",
+  medical: "Medical",
+  combat: "Combat",
+  mind: "Mind & Stress",
+  pressure: "Pressure",
+  environment: "Environment",
+  beneficial: "Beneficial",
+};
+
+export type GlossaryEntry = { title: string; kind: string; text: string; ends?: string; tone?: GlossaryTone };
+
+const GROUP_TONE: Record<string, GlossaryTone> = {
+  Combat: "combat",
+  "Senses & mind": "mind",
+  Body: "physical",
+  Fire: "fire",
+  Electric: "electric",
+  Chemical: "chemical",
+  Environment: "environment",
+  Beneficial: "beneficial",
+};
+
+const DAMAGE_TONE: Record<string, GlossaryTone> = { Physical: "physical", Ballistic: "physical", Fire: "fire", Electric: "electric", Chemical: "chemical" };
+
+const CONDITION_TONE = new Map<string, GlossaryTone>(
+  CONDITION_GROUPS.flatMap((g) => g.conditions.flatMap((name) => {
+    const tone = GROUP_TONE[g.name] ?? DAMAGE_TONE[name.split(": ")[1] ?? ""];
+    return tone ? [[name, tone] as const] : [];
+  })),
+).set("Power-Starved", "electric").set("Overloaded", "electric");
+
+const MEDICAL_SKILLS = new Set(["First Aid", "Surgery"]);
+
+const KIND_TONE: Record<string, GlossaryTone> = { Injury: "medical", Stress: "mind", Resource: "mind", Combat: "combat" };
 
 const MECHANICS: { terms: string[]; entry: GlossaryEntry }[] = [
   { terms: ["Routine Threshold"], entry: { title: "Routine Threshold", kind: "Tasks", text: "The skill level at which a task succeeds without a roll, given the right tools and no threat." } },
@@ -24,8 +65,10 @@ const MECHANICS: { terms: string[]; entry: GlossaryEntry }[] = [
   { terms: ["Reaction", "Reactions"], entry: { title: "Reaction", kind: "Combat", text: "One per round, such as Block or Dodge. An unused Reaction is lost at the start of your next turn." } },
   { terms: ["Expedition Turn", "Expedition Turns"], entry: { title: "Expedition Turn", kind: "Time", text: "About 20–40 minutes of careful activity. Eight make one day segment." } },
   { terms: ["Minor Injury", "Minor Injuries", "Minor injury", "Minor injuries"], entry: { title: "Minor injury", kind: "Injury", text: "−1d6 to the rolls it lists. First Aid treats it, and it can heal naturally on a Rest." } },
-  { terms: ["Major Injury", "Major Injuries", "Major injury", "Major injuries"], entry: { title: "Major injury", kind: "Injury", text: "−2d6 to the rolls it lists, a condition until Surgery, and Bleeding. Surgery turns it into a Treated Minor injury." } },
-  { terms: ["Deadly Injury", "Deadly Injuries", "Deadly injury", "Deadly injuries"], entry: { title: "Deadly injury", kind: "Injury", text: "Surgery by the end of the next segment or the character dies, or a permanent loss." } },
+  { terms: ["Major Injury", "Major Injuries", "Major injury", "Major injuries"], entry: { title: "Major injury", kind: "Injury", text: `−2d6 to the rolls it lists, a condition until Surgery, Bleeding, and Pain (−1 Maximum Energy). Surgery turns it into a Treated Minor injury. Left ${FESTER_DAYS} days without Surgery, it Festers into a Deadly one.` } },
+  { terms: ["Deadly Injury", "Deadly Injuries", "Deadly injury", "Deadly injuries"], entry: { title: "Deadly injury", kind: "Injury", text: `Surgery within ${SURGERY_WINDOW} segments or the character dies, or a permanent loss. Pain costs 1 Maximum Energy until Surgery. First Aid on it buys one more segment.` } },
+  { terms: ["Pain"], entry: { title: "Pain", kind: "Injury", text: "Every Major or Deadly injury that hasn't had Surgery costs 1 Maximum Energy. The point comes back the moment that Surgery succeeds. First Aid doesn't ease it." } },
+  { terms: ["Festering", "Festers", "Festered", "Fester"], entry: { title: "Festering", kind: "Injury", text: `A Major injury left ${FESTER_DAYS} days without Surgery, counting the day it happened, becomes a Deadly injury at that End of Day. Its ${SURGERY_WINDOW}-segment Surgery window opens from the next Morning.` } },
 ];
 
 function build() {
@@ -33,14 +76,19 @@ function build() {
   const add = (term: string, entry: GlossaryEntry) => {
     if (!byTerm.has(term)) byTerm.set(term, entry);
   };
-  for (const p of PRESSURE_STATES) add(p.name, { title: p.name, kind: "Pressure state", text: `${p.dice ? `+${p.dice}d6 Pressure Dice.` : "No Pressure Dice."} On a failed roll: ${p.failure}` });
+  for (const p of PRESSURE_STATES) add(p.name, { title: p.name, kind: "Pressure state", text: `${p.dice ? `+${p.dice}d6 Pressure Dice.` : "No Pressure Dice."} On a failed roll: ${p.failure}`, tone: "pressure" });
   for (const b of STRESS_BANDS) {
     if (b.name === "Stable" || b.name === "Breaking") continue;
-    add(b.name, { title: b.name, kind: `Stress ${b.min === b.max ? b.min : `${b.min}–${b.max}`}`, text: b.effect });
+    add(b.name, { title: b.name, kind: `Stress ${b.min === b.max ? b.min : `${b.min}–${b.max}`}`, text: b.effect, tone: "mind" });
   }
-  for (const c of CONDITIONS) add(c.name, { title: c.name, kind: "Condition", text: c.effect, ends: c.removal });
-  for (const s of SKILLS) add(s.name, { title: s.name, kind: `Skill · ${ATTRIBUTE_NAMES[s.attr]}`, text: `Rolled with ${ATTRIBUTE_NAMES[s.attr]} + ${s.name} + Pressure Dice.` });
-  for (const m of MECHANICS) for (const t of m.terms) add(t, m.entry);
+  for (const c of CONDITIONS) add(c.name, { title: c.name, kind: "Condition", text: c.effect, ends: c.removal, tone: CONDITION_TONE.get(c.name) });
+  // Afflictions named after a keyword need their own entry, or the keyword alone gets highlighted inside the name.
+  for (const a of AFFLICTIONS) if (/\bPain\b/.test(a.name)) add(a.name, { title: a.name, kind: "Affliction", text: a.effect, tone: "mind" });
+  for (const s of SKILLS) add(s.name, { title: s.name, kind: `Skill · ${ATTRIBUTE_NAMES[s.attr]}`, text: `Rolled with ${ATTRIBUTE_NAMES[s.attr]} + ${s.name} + Pressure Dice.`, tone: MEDICAL_SKILLS.has(s.name) ? "medical" : undefined });
+  for (const m of MECHANICS) {
+    const entry = { ...m.entry, tone: m.entry.tone ?? KIND_TONE[m.entry.kind] };
+    for (const t of m.terms) add(t, entry);
+  }
   return byTerm;
 }
 

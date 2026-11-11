@@ -1,14 +1,22 @@
 import {
+  CYBERNETICS,
   CYBER_BY_KEY,
   CYBER_LOAD,
   CYBER_LOCATIONS,
+  CYBER_SYSTEMS,
   CYBER_SYSTEM_BY_KEY,
+  INTERFACE_MECH_ARMOR,
+  SYSTEM_ATTR_BONUS,
+  TIER_LABEL,
   dampeningForLoad,
+  implantName,
   type CyberDef,
   type CyberReq,
+  type CyberTier,
   type MechTag,
 } from "@/data/cybernetics";
-import type { Attribute } from "./rules";
+import type { Attribute, DamageType } from "./rules";
+import { haveInStorage } from "./stock";
 import type { Character, GameState, InstalledCyber } from "./types";
 
 export type Installed = { inst: InstalledCyber; def: CyberDef };
@@ -34,25 +42,86 @@ export function dampening(c: Character) {
   return dampeningForLoad(cyberLoad(c)) + bonus;
 }
 
+/**
+ * Dampening left to spend this Scene.
+ *
+ * Dampening is a pool now rather than a single big discount used once. It is spent a point at a time
+ * as fear and noise arrive, which is what makes the cybernetic path the one that removes variance:
+ * a wired crew member doesn't get a better outcome, they get a narrower range of them. It refreshes
+ * when the Scene ends, and nothing refills it sooner.
+ */
+export const dampeningLeft = (c: Character) => Math.max(0, dampening(c) - (c.dampeningUsed ?? 0));
+
+/**
+ * Spend Dampening to hold something off, returning how much of it was absorbed.
+ *
+ * Pressure costs a point a level. Stress costs two a point, because quieting the mind is harder than
+ * quieting the body — which also means deep Load is what it takes to filter Stress at all.
+ */
+export function spendDampening(c: Character, want: number, costEach: number) {
+  const affordable = Math.floor(dampeningLeft(c) / costEach);
+  const absorbed = Math.min(want, affordable);
+  if (absorbed > 0) c.dampeningUsed = (c.dampeningUsed ?? 0) + absorbed * costEach;
+  return absorbed;
+}
+
 export function cyberAttr(c: Character, attr: Attribute) {
   const list = installed(c).filter(working);
   let total = list.reduce((s, x) => s + (x.def.bonus?.attr?.[attr] ?? 0), 0);
   for (const sys of Object.values(CYBER_SYSTEM_BY_KEY)) {
     if (sys.attr !== attr) continue;
     const tier = Math.max(0, ...list.filter((x) => x.def.system === sys.key).map((x) => x.def.tier));
-    total += tier >= 3 ? 2 : tier === 2 ? 1 : 0;
+    total += SYSTEM_ATTR_BONUS[tier as CyberTier] ?? 0;
   }
   return total;
 }
 
 export const cyberMaxHp = (c: Character) => installed(c).filter(working).reduce((s, x) => s + (x.def.bonus?.maxHp ?? 0), 0);
+
+/**
+ * Armor Points a pilot's Interface system lends the frame they're plugged into. Only the highest tier
+ * counts, the way the Attribute ladder does: a Tier III integrates the Tier II beneath it.
+ */
+export function cyberMechArmor(c: Character | undefined) {
+  if (!c) return 0;
+  const tier = Math.max(0, ...installed(c).filter(working).filter((x) => x.def.system === "interface").map((x) => x.def.tier));
+  return INTERFACE_MECH_ARMOR[tier as CyberTier] ?? 0;
+}
 export const cyberMaxEnergy = (c: Character) => installed(c).filter(working).reduce((s, x) => s + (x.def.bonus?.maxEnergy ?? 0), 0);
 
-/** Whether an implant keeps working while its owner pilots a mech. */
-export function mechTag(x: Installed): MechTag | "Replacement" {
+/**
+ * Implants doing their work. A mech suppresses the Structural and Damage systems, so a pilot in a
+ * frame fights with the frame's numbers and not their own plating — except for the ones the frame's
+ * own Cybernetic Integration Ports keep connected, which are passed in by key.
+ */
+const live = (inMech: boolean, ported: string[] = []) => (x: Installed) =>
+  working(x) && (!inMech || ported.includes(x.inst.key) || CYBER_SYSTEM_BY_KEY[x.def.system].mech !== "Suppressed");
+
+/** Implants halving this damage type, named so the log can say which one did it. */
+export const cyberResists = (c: Character, type: DamageType, inMech = false, ported: string[] = []) =>
+  installed(c).filter(live(inMech, ported)).filter((x) => (x.def.resist ?? []).includes(type)).map((x) => x.def.name);
+
+/**
+ * What a character's Damage systems do to their own attack of this type. Resistance doesn't stack
+ * and neither does this: a Tier III integrates its Tier II, so only the strongest of them counts.
+ */
+export function cyberAttack(c: Character, type: DamageType, inMech = false, ported: string[] = []) {
+  const mine = installed(c).filter(live(inMech, ported)).filter((x) => x.def.damage === type && x.def.attack);
+  const best = mine.sort((a, b) => b.def.attack!.boost - a.def.attack!.boost)[0];
+  if (!best) return { boost: 0, cover: 0, armor: 0, source: null as string | null };
+  return { boost: best.def.attack!.boost, cover: best.def.attack!.cover ?? 0, armor: best.def.attack!.armor ?? 0, source: best.def.name };
+}
+
+/** Whether an implant keeps working while its owner pilots a mech, given what that mech has ported. */
+export function mechTag(x: Installed, ported: string[] = []): MechTag | "Replacement" | "Ported" {
   if (x.inst.replacement) return "Replacement";
+  if (ported.includes(x.inst.key)) return "Ported";
   return CYBER_SYSTEM_BY_KEY[x.def.system].mech;
 }
+
+/** Implants a frame would suppress, which is what a Cybernetic Integration Port is there to choose from. */
+export const suppressedImplants = (c: Character | undefined) =>
+  c ? installed(c).filter((x) => mechTag(x) === "Suppressed" || mechTag(x) === "GM decides") : [];
 
 function matches(x: Installed, req: CyberReq) {
   if (x.inst.replacement) return false;
@@ -165,4 +234,82 @@ export function researchCandidates(g: GameState, system: CyberDef["system"], tie
 export function tier3Ready(g: GameState, system: CyberDef["system"], all: CyberDef[]) {
   const count = all.filter((d) => d.system === system && d.tier === 2 && g.research.cybernetics.includes(d.key)).length;
   return system === "damage" ? count >= 1 : count >= 2;
+}
+
+/**
+ * Why a technology isn't available to the crew yet, or null when it is. Where `installBlocker` answers
+ * for one survivor's body, this answers for the whole crew's research: Tier I is always theirs, and
+ * everything above it waits on a project, which in turn waits on what the project can even roll for.
+ */
+export function researchBlocker(g: GameState, def: CyberDef, all: CyberDef[] = CYBERNETICS): string | null {
+  if (isUnlocked(g, def)) return null;
+  const sys = CYBER_SYSTEM_BY_KEY[def.system].name;
+  const project = `Needs a ${TIER_LABEL[def.tier]} ${sys} research project`;
+  if (def.tier === 2) return project;
+  // A Tier III can't even come up on the research table until the table has something to offer.
+  if (def.system === "damage") {
+    const req = def.requires?.[0];
+    if (req && !req.keys.some((k) => g.research.cybernetics.includes(k))) return `Needs ${req.label} researched first`;
+    return project;
+  }
+  if (!tier3Ready(g, def.system, all)) return `Needs two Tier II ${sys} technologies researched first`;
+  return project;
+}
+
+/** One technology, with the crew's own standing in it. */
+export type TechState = {
+  def: CyberDef;
+  /** Available to install: Tier I always, anything above it once the crew has researched it. */
+  unlocked: boolean;
+  /** Why not, when it isn't. */
+  locked: string | null;
+  /** Survivors carrying it right now, by name. */
+  carriers: string[];
+  /** Finished implants of it waiting in the hold. */
+  spare: number;
+  /** Keys it builds on, and the keys that build on it. */
+  needs: string[];
+  leadsTo: string[];
+};
+
+export type TechTier = { tier: CyberTier; attrBonus: number; load: number; techs: TechState[] };
+export type TechBranch = { system: (typeof CYBER_SYSTEMS)[number]; tiers: TechTier[]; unlocked: number; total: number };
+
+const TIERS: CyberTier[] = [1, 2, 3];
+
+/**
+ * The whole research tree with the crew's progress written into it: what's unlocked, why the rest
+ * isn't, who is carrying each technology, what's spare in the hold, and what builds on what.
+ *
+ * Grouped the way the crew's own reference sheet is — a column per body system, three Tier bands
+ * down it — so a Damage branch with no Tier I simply has no Tier I band.
+ */
+export function researchTree(g: GameState, all: CyberDef[] = CYBERNETICS): TechBranch[] {
+  const dependents = new Map<string, string[]>();
+  for (const d of all) {
+    for (const req of d.requires ?? []) {
+      for (const k of req.keys) dependents.set(k, [...(dependents.get(k) ?? []), d.key]);
+    }
+  }
+  return CYBER_SYSTEMS.map((system) => {
+    const mine = all.filter((d) => d.system === system.key);
+    const tiers = TIERS.map((tier) => ({
+      tier,
+      attrBonus: SYSTEM_ATTR_BONUS[tier],
+      load: CYBER_LOAD[tier],
+      techs: mine
+        .filter((d) => d.tier === tier)
+        .map((def) => ({
+          def,
+          unlocked: isUnlocked(g, def),
+          locked: researchBlocker(g, def, all),
+          carriers: g.characters.filter((c) => installed(c).some((x) => x.inst.key === def.key)).map((c) => c.name),
+          spare: haveInStorage(g, implantName(def)),
+          needs: (def.requires ?? []).flatMap((r) => r.keys),
+          leadsTo: dependents.get(def.key) ?? [],
+        })),
+    })).filter((t) => t.techs.length > 0);
+    const techs = tiers.flatMap((t) => t.techs);
+    return { system, tiers, unlocked: techs.filter((t) => t.unlocked).length, total: techs.length };
+  });
 }

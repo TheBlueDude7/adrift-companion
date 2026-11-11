@@ -16,6 +16,7 @@ import {
   CYBER_BY_KEY,
   CYBER_SYSTEMS,
   CYBER_SYSTEM_BY_KEY,
+  DAMPENING_STRESS_COST,
   FABRICATE_TASK,
   IMPLANT_RECIPES,
   SURGERY_TASK,
@@ -29,6 +30,7 @@ import {
   cyberAttr,
   cyberLoad,
   dampening,
+  dampeningLeft,
   freeLocations,
   installBlocker,
   installed,
@@ -41,7 +43,7 @@ import {
   type Installed,
 } from "@/lib/cyber";
 import { uid } from "@/lib/dice";
-import { pilotedMech } from "@/lib/mechs";
+import { pilotedMech, portedImplants } from "@/lib/mechs";
 import { ATTRIBUTES } from "@/lib/rules";
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
 import { useGame } from "@/lib/store";
@@ -73,12 +75,12 @@ function MaterialsLine({ recipe, className }: { recipe: { name: string; qty: num
   );
 }
 
-function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed: boolean }) {
+function CyberRow({ x, c, suppressed, ported = [] }: { x: Installed; c: Character; suppressed: boolean; ported?: string[] }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
   const { inst, def } = x;
-  const tag = mechTag(x);
+  const tag = mechTag(x, ported);
   const off = suppressed && (tag === "Suppressed" || tag === "GM decides");
   const edit = (label: string, fn: (g: GameState) => string) => act(label, fn);
   const upgradeCost = IMPLANT_RECIPES[1].map((p, i) => ({ name: p.name, qty: Math.max(0, p.qty - IMPLANT_RECIPES.replacement[i].qty) })).filter((p) => p.qty > 0);
@@ -103,7 +105,7 @@ function CyberRow({ x, c, suppressed }: { x: Installed; c: Character; suppressed
         <Pill>{inst.location}</Pill>
         {inst.replacement && <Pill>Replacement</Pill>}
         {inst.damaged && <Pill tone="danger">Damaged</Pill>}
-        {suppressed && <Pill tone={off ? "warn" : "good"}>{off ? (tag === "GM decides" ? "In mech: GM decides" : "Suppressed in mech") : "Works in mech"}</Pill>}
+        {suppressed && <Pill tone={off ? "warn" : "good"} tip={tag === "Ported" ? "The frame's Cybernetic Integration Port keeps this one connected." : undefined}>{off ? (tag === "GM decides" ? "In mech: GM decides" : "Suppressed in mech") : tag === "Ported" ? "Ported: works in mech" : "Works in mech"}</Pill>}
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="icon-xs" variant="ghost" className="ml-auto" aria-label={`${def.name} actions`}><MoreHorizontalIcon /></Button>} />
           <DropdownMenuContent align="end" className="w-56">
@@ -153,6 +155,7 @@ export function CyberneticsPanel({ c }: { c: Character }) {
   const list = installed(c);
   const load = cyberLoad(c);
   const damp = dampening(c);
+  const left = dampeningLeft(c);
   const mech = pilotedMech(game, c.id);
   const bonuses = ATTRIBUTES.map((a) => [a, cyberAttr(c, a)] as const).filter(([, n]) => n);
 
@@ -160,16 +163,23 @@ export function CyberneticsPanel({ c }: { c: Character }) {
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Pill tone={load >= 6 ? "warn" : "muted"}>Cybernetic Load {load}</Pill>
-        <Pill tone={damp ? "info" : "muted"}>Dampening {damp}</Pill>
+        <Pill tone={damp ? "info" : "muted"} tip={damp ? "Spent automatically as Pressure and Stress arrive. Refreshes when the Scene ends." : undefined}>
+          Dampening {left}{left !== damp ? ` of ${damp}` : ""}
+        </Pill>
         {bonuses.map(([a, n]) => <Pill key={a} tone="good">+{n} {a}</Pill>)}
         {mech && <Pill tone="warn">Piloting {mech.name}</Pill>}
         <div className="ml-auto"><InstallDialog c={c} /></div>
       </div>
-      {damp > 0 && <p className="text-xs text-muted-foreground">Once per Scene, when {c.name.split(" ")[0]} would gain Pressure, reduce it by {damp} (minimum 0).</p>}
+      {damp > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {damp} Dampening a Scene, spent as it&apos;s needed: a point holds off a level of Pressure, and {DAMPENING_STRESS_COST} hold off a point of Stress. The app spends it for{" "}
+          {c.name.split(" ")[0]} as the fear arrives, so what wiring buys is a narrower range of bad days rather than a better one.
+        </p>
+      )}
       {list.length === 0 ? (
         <EmptyState title="No cybernetics" body="Tier I implants are available from the start. Install them through Surgery in a Medical Bay." />
       ) : (
-        <div className="grid gap-2">{list.map((x) => <CyberRow key={x.inst.id} x={x} c={c} suppressed={!!mech} />)}</div>
+        <div className="grid gap-2">{list.map((x) => <CyberRow key={x.inst.id} x={x} c={c} suppressed={!!mech} ported={portedImplants(mech)} />)}</div>
       )}
     </div>
   );
@@ -481,7 +491,7 @@ export function CyberResearchCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><FlaskConicalIcon className="size-4 text-primary" /> Cybernetic research</CardTitle>
-        <CardDescription>Research is crew-wide: once a technology is unlocked, anyone eligible can receive it and it can be fabricated again and again.</CardDescription>
+        <CardDescription>Research is crew-wide: once a technology is unlocked, anyone eligible can receive it and it can be fabricated again and again. The whole tree, and what&apos;s left to find in it, is on the Cybernetics tab.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {!lab && <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-100">No Cybernetics Lab aboard. The lab is needed for Cybernetic Research and for crafting Cybernetic Cores. Build one from the Ship tab.</p>}

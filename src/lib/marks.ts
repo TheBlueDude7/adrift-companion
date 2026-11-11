@@ -20,7 +20,7 @@ export type Marks = {
   dice: number;
   /** Corroded: the Armor that would have stopped a point of this stops none of it. */
   armorDead: boolean;
-  /** Points of Armor this hit strips beyond the usual one, from Corroded and Brittle. */
+  /** Points of Armor this hit strips beyond the usual one, from Corroded, Brittle, and a Physical system. */
   armorExtra: number;
   /** Fortified: a temporary point that absorbs before worn Armor and needs no repair. */
   temp: number;

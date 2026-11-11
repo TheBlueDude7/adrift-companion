@@ -15,6 +15,7 @@ import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { operable } from "@/lib/surgery";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
 import { payPush } from "@/lib/mechanics";
@@ -268,6 +269,33 @@ function SubjectPicker({ c, value, onChange, label }: { c: Character; value: str
   );
 }
 
+function InjuryPicker({ patientId, value, onChange }: { patientId: string; value: string | null | undefined; onChange: (v: string | null) => void }) {
+  const patient = useGame((s) => s.game.characters.find((x) => x.id === patientId));
+  const injuries = patient ? operable(patient) : [];
+  const picked = injuries.find((i) => i.id === value);
+  return (
+    <div className="grid gap-1.5">
+      <Label>Injury to operate on</Label>
+      {injuries.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{patient?.name ?? "They"} has no Major or Deadly injury waiting for Surgery.</p>
+      ) : (
+        <Select value={value ?? "none"} onValueChange={(v) => onChange(v === "none" ? null : (v as string))}>
+          <SelectTrigger className="w-full" aria-label="Injury to operate on"><SelectValue>{picked?.name ?? "Pick an injury"}</SelectValue></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Pick an injury</SelectItem>
+            {injuries.map((i) => (
+              <SelectItem key={i.id} value={i.id}>
+                {i.name}
+                <span className="text-muted-foreground"> · {i.severity}{i.festered ? " (festered)" : ""}{i.state === "Untreated" ? " · Untreated" : ""}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 /** What an Assist will and won't do for the task it's helping, before anyone spends a segment on it. */
 function AssistPreview({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);
@@ -509,7 +537,8 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     (def.effect === "course" && !draft.target) ||
     (def.effect === "assist" && !draft.assists) ||
     (needsRecipe && !draft.crafts?.length) ||
-    ((def.effect === "calm" || def.effect === "surgery") && !draft.subjectId) ||
+    ((def.effect === "calm" || def.effect === "surgery" || def.effect === "prep") && !draft.subjectId) ||
+    (def.effect === "surgery" && !draft.injuryId) ||
     (def.effect === "fit" && !draft.fit) ||
     (def.effect === "train" && !draft.trainSkill);
 
@@ -522,7 +551,8 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
     if (def.effect !== "course" && def.effect !== "scan") d.target = null;
     if (def.effect !== "assist") d.assists = null;
     if (!needsRecipe) delete d.crafts;
-    if (def.effect !== "calm" && def.effect !== "surgery") d.subjectId = null;
+    if (def.effect !== "calm" && def.effect !== "surgery" && def.effect !== "prep") d.subjectId = null;
+    if (def.effect !== "surgery") d.injuryId = null;
     if (def.effect !== "fit") d.fit = null;
     if (def.effect !== "train") delete d.trainSkill;
     if (def.effect !== "search") delete d.thorough;
@@ -620,14 +650,15 @@ function PlanDialog({ c, existing, extra = false, trigger }: { c: Character; exi
               note="The item is used up whether or not the salvage comes out. Toolkit charges never come back."
             />
           )}
-          {(def.effect === "calm" || def.effect === "surgery") && (
+          {(def.effect === "calm" || def.effect === "surgery" || def.effect === "prep") && (
             <SubjectPicker
               c={c}
               value={draft.subjectId}
-              onChange={(v) => set({ subjectId: v })}
-              label={def.effect === "surgery" ? "Who is on the table" : "Who to settle"}
+              onChange={(v) => set({ subjectId: v, injuryId: null })}
+              label={def.effect === "surgery" ? "Who is on the table" : def.effect === "prep" ? "Who is being prepped" : "Who to settle"}
             />
           )}
+          {def.effect === "surgery" && draft.subjectId && <InjuryPicker patientId={draft.subjectId} value={draft.injuryId} onChange={(v) => set({ injuryId: v })} />}
           {(def.effect === "course" || def.effect === "scan") && (
             <TargetPicker move={def.effect === "course"} value={draft.target ? { x: draft.target.x, y: draft.target.y } : null} onChange={(p) => { const m = shipMap(game); set({ target: p && m ? { mapId: m.id, ...p } : null }); }} />
           )}

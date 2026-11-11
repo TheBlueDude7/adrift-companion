@@ -1,10 +1,12 @@
 import { AFFLICTIONS } from "@/data/compendium";
+import { DAMPENING_STRESS_COST } from "@/data/cybernetics";
 import { INJURY_BY_CODE } from "@/data/injuries";
 import { moduleLevel } from "./crafting";
+import { dampening, dampeningLeft, spendDampening } from "./cyber";
 import { growCrops } from "./crops";
 import { d, rollPool, sixes, uid } from "./dice";
 import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./derive";
-import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, type InjuryRoll } from "./injuries";
+import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, festerInjuries, type InjuryRoll } from "./injuries";
 import { noMarks, spendMarks, type Marks } from "./marks";
 import { runSolarPanels } from "./modules";
 import { burnDailyPower } from "./power";
@@ -71,6 +73,13 @@ export function changeStress(c: Character, delta: number, out: string[]) {
     out.push(`${c.name} recovers ${-delta} Stress (now ${c.stress}).`);
     return;
   }
+  // Wiring filters the noise before it lands, at two points of Dampening for each point of Stress.
+  const filtered = spendDampening(c, delta, DAMPENING_STRESS_COST);
+  if (filtered) {
+    out.push(`${c.name}'s Dampening absorbs ${filtered} Stress (${dampeningLeft(c)} Dampening left this Scene).`);
+    delta -= filtered;
+    if (delta === 0) return;
+  }
   let applied = 0;
   for (let i = 0; i < delta; i++) {
     if (c.stress >= 10) {
@@ -106,6 +115,14 @@ export function changePressure(g: GameState, c: Character, delta: number, out: s
     out.push(`${c.name} is Strained: the first Pressure gain today adds an extra level.`);
   }
   c.survival.pressureGainedToday = true;
+  // Dampening takes the edge off after Strained has added its level, so being Strained costs the
+  // wiring an extra point rather than slipping past it.
+  const held = spendDampening(c, steps, 1);
+  if (held) {
+    out.push(`${c.name}'s Dampening holds off ${held} level${held === 1 ? "" : "s"} of Pressure (${dampeningLeft(c)} Dampening left this Scene).`);
+    steps -= held;
+    if (steps === 0) return;
+  }
   for (let i = 0; i < steps; i++) {
     if (c.pressure >= PANICKED) {
       out.push(`${c.name} gains Pressure while Panicked.`);
@@ -142,7 +159,7 @@ export type DamageOptions = {
  * more and absorbs nothing when the target is Corroded or Brittle. Armor Piercing X ignores the
  * first X points of protection, Cover first.
  */
-export function damageSteps(c: Pick<Character, "armor" | "hp">, o: Pick<DamageOptions, "amount" | "useArmor" | "pierce" | "cover" | "resistant" | "vulnerable" | "marks">) {
+export function damageSteps(c: Pick<Character, "armor" | "hp"> & Partial<Pick<Character, "tempHp">>, o: Pick<DamageOptions, "amount" | "useArmor" | "pierce" | "cover" | "resistant" | "vulnerable" | "marks">) {
   const m = o.marks ?? noMarks();
   const scaled = scaleDamage(o.amount, !!o.resistant, !!o.vulnerable);
   const coverPoints = o.cover ?? 0;
@@ -153,8 +170,11 @@ export function damageSteps(c: Pick<Character, "armor" | "hp">, o: Pick<DamageOp
   const inPlay = o.useArmor && c.armor > 0 && scaled - cover - temp > 0 && pierceLeft === 0;
   const armor = inPlay && !m.armorDead ? 1 : 0;
   const stripped = inPlay ? Math.min(c.armor, 1 + m.armorExtra) : 0;
-  const lost = Math.min(c.hp, scaled - cover - temp - armor);
-  return { scaled, cover, temp, armor, stripped, pierced: o.useArmor && c.armor > 0 && pierceLeft > 0, lost };
+  // Temporary HP is the last thing between the hit and the body, and it goes first.
+  const after = Math.max(0, scaled - cover - temp - armor);
+  const tempHp = Math.min(c.tempHp ?? 0, after);
+  const lost = Math.min(c.hp, after - tempHp);
+  return { scaled, cover, temp, armor, stripped, pierced: o.useArmor && c.armor > 0 && pierceLeft > 0, tempHp, lost };
 }
 
 export function applyDamage(g: GameState, c: Character, o: DamageOptions, out: string[]) {
@@ -169,6 +189,10 @@ export function applyDamage(g: GameState, c: Character, o: DamageOptions, out: s
   else if (s.stripped) out.push(`${c.name} is Corroded: their Armor stops nothing, and ${s.stripped} points of it go (Armor now ${left}).`);
   else if (s.pierced) out.push(`The attack pierces ${c.name}'s Armor.`);
   c.armor = left;
+  if (s.tempHp) {
+    c.tempHp = Math.max(0, (c.tempHp ?? 0) - s.tempHp);
+    out.push(`${s.tempHp} of ${c.name}'s Temporary HP goes first (${c.tempHp} left).`);
+  }
   const before = c.hp;
   c.hp -= s.lost;
   out.push(`${c.name} takes ${s.lost} damage (HP ${c.hp}/${maxHp(c)}).`);
@@ -430,6 +454,7 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
       c.hp = Math.max(0, c.hp - untreated);
       out.push(`${c.name} loses ${untreated} HP from untreated injuries (HP ${c.hp}).`);
     }
+    festerInjuries(g, c, out);
 
     // Energy, pressure and resets
     s.energyPenalty = penalty;
@@ -536,6 +561,11 @@ export function endScene(g: GameState): string[] {
     if (cleared.length) out.push(`${c.name}: ${cleared.map((b) => b.name).join(", ")} ended.`);
     for (const key of Object.keys(c.abilityUsed)) if (key.startsWith("combat:")) delete c.abilityUsed[key];
     delete c.damagePressureRound;
+    // Dampening is a per-Scene pool, so this is where the wiring gets its quiet back.
+    if (c.dampeningUsed) {
+      delete c.dampeningUsed;
+      out.push(`${c.name}'s Dampening resets to ${dampening(c)}.`);
+    }
     const reopened = c.injuries.find((i) => !i.legacy && i.name === "Internal Bleeding" && !i.operated);
     if (reopened && !c.dead) applyCondition(g, c, "Bleeding", "Ongoing", out, "From Internal Bleeding");
   }

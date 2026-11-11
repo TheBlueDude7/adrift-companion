@@ -4,6 +4,7 @@ import { actionsNow, extraTaskBlocker, fitOptions, newAction, openProjects, norm
 import { COOK_RECIPES, craftBlocker, FABRICATE_RECIPES, MECH_MODULE_RECIPES, MEDICINE_RECIPES, SALVAGE_RECIPES } from "../crafting";
 import { uid } from "../dice";
 import { ATTRIBUTE_NAMES, PROJECT_TEMPLATES, SKILL_BY_KEY } from "../rules";
+import { operable } from "../surgery";
 import type { Character, GameState, ProjectRequest, SegmentAction } from "../types";
 
 /** One thing this survivor could actually do right now, already filled in enough to submit. */
@@ -78,9 +79,13 @@ function variants(g: GameState, c: Character, task: string): SegmentAction[] {
         .filter((a) => a.characterId !== c.id && a.status === "planned" && taskFor(a).effect !== "assist")
         .map((a) => make({ assists: a.id }));
     case "calm":
-    case "surgery":
+    case "prep":
       // Only someone they can reach: a medkit doesn't help a crewmate two zones and a hull away.
       return g.characters.filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c)).map((x) => make({ subjectId: x.id }));
+    case "surgery":
+      return g.characters
+        .filter((x) => x.id !== c.id && !x.dead && away(g, x) === away(g, c))
+        .flatMap((x) => operable(x).map((i) => make({ subjectId: x.id, injuryId: i.id })));
     case "craft": {
       // One Fabricate task makes two items for the one Energy — three for an Expert — and offering
       // only a single recipe at a time quietly threw that away, so a crew that needed two power
@@ -115,8 +120,9 @@ function subject(g: GameState, a: SegmentAction): string {
     return [...counts].map(([n, qty]) => (qty > 1 ? `${qty}× ${n}` : n)).join(", ");
   }
   if (a.fit) return `${a.fit.name} in ${g.ship.rooms.find((r) => r.id === a.fit!.roomId)?.name ?? "a room"}`;
-  const treated = a.subjectId ? g.characters.find((x) => x.id === a.subjectId)?.name : null;
-  if (treated) return treated;
+  const treated = a.subjectId ? g.characters.find((x) => x.id === a.subjectId) : null;
+  const injury = a.injuryId ? treated?.injuries.find((i) => i.id === a.injuryId) : null;
+  if (treated) return injury ? `${treated.name}'s ${injury.name}` : treated.name;
   const helping = a.assists ? g.actions.find((x) => x.id === a.assists) : null;
   if (helping) return `${g.characters.find((x) => x.id === helping.characterId)?.name ?? "someone"} on ${helping.task}`;
   return "";

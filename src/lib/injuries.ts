@@ -86,7 +86,11 @@ export function addInjury(g: GameState, c: Character, entry: InjuryDef, out: str
     out.push(`☠ ${c.name} needs Surgery within ${SURGERY_WINDOW} segments — by the end of ${deadlineWhen(g.day, injury.deadline)} — or they die.`);
   }
   c.injuries.push(injury);
-  if (entry.severity !== "Minor") applyCondition(g, c, "Bleeding", "Ongoing", out, `From ${entry.name}`);
+  if (entry.severity !== "Minor") {
+    clampVitals(c);
+    out.push(`Pain: ${c.name} is down 1 Maximum Energy until ${entry.name} has Surgery.`);
+    applyCondition(g, c, "Bleeding", "Ongoing", out, `From ${entry.name}`);
+  }
   for (const name of entry.conditions ?? []) applyCondition(g, c, name, "Persistent", out, untilSurgery(entry.name));
 }
 
@@ -124,6 +128,36 @@ export function injuryMaxHpSources(c: Character) {
     const cost = i.operated && i.location ? INJURY_BY_CODE[i.code]?.maxHp ?? 0 : 0;
     return cost ? [`${i.name} ${cost}`] : [];
   });
+}
+
+/** A Major or Deadly injury still waiting for Surgery. Old-table injuries get no automatic effects. */
+export const awaitsSurgery = (i: Injury) => !i.legacy && effectiveSeverity(i) !== "Minor";
+
+/** Pain: every injury still waiting for Surgery costs 1 Maximum Energy. */
+export const injuryPain = (c: Character) => c.injuries.filter(awaitsSurgery).length;
+
+/** A Major injury that has waited this many End of Days for Surgery, counting the day it happened, festers. */
+export const FESTER_DAYS = 3;
+
+/**
+ * End of Day: a Major injury left too long without Surgery becomes Deadly, and the Surgery window opens
+ * from the coming morning. Called before the day turns over, so `g.day` is the day that's ending.
+ */
+export function festerInjuries(g: GameState, c: Character, out: string[]) {
+  for (const i of c.injuries) {
+    if (i.legacy || i.operated || i.severity !== "Major" || g.day - i.dayReceived < FESTER_DAYS - 1) continue;
+    i.severity = "Deadly";
+    i.festered = true;
+    i.deadline = segmentsOn(g.day + 1, 0, SURGERY_WINDOW - 1);
+    out.push(`☠ ${c.name}'s ${i.name} festers after ${FESTER_DAYS} days without Surgery: it's Deadly now. Surgery by the end of ${SEGMENTS[i.deadline.segment]} on day ${i.deadline.day}, or they die.`);
+  }
+}
+
+/** First Aid on a Deadly injury buys one more segment before it kills. */
+export function buyTime(i: Injury) {
+  if (!i.deadline) return null;
+  i.deadline = segmentsOn(i.deadline.day, i.deadline.segment, 1);
+  return i.deadline;
 }
 
 /** Natural recovery and Life Support can heal it: Minor now, and not a permanent loss. */

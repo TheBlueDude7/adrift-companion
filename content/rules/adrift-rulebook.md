@@ -287,7 +287,7 @@ Every character in Adrift starts with base stats that they can use.
 Each human starts with:
 
 - 8 hp,
-- 3 max energy,
+- 4 max energy,
 - 1 willpower,
 - And 1 in every base attribute.
 - 6 attribute points to spend.
@@ -610,7 +610,7 @@ A Crisis task is performed under immediate danger or has consequences too severe
 
 Before a Crisis roll, the GM states what failure will cause.
 
-## Combat Exception: Stunts
+### Combat Exception: Stunts
 
 Combat uses its own rules for additional successes.
 
@@ -622,7 +622,7 @@ Combat Stunts are intentionally more flexible because positioning, damage, contr
 
 Outside combat, additional successes do not create generic Stunts; they only matter when a task lists a Strong Result. Generic Stunts are for combat.
 
-#### Task Modifiers
+## Task Modifiers
 
 Use penalties only when circumstances meaningfully impair the attempt. Do not apply a penalty merely because a character is below a Routine Threshold; being below the threshold is already the reason a roll is required.
 
@@ -635,7 +635,7 @@ Use penalties only when circumstances meaningfully impair the attempt. Do not ap
 
 Modifiers normally stack to a maximum of -6d6 or +6d6. A task that has become impossible because a required component or capability is completely absent cannot be attempted until the crew changes the situation.
 
-#### Assistance
+## Assistance
 
 One character may spend a task assisting another character. The assistant must have at least 1 level in the relevant skill, the Strength to lend a back on physical Project work, or a clearly useful method of helping.
 
@@ -650,7 +650,7 @@ One character may spend a task assisting another character. The assistant must h
 - Assistance never turns a Crisis task into a Routine task.
 - Resolve Assists before the task they help, so the helped character knows their pool.
 
-### Standard Shipboard Tasks
+## Standard Shipboard Tasks
 
 The following thresholds establish the baseline for ordinary work aboard a functioning ship. Individual recipes, modules, hazards, and Projects may specify different requirements.
 
@@ -744,14 +744,14 @@ Xenoflora will not take root below Expanded Hydroponics. A ripe crop is not harv
 
 A strain resists automation rather than benefiting from it. **It needs Maintain Crops every single day, at every module level, including Self-Sustaining.** Miss a day and it does not stall like an ordinary crop: it slips containment. The crop is lost, the beds revert to Food, and the GM has something loose aboard the ship to run as they see fit.
 
-### The Competence Rule
+## The Competence Rule
 
 | THE COMPETENCE RULE |
 | --- |
 | If a trained survivor has the required skill, correct tools, a functioning facility, enough time, and a safe working environment, the task succeeds without a roll. |
 |   |
 
-### Projects
+## Projects
 
 Projects are tasks too large to finish in one segment. Building a room, upgrading a module, conducting research, and restoring a ruined reactor are all Projects.
 
@@ -771,7 +771,7 @@ Every Project lists: required Progress, relevant skill, Routine Threshold, facil
 | Cost: Paid once for each Progress according to the ship’s current Hull tier |
 | A character with Mechanical Technician 5 completes one Progress automatically in a safe segment. A less-skilled character may roll Mechanical Technician to attempt the same work. |
 
-### Events and Interruptions
+## Events and Interruptions
 
 The GM may introduce an event at the start of a segment, after tasks are committed, during resolution, or after tasks finish. The timing should follow the fiction and should be stated clearly.
 
@@ -780,11 +780,13 @@ The GM may introduce an event at the start of a segment, after tasks are committ
 - Characters whose tasks have not yet been resolved may reassign them when the event makes the original task impossible.
 - Warnings, sensor data, and visible countdowns should be provided whenever the crew could reasonably detect them.
 
-### Energy
+## Energy
 
 Energy measures how much meaningful work a character can perform before exhaustion. Energy is spent on shipboard tasks and other strenuous actions. Combat uses its own action economy and does not normally spend Energy unless a rule says otherwise.
 
-- Base Maximum Energy is 3.
+<!-- updated: base-energy -->
+
+- Base Maximum Energy is 4.
 - Every 2 Constitution above 1 increases Maximum Energy by 1.
 - Energy cannot normally fall below 0.
 - A character at 0 Energy is Exhausted and cannot begin another Energy-costing task unless they Push or an ability permits it.
@@ -802,7 +804,7 @@ Every Rest:
 - Restores all Energy.
 - Lowers Pressure by 1, but not below the Stress floor.
 
-### Daily Survival Requirements
+## Daily Survival Requirements
 
 At the End of Day, check each character’s Food, Water, Oxygen, and Sleep. Eating and drinking do not consume tasks and may occur during any segment.
 
@@ -821,7 +823,7 @@ A character may consume half a Food Unit instead of one full unit. At the beginn
 - Failure: Maximum Energy is reduced by 1 for that day.
 - Two consecutive days of rationing, whether the rolls succeed or fail, cause 1 Stress.
 
-### Pressure
+## Pressure
 
 Pressure represents immediate fear, adrenaline, tunnel vision, and survival instinct. It rises quickly during danger and fades when the immediate crisis passes.
 
@@ -869,7 +871,7 @@ If a character would gain Pressure while already Panicked, they immediately trig
 
 No reduction takes Pressure below the Stress floor, Rest included: at Stress 5+ Pressure can’t drop below Shaken, and at Stress 7+ not below Pressured.
 
-### Pushing
+## Pushing
 
 A character may Push when ordinary effort is not enough. Pushing is a deliberate decision, not an automatic response to failure.
 
@@ -889,7 +891,7 @@ A character at 0 Energy may still Push. Instead of the Energy, the Push costs an
 - Routine tasks do not require a reroll, but a character may Push to perform an extra Routine task.
 - A Panicked character may Push, but gaining Pressure while Panicked triggers the normal overflow consequence.
 
-### Stress
+## Stress
 
 Stress represents lasting psychological strain. It is tracked from 0 to 10 and does not disappear when danger ends or after ordinary sleep.
 
@@ -942,7 +944,7 @@ Stress is reduced through deliberate recovery, not ordinary Rest. Stress Recover
 
 Stress Recovery Progress is lost if the patient gains Stress before the Project is completed. A character may be the patient in only one Stress Recovery task per day.
 
-### Willpower
+## Willpower
 
 Willpower represents a character’s capacity to refuse collapse when the body or mind should give way. Base Maximum Willpower is 1. Every 3 Constitution above 1 increases Maximum Willpower by 1.
 
@@ -960,7 +962,7 @@ Spend 1 Willpower to do one of the following:
 
 Willpower cannot reduce Pressure directly. All spent Willpower is restored when the character completes a Stress Recovery Project or completes an Act. An Act is a chapter of the campaign built around one major goal or threat; the GM declares it complete when the crew resolves that goal, usually every 3–5 sessions.
 
-### Mind Breaks
+## Mind Breaks
 
 A Mind Break is a temporary loss of control caused by extreme Pressure. Unless a rule states otherwise, roll 1d6 when a Mind Break triggers. The effect lasts until the character falls unconscious, the immediate danger ends, or another character successfully stabilizes them with a Crisis First Aid or Entertainer task. If a Mind Break contests a forced action from an affliction, the Mind Break takes precedent.
 
@@ -1074,17 +1076,21 @@ A character carries at most 2 Minor Injuries and 1 Major Injury at a time. Going
 
 #### Injury Severity
 
-<!-- updated: injuries -->
+<!-- updated: injuries, surgery-window, pain-festering -->
 
 Each Injury lists the rolls it affects. Severity sets the penalty:
 
 - Minor Injuries impose −1d6 on the rolls they list.
 - Major Injuries impose −2d6 on the rolls they list and apply the condition they list until Surgery. The character starts Bleeding.
-- Deadly Injuries impose −2d6 on the rolls they list and are catastrophic: either the character needs Surgery by the end of the next day segment or dies, or the Injury is a permanent loss that only a cybernetic or graft replaces. The character starts Bleeding.
+- Deadly Injuries impose −2d6 on the rolls they list and are catastrophic: either the character needs Surgery within four segments (the one it happened in and the three after) or dies, or the Injury is a permanent loss that only a cybernetic or graft replaces. The character starts Bleeding.
 
 The penalty lasts until the Injury heals, even once it is Treated.
 
-Injuries do not automatically reduce Maximum HP, Maximum Energy, or increase the Energy cost of unrelated Tasks.
+Pain: every Major or Deadly Injury that hasn't had Surgery costs 1 Maximum Energy. The point comes back the moment the Surgery succeeds.
+
+Festering: a Major Injury left 3 days without Surgery, counting the day it happened, Festers at that End of Day. It becomes a Deadly Injury, and its four-segment Surgery window opens from the next Morning.
+
+Injuries do not otherwise reduce Maximum HP or Maximum Energy, or increase the Energy cost of unrelated Tasks, unless the Injury says so.
 
 #### Injury States
 
@@ -1120,7 +1126,7 @@ Bleeding ends with a successful First Aid task or by spending an appropriate Med
 
 First Aid is a free action, usable any time outside the segment structure, with no Energy cost, but it uses up one medkit from the healer's inventory or ship storage. The kit heals its own HP (Improvised Medkit 1, Medkit 3, Glitterworld Medkit 5) and adds its dice (Medkit +1d6, Glitterworld Medkit +3d6). It is always a Skilled roll:
 
-- If treating an Untreated Injury of any Severity, the first 6 treats it. A Major or Deadly Injury still needs Surgery to become Minor.
+- If treating an Untreated Injury of any Severity, the first 6 treats it. A Major or Deadly Injury still needs Surgery to become Minor, but treating a Deadly Injury buys the patient one more segment before it kills.
 - Every other 6 heals 1 HP or removes one condition.
 - First Aid works with no Injury at all, purely to heal.
 - Giving First Aid to another player's character needs that player's agreement.
@@ -1130,16 +1136,27 @@ First Aid cannot repair permanent structural damage, restore lost organs, or rep
 
 #### Surgery
 
-<!-- updated: surgery -->
+<!-- updated: surgery, medical-rules -->
 
-Surgery is always a Crisis task. It requires a functioning Medical Bay, Surgical Tools, appropriate supplies, and another character to operate. A Mobile Surgical Cradle removes the need for a Medical Bay, but doesn't make Surgery easier.
+First Aid keeps a patient alive; Surgery repairs them. Surgery is always a Crisis task on one named Major or Deadly Injury. It costs the surgeon 3 Energy and the patient their segment: they spend it on the table and take no Task of their own. Nobody operates on themselves.
 
-- When Surgery begins, the patient drops to half their Maximum HP if above it, regardless of the outcome.
-- The patient loses 2 current Energy, to a minimum of 0.
-- If already at 1 HP, the patient collapses and must spend the next 2 segments resting after the procedure.
-- Success converts one Major or Deadly injury into a treated Minor injury unless the injury says otherwise.
-- Failure gives the patient one additional Minor injury and 1 Stress. The original injury remains.
-- Additional successes may restore 1 HP, remove a separate Minor injury, or reduce a lasting penalty, according to the Surgery stunt list.
+It requires Surgical Tools, from the surgeon's own pack or, aboard, from ship storage. Each Surgery spends one use of the best set to hand, success or fail. Enhanced Surgical Tools add +3d6 and cost no Energy.
+
+The Medical Bay sets how hard the operation is and how far the patient's HP drops when it begins. Out on an expedition the Medical Bay doesn't count. A working Mobile Surgical Cradle counts as a Field Setup wherever its mech is.
+
+| Where | Surgery roll | HP when it begins: success | HP when it begins: failure |
+| --- | --- | --- | --- |
+| No Medical Bay, or Base Setup | −3d6 | Half Max HP | Half Max HP |
+| Field Setup | −2d6 | Half Max HP | Half Max HP |
+| Operational | −1d6 | Three-quarters Max HP | Half Max HP |
+| Sterile Suite | — | Three-quarters Max HP | Three-quarters Max HP |
+| Advanced Care | — | No drop | No drop |
+
+The drop only applies if the patient is above it, and never takes them below 1 HP. A successful Prep for Surgery on the patient that day adds +2d6.
+
+- Success converts the Injury into a Treated Minor Injury. The conditions it caused end, its Pain ends, and any Surgery deadline is cleared.
+- Strong Result: the patient also regains 1 HP.
+- Failure leaves the Injury exactly as it was. The tools, the Energy, and the HP drop are spent anyway.
 
 #### Death
 
@@ -1489,7 +1506,7 @@ Biological augmentations are living replacements and modifications created from 
 
 ## Chapter 4: Keeping Her Flying
 
-## Ship Mechanics
+### Ship Mechanics
 
 Your ship is not a backdrop. It is shelter, transportation, workshop, hospital, farm, weapons platform, and the last barrier between the crew and empty space.
 
@@ -3348,9 +3365,41 @@ Damage cannot normally reduce HP below 0.
 
 #### Resistance and Vulnerability
 
-Resistance to a damage type halves each hit of that type, rounded down (3 becomes 1). Vulnerability adds half, rounded down (3 becomes 4). Resistance has no levels: any source gives it, and more sources don't stack. Resistance and Vulnerability to the same type cancel out. Immunity means that type deals no damage.
+Resistance to a damage type halves each hit of that type, rounded down (3 becomes 1). Vulnerability adds half, rounded down (3 becomes 4). Neither has levels: any source gives it, and more sources don't stack. Resistance and Vulnerability to the same type cancel out. Immunity means that type deals no damage.
 
-The short-lived Vulnerable: Damage Type condition is separate: +1 damage on the next hit of that type.
+There is only one strength of Vulnerability. The Vulnerable: Damage Type condition is a temporary way to apply it, not a smaller version of it.
+
+<!-- updated: damage-types -->
+
+#### What Each Damage Type Does
+
+Every attack, hazard, and upgrade in Adrift deals one of five damage types. They are not five names for the same number: each one does something no other type can, and those five things hold everywhere — for a survivor, a mech, a threat, and a ship module alike.
+
+| Type | What it is for | Only this type |
+| --- | --- | --- |
+| Ballistic | Denying ground at range | Cover reduces it, and its riders take position away: Pinned, Marked, Exposed |
+| Physical | Breaking a thing and moving it | Strips worn Armor incidentally, and forces movement: Brittle, Prone, Crippled, Disarmed |
+| Fire | Making a place unsurvivable | Stays in the terrain after the attack, and suppresses regeneration and natural healing |
+| Electric | Shutting a machine down | Cares whether the target is a machine: Conductive, Disrupted, Power-Starved |
+| Chemical | Ruining what it touches, slowly | Seals stop it where Armor does not, and it puts a clock on the target: Poisoned, Contaminated, Corroded |
+
+Read as rules:
+
+- **Ballistic is the only type Cover reduces.** Cover Armor absorbs Ballistic Damage and nothing else. A hit of any other type goes past Cover untouched.
+- **Physical is the only type that strips Armor incidentally.** All worn Armor is ablative, but Physical effects are the ones that take extra points off it and that shove a target around without a stunt paying for it.
+- **Fire is the only type that outlives its own attack.** Burning, Smoldering, and Illuminated remain in the zone, and Fire Damage suppresses regeneration and natural healing on what it hits. This is what makes Fire the answer to a target that heals faster than it can be hurt.
+- **Electric is the only type that asks what the target is made of.** Against a mech, a ship module, a vehicle, a drone, or a character who counts as Mechanical, Electric reaches conditions nothing else can: Disrupted, Power-Starved, Conductive. A purely biological target with no electronics in it is normally Immune to Electric Damage and can never be Power-Starved.
+- **Chemical is the only type a seal stops.** Sealed Armor protects against Chemical while its seals hold, whatever the Armor value is; a breach ends that protection even with Armor left. Chemical's conditions are the ones that keep working after the attacker has moved on.
+
+#### Damage Types and the Three Upgrade Paths
+
+The five types are what make the Cybernetic, Mech, and Biological paths answer each other, without any of them needing rules of its own:
+
+- **Electric hunts machinery.** Cybernetics and mechs are machinery, so a heavily implanted survivor and a piloted frame are both exposed to the one type that disables rather than wounds. Industrial Frame Integration says so outright: its owner counts as Mechanical for Electric and machine-targeting effects.
+- **Fire and Chemical hunt flesh.** Both work on living tissue, and Fire shuts off the regeneration a biological build depends on. A sealed, unbreached mech is close to untouchable by Chemical; the moment it is Breached, it is not.
+- **Ballistic and Physical work on everything.** They have no counter-target and no immunity to find, which is why ordinary weapons stay worth carrying at every tier.
+
+A GM wanting a threat to pressure one path in particular picks its damage type rather than its stat line.
 
 ### Armor
 
@@ -3736,7 +3785,7 @@ Complete the following procedure:
 - Regain 20% of resources, rounded down, for this action
 - +1 to a later roll
 
-## WIT-Based Skill Stunts
+### WIT-Based Skill Stunts
 
 ### Perception
 
@@ -3782,7 +3831,17 @@ The GM may answer any question of the kind above in place of a listed effect. Sp
 - The lift lasts: the target cannot drop below their current Pressure for the rest of the day
 - Get something out of them: a truth, a confession, or a cooperation they had been withholding
 
-### Backgrounds
+## Backgrounds in Detail
+
+The eight Backgrounds in full. Chapter 1 covers choosing one and what a Background ability is; this is the reference for what each one actually does.
+
+Every entry is written the same way, so once you have read one you know where to look in the rest:
+
+- Attribute Bonuses and Skill Bonuses: what the work put in your body and your hands.
+- Signature Trait: the thing you can always do that nobody else at the table can.
+- Background Specialty: choose one of the three at character creation.
+
+The eight are Fleet Marine, Covert Operative, Ship Engineer, Medical Officer, Pilot, Xenobiology Researcher, Logistics and Quartermaster, and Terraformer.
 
 ## Fleet Marine
 
@@ -3988,9 +4047,7 @@ Once per expedition, you may temporarily repurpose one installed mech module as 
 
 The replacement must use no more Slots or Hardpoints than the original module.
 
-The repurposed module functions until the end of the current Scene.
-
-## Afterward
+The repurposed module functions until the end of the current Scene. Afterward:
 
 - It returns to its original function.
 - It becomes Damaged.
@@ -4051,7 +4108,7 @@ During that time:
 - They cannot recover HP.
 - Further damage may still kill them.
 
-## Combat Medic
+#### Combat Medic
 
 Once per combat, perform First Aid on an adjacent character as a Fast Action without making a roll or using a first aid kit.
 
@@ -4068,10 +4125,10 @@ If the condition is caused by an untreated Injury, it is suppressed until the en
 
 #### High Surgeon
 
-When you successfully perform Surgery on a Major or Critical Injury, choose one additional benefit:
+When you successfully perform Surgery on a Major or Deadly Injury, choose one additional benefit:
 
 - Restore 2 Maximum HP lost to that Injury, and restore an additional 3 current HP to the patient.
-- If the patient was already at 1 HP before the surgery started, reduce required postoperative Rest by two segments.
+- Spare the patient the HP drop the operation would cost them.
 - Perform surgery on a second Injury during the same procedure.
 
 Each patient may receive only one High Surgeon benefit from the same Injury.
@@ -4117,9 +4174,7 @@ Conditions caused by the event still apply unless they depended entirely on deal
 
 A mech gains one additional Module Slot while you are its pilot. In addition, mechs gain +4 mech hp while you use them.
 
-During installation, designate one module as the Pilot Module.
-
-## The Pilot Module
+During installation, designate one module as the Pilot Module. That module:
 
 - Functions normally while you pilot the mech.
 - Becomes inactive when another character pilots it.
@@ -4457,9 +4512,11 @@ Roll 2d6. The first die sets Severity (1–3 Minor, 4–5 Major, 6 Deadly); the 
 | 5-6 | Major | Systemic Infection | −2d6 to Constitution rolls. Poisoned until Surgery. |
 | 6-6 | Deadly | Organ Failure | −2d6 to Constitution rolls. Poisoned and Drained. Surgery within four segments or die, and −2 Max HP afterward. |
 
-### Afflictions
+## Affliction Tables
 
-## Category 1: Phobias and Sensory Aversions
+Roll or choose on the category below that fits what happened. The first number is the category and the second is the row.
+
+### Category 1: Phobias and Sensory Aversions
 
 These Afflictions are triggered by specific environments, sensations, bodily signs, or survival threats.
 
@@ -4476,7 +4533,7 @@ These Afflictions are triggered by specific environments, sensations, bodily sig
 | 1–9 | Aversion to Silence | A completely silent or very quiet zone causes 1 Pressure at the end of each Expedition Turn. You automatically fail Stealth Tasks that require remaining entirely silent unless an ally is directly communicating with you. |
 | 1–10 | Fear of Medical Procedures | Suffer −3d6 when performing or receiving First Aid or Surgery. Beginning Surgery causes Frightened until the procedure ends. You cannot benefit from Immunity to Frightened during a medical procedure. |
 
-## Category 2: Threat and Damage-Type Distortions
+### Category 2: Threat and Damage-Type Distortions
 
 These Afflictions distort how the character interprets weapons, organisms, hazards, and incoming harm.
 
@@ -4493,7 +4550,7 @@ These Afflictions distort how the character interprets weapons, organisms, hazar
 | 2–9 | Pain Anticipation | When targeted by a visible damaging attack, you must Dodge or Block if able. If you choose not to or cannot, gain 1 Pressure before the attack resolves. |
 | 2–10 | Threat Misclassification | When encountering an unknown creature, the GM secretly selects one damage type you irrationally believe is effective. Until the creature is successfully Analyzed, suffer −2d6 when attacking it with any other damage type. Obvious evidence may contradict the belief, but does not remove the penalty. |
 
-## Category 3: Compulsions and Dependencies
+### Category 3: Compulsions and Dependencies
 
 These Afflictions create rituals, restrictions, and behaviors the character feels unable to ignore.
 
@@ -4510,7 +4567,7 @@ These Afflictions create rituals, restrictions, and behaviors the character feel
 | 3–9 | Sleep Disruption | Rest restores 1 less Energy. You may benefit from only one Rest per day. If you sleep outside Crew Quarters or another secure sleeping area, begin the next day Disoriented. |
 | 3–10 | Decontamination Ritual | After direct contact with an alien organism, Chemical hazard, bodily fluid, or Contaminated object, you must decontaminate at the next safe opportunity. Until then, you cannot willingly Rest, eat, transfer items, or provide physical Assistance. |
 
-## Category 4: Social and Identity Disturbances
+### Category 4: Social and Identity Disturbances
 
 These Afflictions change how the character relates to other survivors and understands their own role.
 
@@ -4527,7 +4584,7 @@ These Afflictions change how the character relates to other survivors and unders
 | 4–9 | Emotional Contagion | The first time a nearby ally gains Pressure each Scene, you also gain 1 Pressure. Immunity to Frightened does not prevent this effect. |
 | 4–10 | Reassurance Dependence | After you fail a Skilled or Crisis Task, you cannot attempt another non-defensive Task alone. An ally must Assist, communicate reassurance, or spend a Fast Action grounding you. Otherwise suffer −3d6. Suffer -1d6 to all Crisis Tasks. |
 
-## Category 5: Dissociation and Perceptual Distortion
+### Category 5: Dissociation and Perceptual Distortion
 
 These Afflictions interfere with memory, attention, sensory interpretation, and the character’s sense of reality.
 
@@ -4544,7 +4601,7 @@ These Afflictions interfere with memory, attention, sensory interpretation, and 
 | 5–9 | Tunnel Vision | After you attack, Mark, or Analyze a target, all other hostile creatures are treated as Hidden from you until your target leaves the Scene, becomes Downed, or you spend a Fast Action reassessing the situation. |
 | 5–10 | Temporal Dislocation | You begin the first Round of every combat Surprised. If you would already be Surprised, you also become Confused until the end of your first turn. |
 
-## Category 6: Severe Maladaptive States
+### Category 6: Severe Maladaptive States
 
 These afflictions represent major psychological deterioration. Their effects are intentionally severe and may significantly alter a character’s build or behavior.
 
@@ -4561,7 +4618,7 @@ These afflictions represent major psychological deterioration. Their effects are
 | 6–9 | Total Shutdown | When you become Overtaxed, also become Immobilized and Silenced. These conditions remain until an adjacent ally spends a Slow Action grounding you or your Pressure falls below Overtaxed. |
 | 6–10 | No Affliction Here! | Scot-free! |
 
-### Conditions
+## Conditions
 
 | Condition | Effect | Normal Removal |
 | --- | --- | --- |
@@ -4998,7 +5055,7 @@ Some abilities apply temporary vulnerability as a condition.
 
 #### Vulnerable: Damage Type
 
-The next hit of the listed damage type deals +1 Damage.
+The next hit of the listed damage type is raised by half, rounded down, exactly as a permanent Vulnerability would raise it.
 
 Examples include:
 
@@ -5010,9 +5067,7 @@ Examples include:
 
 The condition ends after triggering or at the end of the Scene.
 
-This condition is separate from a creature’s permanent damage Vulnerability.
-
-A target with both a permanent Vulnerability and Vulnerable: Fire takes both bonuses unless an ability states otherwise.
+A target that already has a permanent Vulnerability to that type gains nothing from the condition: Vulnerability has no levels and does not stack with itself.
 
 ### Adaptive Defenses
 
@@ -5020,7 +5075,7 @@ Some monsters and upgrades change their defenses during an encounter.
 
 #### Adaptive: Damage Type
 
-The target gains Resistance 1 against the listed damage type.
+The target gains Resistance against the listed damage type.
 
 If Adaptive is applied for a different damage type, the previous Adaptive Resistance is replaced.
 
@@ -5095,7 +5150,7 @@ New monsters, weapons, upgrades, and environments may create conditions beyond t
 
 The Human Century
 
-### Adrift Lore Expanded
+## Adrift Lore Expanded
 
 Humanity’s expansion beyond Earth lasted only one hundred years.
 

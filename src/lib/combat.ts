@@ -1,6 +1,6 @@
 import { conditionPenalty } from "./conditions";
 import { d, rollPool, sixes, uid } from "./dice";
-import { attributeValue, rollBreakdown } from "./derive";
+import { attributeValue, damageResistance, damageSystem, rollBreakdown } from "./derive";
 import { markDamage, marksOn, spendMarks, type Marks } from "./marks";
 import { applyDamage, damageSteps } from "./mechanics";
 import { zoneDistance } from "./expedition";
@@ -200,12 +200,16 @@ function hurtCharacter(g: GameState, c: Character, weapon: WeaponProfile, damage
   const said: string[] = [];
   if (amount < damage) said.push(`Nonlethal: ${c.name} can't be dropped by this, so it deals ${amount}.`);
   const vulnerable = c.conditions.some((x) => x.name === `Vulnerable: ${weapon.damageType}`);
+  // Resistance has no levels, so any one source halves the hit; the first is named and the rest
+  // only matter if that one is ever taken away.
+  const resists = damageResistance(g, c, weapon.damageType);
+  if (resists.length) said.push(`${resists[0]} gives ${c.name} ${weapon.damageType} Resistance.`);
   const opts = {
     amount,
     useArmor: true,
     pierce: weapon.ap ?? 0,
     cover: weapon.damageType === "Ballistic" ? coverPoints : 0,
-    resistant: false,
+    resistant: resists.length > 0,
     vulnerable,
     marks,
   };
@@ -285,12 +289,30 @@ export function resolveAttack(g: GameState, attackerId: string, targetId: string
   // Fortified and Corroded wait for the Armor, and all of them are spent in the damage path below.
   const marks = marksOn(target, weapon.damageType);
   const mark = markDamage(marks);
-  const damage = Math.max(0, weapon.damage + hurt + mark.extra);
+  // What the attacker's own Damage system makes of a hit of its type: damage, a look through Cover,
+  // and plating stripped past the usual point. Suppressed while they're piloting a mech.
+  const system = damageSystem(g, c, weapon.damageType);
+  // The system takes its share of the hit as it already stands, so Marked and Weakened are counted
+  // before it rather than after, and a bigger weapon gets a bigger bonus.
+  const base = Math.max(0, weapon.damage + hurt + mark.extra);
+  const boost = Math.ceil(base * system.boost);
+  const damage = base + boost;
   if (hurt) lines.push({ text: `${c.name} is weakened, so it lands for ${weapon.damage + hurt} rather than ${weapon.damage}.` });
   for (const text of mark.lines) lines.push({ text });
   const exposed = conditionPenalty(target, { skill: null, attr: "STR" }).noCover;
-  const coverPoints = exposed ? 0 : COVER_POINTS[shot.cover];
+  const plating = threat ? (threat.stats?.armor ?? 0) : victim!.armor;
+  const covered = exposed ? 0 : COVER_POINTS[shot.cover];
+  const coverPoints = Math.max(0, covered - system.cover);
   if (exposed && shot.cover !== "none") lines.push({ text: `${target.name} is Exposed, so cover doesn't help it.` });
+  if (system.source) {
+    const did = boost > 0 ? [`+${boost} ${weapon.damageType} damage (${Math.round(system.boost * 100)}%)`] : [];
+    if (system.cover && covered > 0) did.push(coverPoints === 0 ? "sees straight through their cover" : "looks through a point of their cover");
+    if (did.length) lines.push({ text: `${c.name}'s ${system.source}: ${did.join(", ")}.` });
+    // That a threat had plating to lose is the GM's, like every other Armor number. A survivor's own
+    // Armor is on their sheet for everyone to see, so the same line is public when the target is crew.
+    if (system.armor && plating > 0) lines.push({ text: `It strips ${system.armor} more point${system.armor === 1 ? "" : "s"} of ${target.name}'s Armor.`, gm: !!threat });
+  }
+  marks.armorExtra += system.armor;
   if (threat) {
     const lost = hurtThreat(threat, weapon, damage, coverPoints, marks, lines);
     // Taking HP damage breaks a threat's Overwatch as surely as it breaks a survivor's.

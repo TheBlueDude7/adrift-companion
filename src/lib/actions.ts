@@ -7,7 +7,8 @@ import { d, rollPool, sixes, uid } from "./dice";
 import { recordSearch } from "./expedition";
 import { cellKey, tileDistance, tileLabel } from "./maps";
 import { conditionPenalty, type ConditionAsk } from "./conditions";
-import { injuryPenalty } from "./injuries";
+import { buyTime, deadlineWhen, injuryPenalty } from "./injuries";
+import { operable, performSurgery, PREP_DICE, prepped, surgeryInjuryBlocker, surgicalToolsFor, theatreFor } from "./surgery";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
 import { completeModuleWork } from "./modules";
 import { moveShip, shipMap } from "./power";
@@ -152,7 +153,7 @@ export type AssistEffect = {
  * Projects where there is nothing to carry, lift, or hold steady, so a strong back is no use. Anything
  * else builds, moves, or repairs something physical and can take a Labor Assist.
  */
-const DESK_WORK = ["Stress Recovery", "Affliction Treatment", "Cybernetic Research", "Xenoflora Cultivation"];
+const DESK_WORK = ["Stress Recovery", "Affliction Treatment", "Cybernetic Research", "Xenoflora Cultivation", "Biological Cultivation"];
 
 const physicalProject = (p: Project) => !DESK_WORK.some((n) => p.name.startsWith(n));
 
@@ -480,6 +481,15 @@ function situational(g: GameState, a: SegmentAction, def: ShipboardTask): { thre
       if (patient.dead) return { threshold: def.threshold, blocker: `${patient.name} is past surgery` };
       const theirs = tasksInWindow(g, patient.id, a.day, a.segment, a.turn);
       if (theirs.length) return { threshold: def.threshold, blocker: `${patient.name} is already committed to ${theirs[0].task} — withdraw it first` };
+      const injury = surgeryInjuryBlocker(patient, patient.injuries.find((i) => i.id === a.injuryId));
+      if (injury) return { threshold: def.threshold, blocker: injury };
+      if (!surgicalToolsFor(g, a.characterId)) return { threshold: def.threshold, blocker: g.expedition?.crew.includes(a.characterId) ? "Needs Surgical Tools in the surgeon's own pack" : "Needs Surgical Tools in the surgeon's pack or the hold" };
+      return { threshold: def.threshold, blocker: null };
+    }
+    case "Prep for Surgery": {
+      const patient = a.subjectId ? g.characters.find((x) => x.id === a.subjectId) : undefined;
+      if (!patient) return { threshold: def.threshold, blocker: "Pick who's being prepped" };
+      if (!operable(patient).length) return { threshold: def.threshold, blocker: `${patient.name} has nothing that needs Surgery` };
       return { threshold: def.threshold, blocker: null };
     }
     case "Plot Safe Course":
@@ -555,6 +565,7 @@ export function taskTerms(g: GameState, a: SegmentAction): TaskTerms {
     const recipe = a.crafts?.[0] ? RECIPE_BY_NAME[a.crafts[0]] : undefined;
     threshold = SALVAGE_THRESHOLD[recipe?.tier ?? ""] ?? threshold;
   }
+  if (def.effect === "surgery" && surgicalToolsFor(g, a.characterId)?.free) energy = 0;
   if (def.effect === "medicine" && c) {
     const pick = MEDICINE_SKILLS.reduce((b, o) => (skillLevel(c, o.skill) - o.threshold > skillLevel(c, b.skill) - b.threshold ? o : b));
     skills = [pick.skill];
@@ -991,6 +1002,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
       if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted"));
     }
   }
+  if (def.effect === "surgery") performSurgery(g, a, ok, strong, out);
   if (ok && def.effect === "calm") {
     const subject = g.characters.find((x) => x.id === a.subjectId);
     if (!subject || subject.dead) out.push("⚠ Nobody was there to settle.");
@@ -1151,6 +1163,22 @@ export function taskPool(g: GameState, a: SegmentAction): { dice: number; parts:
     dice -= 3;
     parts.push("unscanned −3");
   }
+  if (terms.skill === "surgery" && taskFor(a).effect === "surgery") {
+    const theatre = theatreFor(g, a.characterId);
+    if (theatre.dice) {
+      dice += theatre.dice;
+      parts.push(`${theatre.cradle ? "Surgical Cradle" : theatre.label} ${theatre.dice}`);
+    }
+    const tools = surgicalToolsFor(g, a.characterId);
+    if (tools?.dice) {
+      dice += tools.dice;
+      parts.push(`${tools.name} +${tools.dice}`);
+    }
+    if (prepped(g, a)) {
+      dice += PREP_DICE;
+      parts.push(`Prepped +${PREP_DICE}`);
+    }
+  }
   return { dice: Math.max(0, dice), parts, asks: cond?.asks ?? [], blocked: cond?.blocked ?? null };
 }
 
@@ -1307,6 +1335,8 @@ export function giveFirstAid(g: GameState, healerId: string, patientId: string, 
     injury.state = "Treated";
     extra -= 1;
     out.push(`${shown}: ${injury.name} is Treated.${injury.severity !== "Minor" && !injury.operated ? " It still needs Surgery to become a Minor injury." : ""}`);
+    const bought = buyTime(injury);
+    if (bought) out.push(`It buys ${patient.name} one more segment: Surgery by the end of ${deadlineWhen(g.day, bought)}.`);
   } else out.push(`${shown}: ${extra ? `${extra} six${extra > 1 ? "es" : ""}` : "no 6s"}.`);
   for (const id of clear) {
     const cond = patient.conditions.find((x) => x.id === id);

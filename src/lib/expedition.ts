@@ -2,8 +2,9 @@ import { entranceOf, SITE_BY_ID, type SiteDefinition } from "@/data/sites";
 import { carrySlots, usedSlots } from "./derive";
 import { uid } from "./dice";
 import { actionBlocker, clearOverwatch, spendAction, type ActionKind } from "./fight";
+import { hazardToll } from "./hazards";
 import { advanceSegment, changePressure, changeStress } from "./mechanics";
-import { borderSprintable, borderWalkable, BUNDLE_BY_LABEL, SEGMENTS, type BorderState } from "./rules";
+import { borderSprintable, borderWalkable, BUNDLE_BY_LABEL, COVER_POINTS, SEGMENTS, type BorderState, type Cover } from "./rules";
 import { stockItem } from "./stock";
 import type { Border, Expedition, FindBy, GameState, Line, Zone } from "./types";
 
@@ -173,6 +174,9 @@ export function moveTo(g: GameState, characterId: string, zoneId: string): (stri
   if (watched) out.push(watched);
   // A room run through is a room they've been in, so it stops being unexplored like any other.
   for (const z of first) out.push(...see(e, z!));
+  // Walking into a burning room costs you for walking in. A sprint passes through the middle zone
+  // too, so that one catches them on the way past.
+  for (const z of [plan.via, to].filter((x) => x)) out.push(...hazardToll(g, z!.id, { characterId }));
   return out;
 }
 
@@ -195,6 +199,26 @@ export function setBorderState(g: GameState, a: string, b: string, state: Border
   if (known.length === 2) return [`The way between the ${known[0]!.name} and the ${known[1]!.name} is now ${state}, where it was ${was}.`];
   if (known.length === 1) return [`One way out of the ${known[0]!.name} is now ${state}, where it was ${was}.`];
   return [{ text: `A way the crew hasn't found is now ${state}, where it was ${was}.`, gm: true }];
+}
+
+/**
+ * Change what a whole room offers to hide behind.
+ *
+ * Cover used to be something the site was authored with and nobody could touch. A frame big enough
+ * to extrude a barricade changes the room instead of its own sheet, which is the thing a mech can do
+ * that no amount of surgery can: everyone standing in here benefits, including the ones who arrive
+ * later. Wreckage and collapse move it the other way.
+ */
+export function setZoneCover(g: GameState, zoneId: string, cover: Cover, by?: string): (string | Line)[] {
+  const z = g.expedition?.zones.find((x) => x.id === zoneId);
+  if (!z) return ["That zone isn't part of this site."];
+  if (z.cover === cover) return [];
+  const was = z.cover;
+  z.cover = cover;
+  const label = { none: "no cover at all", partial: "Partial Cover", strong: "Strong Cover" }[cover];
+  const rose = COVER_POINTS[cover] > COVER_POINTS[was];
+  const verb = rose ? "goes up to" : "drops to";
+  return [`The ${z.name} ${verb} ${label}${by ? `, worked by ${by}` : ""}. Everyone standing in it shares that, and so does whoever walks in next.`];
 }
 
 /** A successful Scout Ahead: learn the next zone without walking into it. */

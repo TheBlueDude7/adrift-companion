@@ -4,7 +4,29 @@ import { MinusIcon, PlusIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Attribute } from "@/lib/rules";
 import { cn } from "@/lib/utils";
+
+/**
+ * One hue per Attribute, so a thing built around Strength looks like Strength wherever it is drawn:
+ * the attribute cards on a sheet, the skill groups beneath them, and the cybernetic systems that
+ * raise it. Violet and orange carry the two cybernetic systems that raise no Attribute at all.
+ */
+export const HUE = {
+  rose: { text: "text-rose-300", card: "border-rose-500/40 bg-rose-500/10", badge: "bg-rose-500/20 text-rose-200", group: "border-t-rose-500/70", border: "border-rose-500/25", head: "bg-rose-500/10", node: "border-rose-500/30 bg-rose-500/[0.06] hover:border-rose-400/70", band: "bg-rose-500/15 text-rose-100", rail: "bg-rose-500/40", bar: "bg-rose-500/80" },
+  amber: { text: "text-amber-300", card: "border-amber-400/40 bg-amber-400/10", badge: "bg-amber-400/20 text-amber-200", group: "border-t-amber-400/70", border: "border-amber-400/25", head: "bg-amber-400/10", node: "border-amber-400/30 bg-amber-400/[0.06] hover:border-amber-300/70", band: "bg-amber-400/15 text-amber-100", rail: "bg-amber-400/40", bar: "bg-amber-400/80" },
+  sky: { text: "text-sky-300", card: "border-sky-500/40 bg-sky-500/10", badge: "bg-sky-500/20 text-sky-200", group: "border-t-sky-500/70", border: "border-sky-500/25", head: "bg-sky-500/10", node: "border-sky-500/30 bg-sky-500/[0.06] hover:border-sky-400/70", band: "bg-sky-500/15 text-sky-100", rail: "bg-sky-500/40", bar: "bg-sky-500/80" },
+  emerald: { text: "text-emerald-300", card: "border-emerald-500/40 bg-emerald-500/10", badge: "bg-emerald-500/20 text-emerald-200", group: "border-t-emerald-500/70", border: "border-emerald-500/25", head: "bg-emerald-500/10", node: "border-emerald-500/30 bg-emerald-500/[0.06] hover:border-emerald-400/70", band: "bg-emerald-500/15 text-emerald-100", rail: "bg-emerald-500/40", bar: "bg-emerald-500/80" },
+  violet: { text: "text-violet-300", card: "border-violet-500/40 bg-violet-500/10", badge: "bg-violet-500/20 text-violet-200", group: "border-t-violet-500/70", border: "border-violet-500/25", head: "bg-violet-500/10", node: "border-violet-500/30 bg-violet-500/[0.06] hover:border-violet-400/70", band: "bg-violet-500/15 text-violet-100", rail: "bg-violet-500/40", bar: "bg-violet-500/80" },
+  orange: { text: "text-orange-300", card: "border-orange-500/40 bg-orange-500/10", badge: "bg-orange-500/20 text-orange-200", group: "border-t-orange-500/70", border: "border-orange-500/25", head: "bg-orange-500/10", node: "border-orange-500/30 bg-orange-500/[0.06] hover:border-orange-400/70", band: "bg-orange-500/15 text-orange-100", rail: "bg-orange-500/40", bar: "bg-orange-500/80" },
+};
+
+export type Hue = keyof typeof HUE;
+
+export const ATTRIBUTE_HUE: Record<Attribute, Hue> = { STR: "rose", CON: "amber", INT: "sky", WIT: "emerald" };
+
+/** The colours for whatever an Attribute governs. */
+export const attrHue = (a: Attribute) => HUE[ATTRIBUTE_HUE[a]];
 
 export function StarshipIcon({ className }: { className?: string }) {
   return (
@@ -143,6 +165,24 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
     <div className="mb-3 flex items-center justify-between gap-2">
       <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{children}</h3>
       {action}
+    </div>
+  );
+}
+
+/** A plain rules table. Used by the rulebook renderer and by every panel that explains a path. */
+export function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
+  return (
+    <div className="overflow-x-auto rounded border">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/50 text-left">
+          <tr>{head.map((c, i) => <th key={i} className="px-2.5 py-1.5 font-semibold">{c}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t align-top">{r.map((c, j) => <td key={j} className="px-2.5 py-1.5">{c}</td>)}</tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

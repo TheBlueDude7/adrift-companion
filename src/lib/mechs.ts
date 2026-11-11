@@ -1,5 +1,6 @@
 import { CHASSIS, MECH_DAMAGE_TYPES, MECH_TIERS, MODULE_BY_KEY, type MechModule } from "@/data/mechs";
 import { UPGRADE_LADDERS } from "@/data/ship-upgrades";
+import { cyberMechArmor } from "./cyber";
 import { uid } from "./dice";
 import { scaleDamage } from "./rules";
 import type { Character, GameState, Mech, MechChassis, MechDamageType } from "./types";
@@ -11,20 +12,34 @@ export function mechModules(m: Mech) {
 }
 
 /**
- * Armor Points the mech's plating provides when it's intact: the frame's own, which no damage can take
- * away for good, plus every working Defensive module. Damaged modules protect nothing.
+ * Implants this frame keeps connected that it would otherwise suppress — one per working Cybernetic
+ * Integration Port, by implant key, so the nomination survives the implant being replaced in surgery.
+ * A damaged Port connects nothing, and a Port nobody has chosen for connects nothing either.
  */
-export const maxMechArmor = (m: Mech) =>
-  MECH_TIERS[m.tier].armor + mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0);
+export const portedImplants = (m: Mech | undefined) =>
+  m ? mechModules(m).filter((x) => x.def.port && !x.inst.damaged).flatMap((x) => (x.inst.choice ? [x.inst.choice] : [])) : [];
+
+/**
+ * Armor Points the mech's plating provides when it's intact: the frame's own, which no damage can take
+ * away for good, plus every working Defensive module, plus whatever the pilot's Interface system lends
+ * it. Damaged modules protect nothing.
+ *
+ * `pilot` is optional because a save migration has a frame before it has a crew to look through.
+ */
+export const maxMechArmor = (m: Mech, pilot?: Character) =>
+  MECH_TIERS[m.tier].armor + mechModules(m).reduce((s, x) => s + (x.inst.damaged ? 0 : x.def.armor ?? 0), 0) + cyberMechArmor(pilot);
 
 export function mechStats(g: GameState, m: Mech) {
   const chassis = CHASSIS[m.chassis];
   const tier = MECH_TIERS[m.tier];
   const pilot = g.characters.find((c) => c.id === m.pilotId);
   const expert = isMechExpert(pilot);
+  // What the pilot's own Interface implants lend the frame. Interface is Frame-Compatible by
+  // definition, so unlike their other implants it is doing its work precisely while they're inside.
+  const plugged = cyberMechArmor(pilot);
   const mods = mechModules(m);
   const live = mods.filter((x) => !x.inst.damaged);
-  const maxArmor = maxMechArmor(m);
+  const maxArmor = maxMechArmor(m, pilot);
   const resist = Object.fromEntries(MECH_DAMAGE_TYPES.map((t) => [t, 0])) as Record<MechDamageType, number>;
   for (const t of m.tierResist) resist[t] += 1;
   for (const x of live) if (x.def.resist) resist[x.def.resist] += 1;
@@ -43,6 +58,7 @@ export function mechStats(g: GameState, m: Mech) {
     cells: tier.cells,
     resist,
     expert,
+    plugged,
     offline: m.hp <= 0 || m.upgrading,
   };
 }

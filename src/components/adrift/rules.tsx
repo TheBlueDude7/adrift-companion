@@ -13,8 +13,11 @@ import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN } from "@/data/tasks";
 import { MEDKITS } from "@/lib/actions";
 import { MIND_BREAKS, PRESSURE_STATES, severityFromRoll, STRESS_BANDS } from "@/lib/rules";
 import { cn } from "@/lib/utils";
-import { GlossaryText } from "./glossary";
+import { RuleTable } from "./common";
+import { GlossaryText, ToneLegend } from "./glossary";
 import { AffectingPanel } from "./rules-affecting";
+import { MedicalRules } from "./rules-medical";
+import { CyberRules, MechRules } from "./rules-paths";
 import { DamageTry, InjuryTry, PoolTry } from "./rules-tryit";
 
 const SEVERITY_FACES = [1, 2, 3, 4, 5, 6];
@@ -71,7 +74,7 @@ function parseRulebook(md: string): Section[] {
 
   const sections: Section[] = [{ title: "Introduction", part: true, blocks: [] }];
   for (const b of blocks) {
-    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Human Space)\b/.test(b.text), blocks: [], updated: b.updated });
+    if (b.kind === "h" && b.level <= 2) sections.push({ title: b.text, part: /^(Chapter \d+|Compendium|Backgrounds in Detail|Human Space)\b/.test(b.text), blocks: [], updated: b.updated });
     else sections[sections.length - 1].blocks.push(b);
   }
   return sections.filter((s) => s.blocks.length || s.part);
@@ -126,12 +129,18 @@ export function RulesTab() {
       <TabsList>
         <TabsTrigger value="quick" className="px-3">Quick reference</TabsTrigger>
         <TabsTrigger value="book" className="px-3">Rulebook</TabsTrigger>
+        <TabsTrigger value="medical" className="px-3">Medical</TabsTrigger>
+        <TabsTrigger value="mechs" className="px-3">Mechs</TabsTrigger>
+        <TabsTrigger value="cyber" className="px-3">Cybernetics</TabsTrigger>
         <TabsTrigger value="me" className="px-3">What&apos;s affecting me</TabsTrigger>
       </TabsList>
       <TabsContent value="quick" className="pt-3"><QuickReference updates={updates} /></TabsContent>
       <TabsContent value="book" className="pt-3">
         {data ? <Rulebook markdown={data.markdown} /> : <p className="py-8 text-center text-sm text-muted-foreground">{error ? "The rulebook couldn't be loaded." : "Loading the rulebook…"}</p>}
       </TabsContent>
+      <TabsContent value="medical" className="pt-3"><MedicalRules /></TabsContent>
+      <TabsContent value="mechs" className="pt-3"><MechRules /></TabsContent>
+      <TabsContent value="cyber" className="pt-3"><CyberRules /></TabsContent>
       <TabsContent value="me" className="pt-3"><AffectingPanel /></TabsContent>
     </Tabs>
   );
@@ -189,6 +198,7 @@ function Rulebook({ markdown }: { markdown: string }) {
             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8" placeholder="Search the whole rulebook…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <ToneLegend />
           {query.length >= 2 ? (
             <div className="grid gap-1">
               <p className="text-xs text-muted-foreground">{hits.length ? `${hits.length} match${hits.length === 1 ? "" : "es"}` : "No matches."}</p>
@@ -229,23 +239,6 @@ function RuleBlock({ id, block: b }: { id: string; block: Block }) {
   if (b.kind === "ul") return <ul id={id} className="grid list-disc gap-1 pl-5">{b.items.map((t, i) => <li key={i}><GlossaryText text={t} /></li>)}</ul>;
   if (b.kind === "table") return <div id={id} className="scroll-mt-4"><RuleTable head={b.head} rows={b.rows.map((r) => r.map((t, i) => <GlossaryText key={i} text={t} />))} /></div>;
   return <p id={id} className="scroll-mt-4"><GlossaryText text={b.text} /></p>;
-}
-
-function RuleTable({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
-  return (
-    <div className="overflow-x-auto rounded border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left">
-          <tr>{head.map((c, i) => <th key={i} className="px-2.5 py-1.5 font-semibold">{c}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t align-top">{r.map((c, j) => <td key={j} className="px-2.5 py-1.5">{c}</td>)}</tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 type QuickCard = { title: string; find: string; body: ReactNode; wide?: boolean };
@@ -350,9 +343,9 @@ const QUICK: QuickCard[] = [
         <Lines items={[
           "Roll an Injury when one hit takes 3+ HP after Cover and Armor, or when a character drops to 0 HP.",
           "Roll 2d6. The first die is Severity (1–3 Minor, 4–5 Major, 6 Deadly); the second is Location.",
-          "Minor: −1d6 to the rolls it lists. Major: −2d6, the listed condition until Surgery, and Bleeding. Deadly: Surgery by the end of the next segment or the character dies, or a permanent loss.",
+          "Minor: −1d6 to the rolls it lists. Major: −2d6, the listed condition until Surgery, and Bleeding. Deadly: Surgery within four segments or the character dies, or a permanent loss. Every Major or Deadly injury without Surgery is also Pain, −1 Maximum Energy, and a Major one left 3 days without Surgery Festers into a Deadly one.",
           "Cap: 2 Minor and 1 Major at a time. Going over the cap, or rolling an injury you already have, makes it one step worse in the same location.",
-          "Untreated injuries cost 1 HP each at End of Day. First Aid's first 6 makes any injury Treated. Surgery (always a Crisis task; the patient drops to half Max HP when it begins) turns a Major or Deadly injury into a Treated Minor one.",
+          "Untreated injuries cost 1 HP each at End of Day. First Aid's first 6 makes any injury Treated, and on a Deadly injury buys one more segment. Only Surgery turns a Major or Deadly injury into a Treated Minor one: always a Crisis task, it needs Surgical Tools, and the Medical Bay sets its penalty (−3d6 without one) and how far the patient's HP drops when it begins. A failure leaves the injury as it was.",
           "Natural recovery: on every Rest, roll Constitution + days since the oldest Treated Minor injury. Any 6 heals it. Permanent losses don't heal naturally.",
           "Injuries from the old 60-entry table are marked \"old table\" and keep working as before until the GM converts them.",
         ]} />

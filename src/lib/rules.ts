@@ -132,7 +132,7 @@ export const BACKGROUNDS: Background[] = [
     specialties: [
       { name: "You're Not Dying Today", frequency: "expedition", summary: "A reachable character who would die instead stays Stabilized at 0 HP until the Scene ends." },
       { name: "Combat Medic", frequency: "combat", summary: "Fast Action First Aid with no roll or kit: remove Bleeding, Burning, Poisoned, Staggered, Suffocating, or stabilize." },
-      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major/Critical Injury also does one of: restore 2 Maximum HP lost to that Injury and 3 current HP; cut postoperative Rest by two segments if the patient was at 1 HP; or operate on a second Injury in the same procedure. One benefit per Injury." },
+      { name: "High Surgeon", frequency: "passive", summary: "Successful Surgery on a Major or Deadly Injury also does one of: restore 2 Maximum HP lost to that Injury and 3 current HP; spare the patient the HP drop the operation would cost; or operate on a second Injury in the same procedure. One benefit per Injury." },
     ],
   },
   {
@@ -474,6 +474,9 @@ export const PROJECT_TEMPLATES = [
   { name: "Cybernetic Research (Tier II)", skill: "Wits + Engineering", threshold: 6, required: 5, contributorLimit: 2, energy: 2, facility: "Cybernetics Lab, Grade II Workshop and Grade II Medical Bay, Standard Toolkit or better", materials: "Committed at the start: 1 Cybernetic Core, 2 Reinforced Steel, 3 Components, 1 Advanced Adhesive. Choose a category; on completion, roll for the technology and record it under Cybernetic research." },
   { name: "Cybernetic Research (Tier III)", skill: "Wits + Engineering", threshold: 8, required: 8, contributorLimit: 2, energy: 3, facility: "Cybernetics Lab, Grade III Workshop and Grade III Medical Bay, Advanced Toolkit", materials: "Committed at the start: 2 Cybernetic Cores, 2 Neutronium, 3 Quantum Components, 2 Advanced Adhesive. Needs two Tier II technologies unlocked in the category (Damage: the matching Tier II system)." },
   { name: "Xenoflora Cultivation", skill: "Wits + Botany", threshold: 7, required: 6, contributorLimit: 2, energy: 2, facility: "Expanded Hydroponics or better, and a Biological Lab", materials: "Needs a viable alien specimen, which only the GM can grant. Committed at the start: 1 extracted Research Trait, 2 Scrapped Biomass, 3 Chemical Mixture. On completion Hydroponics will take a Xenoflora sowing." },
+  { name: "Biological Cultivation (Tier I)", skill: "Wits + Biology", threshold: 4, required: 4, contributorLimit: 2, energy: 2, facility: "Biological Lab", materials: "Committed at the start: 2 Scrapped Biomass, 1 Chemical Mixture. No Research Trait: a common strain needs no specimen to work from. Choose a tree; on completion, roll for the augmentation and record it under Biological research." },
+  { name: "Biological Cultivation (Tier II)", skill: "Wits + Biology", threshold: 6, required: 5, contributorLimit: 2, energy: 2, facility: "Biological Lab, Grade II Medical Bay, Standard Toolkit or better", materials: "Committed at the start: 1 extracted Research Trait, 3 Scrapped Biomass, 3 Chemical Mixture. Needs two Tier I augmentations already cultivated in the same tree." },
+  { name: "Biological Cultivation (Tier III)", skill: "Wits + Biology", threshold: 8, required: 8, contributorLimit: 2, energy: 3, facility: "Biological Lab, Grade III Medical Bay, Advanced Toolkit", materials: "Committed at the start: 2 extracted Research Traits, 5 Scrapped Biomass, 4 Chemical Mixture, 2 Destructive Chemical Mixture. Needs two Tier II augmentations already cultivated in the same tree." },
   { name: "Custom Project", skill: "", threshold: 0, required: 4, contributorLimit: 2, energy: 2, facility: "", materials: "" },
 ] as const;
 
@@ -530,6 +533,11 @@ export const PROJECT_COSTS: Record<string, ProjectCost> = {
   // The Research Trait the sheet also asks for isn't a tracked item — the GM grants the specimen and
   // the trait together, which is already what gates this project — so only the stock is counted here.
   "Xenoflora Cultivation": { upfront: p([2, "Scrapped Biomass"], [3, "Chemical Mixture"]) },
+  // Same reasoning as Xenoflora: the extracted Research Trait is the GM's to hand over, so what's
+  // counted here is what actually sits in the hold.
+  "Biological Cultivation (Tier I)": { upfront: p([2, "Scrapped Biomass"], [1, "Chemical Mixture"]) },
+  "Biological Cultivation (Tier II)": { upfront: p([3, "Scrapped Biomass"], [3, "Chemical Mixture"]) },
+  "Biological Cultivation (Tier III)": { upfront: p([5, "Scrapped Biomass"], [4, "Chemical Mixture"], [2, "Destructive Chemical Mixture"]) },
 };
 
 /** Resistance halves damage and Vulnerability adds half, both rounded down. Having both cancels out. */
@@ -552,6 +560,7 @@ export const CONDITION_GROUPS: { name: string; conditions: string[] }[] = [
   { name: "Fire", conditions: ["Burning", "Smoldering", "Illuminated", "Overheated"] },
   { name: "Electric", conditions: ["Conductive", "Disrupted", "Jammed"] },
   { name: "Chemical", conditions: ["Corroded", "Poisoned", "Contaminated"] },
+  { name: "Damage types", conditions: [...DAMAGE_TYPES.map((t) => `Resistant: ${t}`), ...DAMAGE_TYPES.map((t) => `Vulnerable: ${t}`)] },
   { name: "Environment", conditions: ["Suffocating", "Freezing", "Anchored", "Weightless"] },
   { name: "Beneficial", conditions: ["Regenerating", "Hidden", "Fortified", "Accelerated"] },
 ];
@@ -589,6 +598,8 @@ export const DEFAULT_CONDITION_DURATION: Record<string, ConditionDuration> = {
   Crippled: "Persistent",
   Poisoned: "Persistent",
   Contaminated: "Persistent",
+  // A dose of Xenoflora lasts the expedition, which outlives any one Scene.
+  ...Object.fromEntries(DAMAGE_TYPES.map((t) => [`Resistant: ${t}`, "Persistent" as const])),
 };
 
 export const defaultDuration = (name: string): ConditionDuration => DEFAULT_CONDITION_DURATION[name] ?? "Scene";

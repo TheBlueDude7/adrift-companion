@@ -36,6 +36,8 @@ export type Injury = {
   operated?: boolean;
   /** A Deadly injury that needs Surgery by the end of this day and segment, or the character dies. */
   deadline?: { day: number; segment: number };
+  /** A Major injury that went too long without Surgery and became Deadly. */
+  festered?: boolean;
 };
 
 export type Affliction = {
@@ -111,6 +113,26 @@ export type Character = {
   /** Loadmaster's shared pool: the characters on the expedition, including the Quartermaster. */
   pool?: string[];
   cybernetics?: InstalledCyber[];
+  /** Dampening spent so far this Scene, against Pressure and Stress. Cleared when the Scene ends. */
+  dampeningUsed?: number;
+  biology?: InstalledBio[];
+  /**
+   * Temporary HP, which every biological augmentation is worth a couple of at the start of a combat.
+   * It is spent before ordinary HP and never repaired, only granted again.
+   */
+  tempHp?: number;
+};
+
+/**
+ * One biological augmentation grown into a survivor. Unlike an implant it has no location and no
+ * Load — what it costs is written into the upgrade, as a Backlash and usually as a hungrier body.
+ */
+export type InstalledBio = {
+  id: string;
+  /** Key into BIOLOGY. */
+  key: string;
+  /** Choices made as it was grown, like which three organ Injuries a Redundant Organ Cluster covers. */
+  choice: string;
 };
 
 export type InstalledCyber = {
@@ -169,7 +191,13 @@ export type Threat = {
   stats?: ThreatStats;
 };
 
-export type InstalledModule = { id: string; key: string; damaged: boolean };
+export type InstalledModule = {
+  id: string;
+  key: string;
+  damaged: boolean;
+  /** For a Cybernetic Integration Port, the key of the pilot's implant it keeps connected. */
+  choice?: string;
+};
 
 export type Mech = {
   id: string;
@@ -197,6 +225,12 @@ export type Mech = {
 export type Research = {
   /** Tier II and III cybernetics the crew has unlocked. Tier I is always available. */
   cybernetics: string[];
+  /**
+   * Tier II and III biological augmentations the crew has cultivated. Tier I is always available, as
+   * with cybernetics: the document calls those common or relatively simple traits. Optional so a save
+   * made before the path existed still loads.
+   */
+  biology?: string[];
   /** The GM has put a viable alien specimen in the crew's hands, so they may attempt the project. */
   xenofloraAllowed?: boolean;
   /** The Xenoflora Cultivation project is finished, so the beds will take an alien strain. */
@@ -437,8 +471,34 @@ export type Zone = {
   searched: boolean;
   /** Clues, lore and salvage waiting here. A player's copy carries only the ones they've found. */
   finds: Find[];
+  /** Fire, chemicals or spores left standing in the zone. Absent on a zone nobody has burned. */
+  hazards?: ZoneHazard[];
   /** Absent in a player's copy. */
   secrets?: ZoneSecrets;
+};
+
+/**
+ * Something left standing in a zone that hurts whoever is in it, without anyone spending an action
+ * to make it happen — a Burning zone, a chemical cloud, a spore bloom. It is the only thing in the
+ * game that works on the enemy's turn, which is what makes a frame or a colony that plants one worth
+ * more than its damage on paper.
+ *
+ * It catches a creature twice over: once for walking in, and again for still being there when their
+ * turn ends. Cover is no help against something you are standing in, so only Resistance and Armor
+ * reduce it.
+ */
+export type ZoneHazard = {
+  id: string;
+  name: string;
+  /** Damage each time it catches someone, before Resistance and Armor. Zero for one that only applies conditions. */
+  damage: number;
+  type: DamageType;
+  /** What it applies to whoever it catches, by condition name. */
+  conditions: string[];
+  /** Rounds of fighting it has left, or absent for one that stands until something puts it out. */
+  rounds?: number;
+  /** Whatever made it, so the log can say what the crew is standing in. */
+  source: string;
 };
 
 /**
@@ -627,8 +687,10 @@ export type SegmentAction = {
   target?: { mapId: string; x: number; y: number } | null;
   /** Another action this one assists. */
   assists?: string | null;
-  /** The crewmate a task is performed on: Reduce Pressure, Surgery. */
+  /** The crewmate a task is performed on: Reduce Pressure, Prep for Surgery, Surgery. */
   subjectId?: string | null;
+  /** The patient's injury a Surgery operates on. */
+  injuryId?: string | null;
   /** Recipe names to fabricate, duplicates allowed. Cooking, medicine, and salvage use the first. */
   crafts?: string[];
   /** Skill a Train Skill task practices. */

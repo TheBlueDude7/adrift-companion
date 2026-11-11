@@ -35,7 +35,8 @@ import {
   wornArmor,
 } from "@/lib/derive";
 import { INJURY_BY_CODE, INJURY_TABLE } from "@/data/injuries";
-import { convertLegacy, effectiveSeverity, injuryMaxHpSources, operate, suggestConversion } from "@/lib/injuries";
+import { GLOSSARY } from "@/lib/glossary";
+import { convertLegacy, effectiveSeverity, FESTER_DAYS, injuryMaxHpSources, injuryPain, operate, suggestConversion } from "@/lib/injuries";
 import { changePressure, changeStress, clampVitals, findChar, gainXp, mindBreak, rest } from "@/lib/mechanics";
 import {
   ATTRIBUTES,
@@ -56,7 +57,6 @@ import {
   SKILLS,
   stressBand,
   xpForNextLevel,
-  type Attribute,
   type InjurySeverity,
   type InjuryState,
 } from "@/lib/rules";
@@ -70,9 +70,12 @@ import { READ_ONLY, usePerms } from "@/lib/use-perms";
 import { claimCharacter } from "@/lib/sync/client";
 import { toast } from "sonner";
 import { ApplyConditionDialog, ConditionChips, conditionTip, QuickConditions, SceneControls } from "./conditions";
-import { EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
+import { attrHue, EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
+import { GlossaryText, GlossaryTip } from "./glossary";
 import { DiceRoller } from "./dice-roller";
 import { AddItemDialog, ItemList } from "./inventory";
+import { biologyInPlay } from "@/lib/biology";
+import { BiologyPanel } from "./biology";
 import { CyberneticsPanel } from "./cybernetics";
 import { ContingencyPanel, SharedPoolPanel } from "./quartermaster";
 
@@ -227,7 +230,12 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
           limit={isGM ? maxEnergy(c) : c.energy}
           tone="energy"
           onChange={(v) => edit(`${c.name} Energy → ${v}`, (x) => { const diff = v - x.energy; x.energy = v; return `${x.name} ${diff < 0 ? "spends" : "regains"} ${Math.abs(diff)} Energy (${v}/${maxEnergy(x)}).`; })}
-          extra={c.survival.energyPenalty > 0 ? <span className="text-[11px] text-amber-300">−{c.survival.energyPenalty} max today</span> : c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined}
+          extra={(() => {
+            const pain = injuryPain(c);
+            const notes = [c.survival.energyPenalty > 0 && `−${c.survival.energyPenalty} max today`, pain > 0 && `−${pain} Pain`].filter(Boolean).join(", ");
+            if (notes) return <span className="text-[11px] text-amber-300"><GlossaryText text={notes} /></span>;
+            return c.energy === 0 ? <span className="text-[11px] text-amber-300">Exhausted</span> : undefined;
+          })()}
         />
         <StatBlock label="Willpower" value={c.willpower} max={maxWillpower(c)} tone="willpower" onChange={(v) => edit(`${c.name} Willpower → ${v}`, (x) => { x.willpower = v; return `${x.name} Willpower set to ${v}.`; })} />
         <StatBlock
@@ -288,13 +296,6 @@ function Vitals({ c, edit }: { c: Character; edit: Edit }) {
   );
 }
 
-const ATTRIBUTE_TONE: Record<Attribute, { card: string; text: string; badge: string; group: string }> = {
-  STR: { card: "border-rose-500/40 bg-rose-500/10", text: "text-rose-300", badge: "bg-rose-500/20 text-rose-200", group: "border-t-rose-500/70" },
-  CON: { card: "border-amber-400/40 bg-amber-400/10", text: "text-amber-300", badge: "bg-amber-400/20 text-amber-200", group: "border-t-amber-400/70" },
-  INT: { card: "border-sky-500/40 bg-sky-500/10", text: "text-sky-300", badge: "bg-sky-500/20 text-sky-200", group: "border-t-sky-500/70" },
-  WIT: { card: "border-emerald-500/40 bg-emerald-500/10", text: "text-emerald-300", badge: "bg-emerald-500/20 text-emerald-200", group: "border-t-emerald-500/70" },
-};
-
 function Attributes({ c, edit }: { c: Character; edit: Edit }) {
   const spend = creationSpend(c);
   return (
@@ -311,13 +312,13 @@ function Attributes({ c, edit }: { c: Character; edit: Edit }) {
             b.mod && `${sign(b.mod)} mod`,
           ].filter(Boolean);
           return (
-            <div key={a} className={cn("rounded-lg border p-3", ATTRIBUTE_TONE[a].card)}>
+            <div key={a} className={cn("rounded-lg border p-3", attrHue(a).card)}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className={cn("rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-wider", ATTRIBUTE_TONE[a].badge)}>{a}</span>
+                  <span className={cn("rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-wider", attrHue(a).badge)}>{a}</span>
                   <p className="mt-1.5 truncate text-sm font-medium">{ATTRIBUTE_NAMES[a]}</p>
                 </div>
-                <span className={cn("font-mono text-4xl font-bold", ATTRIBUTE_TONE[a].text)}>{attributeValue(c, a)}</span>
+                <span className={cn("font-mono text-4xl font-bold", attrHue(a).text)}>{attributeValue(c, a)}</span>
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <Stepper value={c.attributes[a]} min={1} max={10} size="xs" label={`${a} base`} onChange={(v) => edit(`${c.name} ${a} → ${v}`, (x) => { x.attributes[a] = v; return `${x.name}'s base ${ATTRIBUTE_NAMES[a]} set to ${v}.`; })} />
@@ -354,8 +355,8 @@ function Skills({ c, edit }: { c: Character; edit: Edit }) {
       <SectionTitle action={<span className={cn("text-xs", spend.skillXp > CREATION_SKILL_XP ? "text-amber-300" : "text-muted-foreground")}>{spend.skillXp}/{CREATION_SKILL_XP} creation XP</span>}>Skills</SectionTitle>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(22rem,100%),1fr))] gap-3">
         {groups.map((grp) => (
-          <div key={grp.attr} className={cn("rounded-lg border border-t-2 bg-background/40 p-2", ATTRIBUTE_TONE[grp.attr].group)}>
-            <p className={cn("px-1 pb-1 text-[11px] font-semibold tracking-wide uppercase", ATTRIBUTE_TONE[grp.attr].text)}>{ATTRIBUTE_NAMES[grp.attr]} · {attributeValue(c, grp.attr)}</p>
+          <div key={grp.attr} className={cn("rounded-lg border border-t-2 bg-background/40 p-2", attrHue(grp.attr).group)}>
+            <p className={cn("px-1 pb-1 text-[11px] font-semibold tracking-wide uppercase", attrHue(grp.attr).text)}>{ATTRIBUTE_NAMES[grp.attr]} · {attributeValue(c, grp.attr)}</p>
             <div className="grid">
               {grp.skills.map((s) => {
                 const lvl = skillLevel(c, s.key);
@@ -437,6 +438,8 @@ function Abilities({ c, edit }: { c: Character; edit: Edit }) {
 }
 
 function Injuries({ c, edit }: { c: Character; edit: Edit }) {
+  const { isGM } = usePerms();
+  const today = useGame((s) => s.game.day);
   return (
     <div>
       <SectionTitle action={<CompendiumPicker character={c} kind="injury" />}>Injuries</SectionTitle>
@@ -454,6 +457,12 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                 ) : (
                   <span className="text-xs text-muted-foreground">{effectiveSeverity(inj)} {inj.location}{inj.operated && ` (was ${inj.severity})`}</span>
                 )}
+                {inj.festered && !inj.operated && <GlossaryTip entry={GLOSSARY.get("Festering")!}><Pill className="border-rose-500/50 text-rose-300">Festered</Pill></GlossaryTip>}
+                {!inj.legacy && !inj.operated && inj.severity === "Major" && (
+                  <span className="text-xs text-amber-300/80">
+                    · <GlossaryText text={`Festers ${(() => { const nights = inj.dayReceived + FESTER_DAYS - today; return nights <= 1 ? "tonight" : `in ${nights} nights`; })()}`} />
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">· day {inj.dayReceived}</span>
                 <div className="ml-auto flex items-center gap-1">
                   {inj.legacy ? (
@@ -465,8 +474,8 @@ function Injuries({ c, edit }: { c: Character; edit: Edit }) {
                       <ConvertInjuryDialog injury={inj} edit={edit} />
                     </>
                   ) : (
-                    effectiveSeverity(inj) !== "Minor" && (
-                      <Tip content="Record a successful Surgery: the injury becomes a Treated Minor one (−1d6) and the conditions it caused end. Surgery is a Crisis task, and the patient drops to half Max HP when it begins.">
+                    isGM && effectiveSeverity(inj) !== "Minor" && (
+                      <Tip content="GM override: record a Surgery that happened outside the Actions tab. The injury becomes a Treated Minor one (−1d6) and the conditions it caused end. Nothing else is applied: no tools spent and no HP drop. Plan a Surgery task to play it out.">
                         <Button size="sm" variant="outline" onClick={() => edit(`Surgery on ${inj.name}`, (x) => { const out: string[] = []; operate(x, inj.id, out); return out; })}>Surgery</Button>
                       </Tip>
                     )
@@ -689,6 +698,17 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
           <CyberneticsPanel c={c} />
         </CardContent>
       </Card>
+
+      {/* Same rule as the Biology tab: the path shows up with the lab that can grow it, and stays for
+          anyone carrying what it grew. */}
+      {biologyInPlay(game) && (
+        <Card>
+          <CardContent>
+            <SectionTitle>Biology</SectionTitle>
+            <BiologyPanel c={c} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent>

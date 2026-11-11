@@ -26,14 +26,15 @@ import {
   type MechModule,
   type ModuleCategory,
 } from "@/data/mechs";
-import { TIER_LABEL } from "@/data/cybernetics";
+import { CYBER_BY_KEY, TIER_LABEL } from "@/data/cybernetics";
+import { cyberMechArmor, suppressedImplants } from "@/lib/cyber";
 import { uid } from "@/lib/dice";
 import { applyDamage, damageSteps } from "@/lib/mechanics";
 import { burnMechCells, cellList, mechCells } from "@/lib/power";
 import { mechCapacity, mechModules, mechStats, moduleBlocker, newMech, resolveMechDamage } from "@/lib/mechs";
 import { haveInStorage, recipeText, shortfalls, spend, stockItem, takeOne } from "@/lib/stock";
 import { useGame } from "@/lib/store";
-import type { GameState, Mech, MechChassis, MechDamageType } from "@/lib/types";
+import type { Character, GameState, InstalledModule, Mech, MechChassis, MechDamageType } from "@/lib/types";
 import { usePerms } from "@/lib/use-perms";
 import { cn } from "@/lib/utils";
 import { EMPTY_ROLL, InjuryRollFields, parseRoll, type RollDraft } from "./character-dialogs";
@@ -479,6 +480,42 @@ function TierUpgradeDialog({ mech }: { mech: Mech }) {
   );
 }
 
+/**
+ * The implant a Cybernetic Integration Port keeps connected. Only the pilot's own suppressed implants
+ * are worth porting, so the list follows whoever is in the seat: swapping pilots can leave a
+ * nomination the new one doesn't carry, which simply does nothing until it's chosen again.
+ */
+function PortChoice({ mech, inst, pilot }: { mech: Mech; inst: InstalledModule; pilot: Character | undefined }) {
+  const act = useGame((s) => s.act);
+  const options = suppressedImplants(pilot);
+  const chosen = options.find((x) => x.inst.key === inst.choice);
+
+  if (!pilot) return <p className="mt-1 text-[11px] text-muted-foreground">Assign a pilot to choose what the Port keeps connected.</p>;
+  if (options.length === 0) return <p className="mt-1 text-[11px] text-muted-foreground">{pilot.name} has no implants this frame would suppress, so the Port has nothing to connect.</p>;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <Select
+        value={inst.choice ?? ""}
+        onValueChange={(v) =>
+          act("Port a cybernetic", (g) => {
+            const key = v ?? "";
+            const x = findMech(g, mech.id).modules.find((y) => y.id === inst.id)!;
+            x.choice = key || undefined;
+            const def = CYBER_BY_KEY[key];
+            return def ? `${pilot.name}'s ${def.name} is connected through ${mech.name}'s Integration Port and works inside the frame.` : `${mech.name}'s Integration Port is disconnected.`;
+          })
+        }
+      >
+        <SelectTrigger size="sm" className="h-7 w-60 text-xs"><SelectValue placeholder="Choose a cybernetic to connect">{chosen?.def.name}</SelectValue></SelectTrigger>
+        <SelectContent>{options.map((x) => <SelectItem key={x.inst.id} value={x.inst.key}>{x.def.name}</SelectItem>)}</SelectContent>
+      </Select>
+      {chosen ? <Pill tone="good">Connected</Pill> : <Pill tone="warn">Nothing connected</Pill>}
+      {inst.choice && !chosen && <Pill tone="warn">{pilot.name} doesn&apos;t have it</Pill>}
+    </div>
+  );
+}
+
 function MechCard({ mech }: { mech: Mech }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
@@ -505,6 +542,7 @@ function MechCard({ mech }: { mech: Mech }) {
           <Pill>Noise: {s.chassis.noise}</Pill>
           {mech.external && <Pill tone="warn">Secured outside</Pill>}
           {s.expert && <Pill tone="good">Mech Expert: +1 slot, +4 HP</Pill>}
+          {s.plugged > 0 && <Pill tone="good" tip="The pilot's Interface system, which works precisely because they are inside a frame. It lends the plating Armor Points, and takes them away again if they climb out.">Interface: +{s.plugged} Armor</Pill>}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -559,7 +597,22 @@ function MechCard({ mech }: { mech: Mech }) {
         <div className="grid gap-2 rounded-lg border p-3">
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs">Pilot</Label>
-            <Select value={mech.pilotId ?? "none"} onValueChange={(v) => edit("Assign pilot", (m, g) => { m.pilotId = v === "none" ? null : (v as string); if (!m.pilotId) m.deployed = false; const who = g.characters.find((c) => c.id === m.pilotId); return who ? `${who.name} is assigned to pilot ${m.name}.` : `${m.name} has no pilot.`; })}>
+            <Select
+              value={mech.pilotId ?? "none"}
+              onValueChange={(v) => edit("Assign pilot", (m, g) => {
+                const before = mechStats(g, m).maxArmor;
+                m.pilotId = v === "none" ? null : (v as string);
+                if (!m.pilotId) m.deployed = false;
+                // A connection isn't plating that has to be bolted on, so the Armor an Interface
+                // system lends arrives with the pilot — and leaves with them.
+                const after = mechStats(g, m).maxArmor;
+                m.armor = Math.max(0, Math.min(after, m.armor + (after - before)));
+                const who = g.characters.find((c) => c.id === m.pilotId);
+                const lent = cyberMechArmor(who);
+                if (!who) return `${m.name} has no pilot.`;
+                return `${who.name} is assigned to pilot ${m.name}${lent ? `, and their Interface system lends the frame ${lent} Armor (${m.armor}/${after}).` : "."}`;
+              })}
+            >
               <SelectTrigger size="sm" className="w-44"><SelectValue>{pilot?.name ?? "No pilot"}</SelectValue></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No pilot</SelectItem>
@@ -611,6 +664,7 @@ function MechCard({ mech }: { mech: Mech }) {
                     {inst.damaged && <Pill tone="danger">Damaged</Pill>}
                   </p>
                   <p className="text-xs text-muted-foreground">{def.effect}</p>
+                  {def.port && <PortChoice mech={mech} inst={inst} pilot={pilot} />}
                 </div>
                 <div className="flex shrink-0 gap-0.5">
                   <Button size="icon-xs" variant="ghost" aria-label={inst.damaged ? `Repair ${def.name}` : `Damage ${def.name}`} title={inst.damaged ? "Mark repaired" : "Mark damaged"} onClick={() => edit("Module damage", (m) => { const x = m.modules.find((y) => y.id === inst.id)!; x.damaged = !x.damaged; return `${def.name} on ${m.name} is ${x.damaged ? "damaged and provides no benefit" : "repaired"}.`; })}><WrenchIcon /></Button>

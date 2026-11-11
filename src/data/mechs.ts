@@ -43,6 +43,8 @@ export type MechModule = {
   armor?: number;
   inventory?: number;
   resist?: MechDamageType;
+  /** Keeps one of the pilot's otherwise suppressed implants connected, named on the installed module. */
+  port?: true;
 };
 
 const m = (category: ModuleCategory, name: string, slots: number, tier: 1 | 2 | 3, effect: string, extra: Partial<MechModule> = {}): MechModule => ({
@@ -117,14 +119,23 @@ export const MECH_MODULES: MechModule[] = [
   m("Engineering", "Emergency Power Reserve", 1, 2, "Once per expedition, immediately remove Power-Starved or Disrupted."),
   m("Engineering", "Structural Support Rig", 1, 1, "Hold open a door, brace a collapsing structure, stabilize a wreck, or support a damaged ceiling without continuous effort."),
   m("Engineering", "Portable Workshop Rig", 2, 3, "Functions as a Grade I Workshop for portable equipment and mech repairs. Can't construct rooms or full ship modules."),
+  m("Engineering", "Barricade Extruder", 1, 2, "As a Slow Action, raise the Cover in the mech's zone by one step, to Partial and then to Strong. It stands for the rest of the expedition unless something tears it down."),
+  m("Engineering", "Blast Shutter Deployer", 1, 2, "As a Fast Action, set one border of the mech's zone to sealed, or open a border the mech itself sealed. A sealed border needs a Breach to cross and stops line of sight."),
+  m("Engineering", "Demolition Charge Rack", 2, 3, "As a Slow Action, bring down one border of the mech's zone: it becomes blocked, and nothing crosses it without clearing the rubble. The collapse is Loud and strips the Cover from both rooms it touches."),
+  m("Engineering", "Siege Breaching Assembly", 2, 3, "As a Slow Action, reduce any closed, locked, or sealed border the mech can reach to destroyed, with no Task and no roll. Against a blocked border it takes two turns. Loud."),
+  m("Engineering", "Load-Bearing Gantry", 1, 2, "While the mech is Anchored, every crew member in its zone ignores Heavy for carrying and loading, and the mech can hold a structure, door, or ceiling open for all of them at once without spending Actions."),
+  m("Engineering", "Field Shelter Deployment", 2, 2, "As a Slow Action, deploy a sealed shelter in the mech's zone. Up to four crew may Rest inside it as though aboard the ship, and the zone counts as Secured against ordinary weather, atmosphere, and ambient hazards while it stands."),
 
   m("Medical", "Integrated Medkit", 1, 1, "Counts as a Medkit and allows First Aid without drawing separate equipment."),
   m("Medical", "Stabilization Harness", 1, 1, "A passenger carried by the mech can't suffer additional Bleeding damage while the harness is active."),
   m("Medical", "Trauma Monitoring System", 1, 1, "Automatically identifies the severity of visible Injuries and whether Surgery is urgently required."),
   m("Medical", "Auto-Injector Array", 1, 2, "Once per Scene, remove Weakened, Confused, or Staggered from the pilot. The pilot becomes Drained afterward."),
-  m("Medical", "Mobile Surgical Cradle", 2, 3, "Permits Surgery outside a Medical Bay. Surgery is still a Crisis task."),
+  m("Medical", "Mobile Surgical Cradle", 2, 3, "Counts as a Field Setup Medical Bay wherever the mech is: Surgery gets −2d6 instead of −3d6 out in a derelict, or aboard a ship with no working Medical Bay. Surgery is still a Crisis task."),
   m("Medical", "Life-Support Bypass", 1, 2, "Compensates for Punctured Lungs, Collapsed Lung, Organ Failure, or similar Injuries while inside the mech. Doesn't heal them."),
   m("Medical", "Neural Grounding System", 1, 2, "Ignore the first Pressure gained from an environmental hazard each expedition. Affliction triggers still apply."),
+  m("Medical", "Casualty Recovery Frame", 2, 2, "Carry up to two Downed or Immobilized characters without using inventory slots, and pull one in from an adjacent zone as a Fast Action. Neither of them can suffer further Bleeding damage while aboard."),
+  m("Medical", "Crew Boarding Rail", 1, 1, "Two crew may ride the frame. They move with it, including through its Sprint, and they count as behind the mech's Cover while aboard."),
+  m("Medical", "Triage Broadcast Array", 2, 3, "As a Slow Action, stabilize every Bleeding or Downed crew member in the mech's zone at once. Stabilizing is not treatment; their injuries are still untreated."),
 
   m("Weapon", "Ballistic Autocannon", 1, 1, "3 Ballistic Damage at Medium range. Additional successes may apply Pinned or destroy Cover.", { weapon: "Ballistic" }),
   m("Weapon", "Precision Rail Driver", 2, 2, "4 Ballistic Damage at Long range, ignores 1 Armor. Requires a Slow Action to Aim before each attack.", { weapon: "Ballistic" }),
@@ -141,16 +152,57 @@ export const MECH_MODULES: MechModule[] = [
   m("Weapon", "Chemical Projector", 1, 1, "2 Chemical Damage; may apply Corroded or Poisoned.", { weapon: "Chemical" }),
   m("Weapon", "Corrosive Jet", 1, 2, "3 Chemical Damage to one target and automatically applies Corroded on a hit.", { weapon: "Chemical" }),
   m("Weapon", "Contamination Dispersal System", 2, 3, "Creates a persistent Chemical hazard in one zone. Targets entering it risk becoming Contaminated.", { weapon: "Chemical" }),
+  m("Weapon", "Razorwire Deployer", 1, 2, "Fills the mech's zone or an adjacent one with wire: 1 Physical Damage and Restrained to anything entering it or ending its turn there. The crew know where it is and can pick their way through.", { weapon: "Physical" }),
+  m("Weapon", "Cryogenic Dispersal Array", 2, 3, "Freezes a whole zone: 2 Chemical Damage and Slowed to anything entering it or ending its turn there, until the room thaws.", { weapon: "Chemical" }),
+  m("Weapon", "Siege Mortar", 2, 3, "4 Ballistic Damage to every exposed target in one zone the mech can see, at any range. Destroys that zone's Cover outright. Extremely loud.", { weapon: "Ballistic" }),
 
   m("Control", "Manual Control Rig", 0, 1, "Standard mech controls. No additional benefit."),
   m("Control", "Neural Interface", 1, 2, "Interface and Frame-Compatible. +2d6 to Piloting and removes the penalty for operating a Damaged mech."),
   m("Control", "Predictive Combat Interface", 1, 3, "Once per Round, reserve a Reaction without spending a Fast Action."),
-  m("Control", "Cybernetic Integration Port", 1, 2, "Choose one normally suppressed cybernetic. It becomes Frame-Compatible while connected to this mech."),
+  m("Control", "Cybernetic Integration Port", 1, 2, "Choose one normally suppressed cybernetic. It becomes Frame-Compatible while connected to this mech.", { port: true }),
   m("Control", "Biological Accommodation Chamber", 2, 2, "Choose one passive biological upgrade. It stays functional inside the mech. Active attacks and extra Actions stay suppressed."),
   m("Control", "Alien Symbiosis Core", 2, 3, "One biological upgrade functions normally inside the mech, but gaining Pressure may also apply Overloaded, Enraged, or another listed side effect."),
+  m("Control", "Command Beacon", 1, 2, "While the beacon is live, every crew member in the mech's zone reduces Pressure gained by 1, to a minimum of 0."),
+  m("Control", "Fire Coordination Mast", 1, 3, "As a Fast Action, name one target the mech can see. Until the end of the Round every ally attacking that target rolls +2d6, and the first ally to hit it may apply Marked without spending a success."),
 ];
 
 export const MODULE_BY_KEY = Object.fromEntries(MECH_MODULES.map((x) => [x.key, x])) as Record<string, MechModule>;
+
+/**
+ * The modules that edit the site rather than the frame: borders, Cover, and standing hazards.
+ *
+ * This is the mech path's claim on the game. Surgery changes the person and a graft changes the body;
+ * only a frame changes the room, and a room is shared, so it is also the only path whose purchases
+ * help the crew member who walks in next turn.
+ */
+export const MECH_ROOM_MODULES = [
+  "barricade-extruder",
+  "blast-shutter-deployer",
+  "demolition-charge-rack",
+  "siege-breaching-assembly",
+  "razorwire-deployer",
+  "cryogenic-dispersal-array",
+  "siege-mortar",
+  "inferno-projector",
+  "contamination-dispersal-system",
+  "structural-support-rig",
+  "phase-step-actuator",
+];
+
+/** The modules that spend the frame's size on somebody other than the pilot. */
+export const MECH_SUPPORT_MODULES = [
+  "command-beacon",
+  "fire-coordination-mast",
+  "casualty-recovery-frame",
+  "crew-boarding-rail",
+  "triage-broadcast-array",
+  "load-bearing-gantry",
+  "field-shelter-deployment",
+  "medical-evacuation-cradle",
+  "retrieval-winch",
+  "heavy-lift-actuators",
+  "extended-life-support",
+];
 export const MODULE_CATEGORIES: ModuleCategory[] = ["Weapon", "Defensive", "Cargo & Salvage", "Environmental", "Mobility", "Sensors", "Engineering", "Medical", "Control"];
 
 export const MODULE_RECIPES: Record<1 | 2 | 3, Recipe> = {

@@ -1,4 +1,6 @@
+import { bioTempHp } from "./biology";
 import { d } from "./dice";
+import { hazardToll, tickHazards } from "./hazards";
 import { applyCondition, endRound } from "./mechanics";
 import type { Combatant, Fight, GameState, Line, Overwatch } from "./types";
 
@@ -76,6 +78,14 @@ export function startFight(g: GameState, start: FightStart): (string | Line)[] {
     const said: string[] = [];
     for (const c of crew) applyCondition(g, c, "Surprised", "Brief", said);
     out.push("The crew is caught out, and whatever found them acts first.", ...said);
+  }
+  // Grown flesh braces itself as the fight opens. It is granted fresh rather than topped up, so a
+  // fight that ends with Temporary HP left over doesn't carry it into the next one.
+  for (const c of crew) {
+    const temp = bioTempHp(c);
+    if (!temp) continue;
+    c.tempHp = temp;
+    out.push(`${c.name}'s grown flesh braces: ${temp} Temporary HP.`);
   }
   out.push(...upLine(g, f));
   return out;
@@ -225,6 +235,9 @@ export function nextTurn(g: GameState): (string | Line)[] {
       c.conditions = c.conditions.filter((y) => y.id !== caught.id);
       out.push(`${c.name} has their wits back: Surprised ends.`);
     }
+    // Still standing in it when the turn ends, which is the second half of what a hazard catches.
+    const where = x.kind === "crew" ? g.expedition?.at[x.id] : g.threats.find((y) => y.id === x.id)?.zone;
+    if (where) out.push(...hazardToll(g, where, x.kind === "crew" ? { characterId: x.id } : { threatId: x.id }));
   }
   prune(g, f);
   if (!f.order.length) {
@@ -244,12 +257,18 @@ export function nextTurn(g: GameState): (string | Line)[] {
     delete x.reaction;
     delete x.acted;
   }
-  return [...out, ...endRound(g), `— Round ${f.round} —`, ...lapsed(g, f), ...upLine(g, f)];
+  return [...out, ...endRound(g), ...tickHazards(g), `— Round ${f.round} —`, ...lapsed(g, f), ...upLine(g, f)];
 }
 
 export function endFight(g: GameState): (string | Line)[] {
   if (!g.fight) return ["No fight is under way."];
   const rounds = g.fight.round;
   delete g.fight;
-  return [`The fighting stops after ${rounds} Round${rounds === 1 ? "" : "s"}. Initiative no longer applies.`];
+  const out: (string | Line)[] = [`The fighting stops after ${rounds} Round${rounds === 1 ? "" : "s"}. Initiative no longer applies.`];
+  // Temporary HP was for this fight. What's left of it doesn't bank.
+  for (const c of g.characters.filter((x) => x.tempHp)) {
+    delete c.tempHp;
+    out.push(`${c.name}'s Temporary HP is spent or gone.`);
+  }
+  return out;
 }
