@@ -861,6 +861,10 @@ export type Resolution = {
   bundles?: string[];
   /** Ids of the room's waiting finds this Search brought to light. They cost the site nothing. */
   finds?: string[];
+  /** What the GM says Salvage Ship pulled off the wreck, by catalog name. It goes into ship storage. */
+  salvaged?: { name: string; qty: number }[];
+  /** The wreck has nothing left: mark it picked clean on the chart, so it can't be salvaged again. */
+  stripped?: boolean;
 };
 
 const STATUS_WORD: Record<Resolution["status"], string> = { success: "succeeds", strong: "strong success", failed: "fails", cancelled: "called off" };
@@ -983,6 +987,17 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
   }
   // A failed Search still takes its two Turns and still makes a noise, but leaves the room searchable.
   if (!ok && def.effect === "search" && a.thorough) out.push(THOROUGH_NOTE);
+  if (ok && def.effect === "strip") {
+    const wreck = salvageTarget(g);
+    const from = wreck?.name ?? "the wreck";
+    const parts = (r.salvaged ?? []).filter((p) => p.qty > 0);
+    for (const p of parts) stockItem(g, p.name, p.qty, { category: "Material" });
+    out.push(parts.length ? `Stripped from ${from}: ${recipeText(parts)}, added to ship storage.` : `Nothing worth hauling comes off ${from}.`);
+    if (r.stripped && wreck) {
+      wreck.status = "looted";
+      out.push(`${wreck.name} is picked clean.`);
+    }
+  }
   if (ok && def.effect === "salvage") {
     const recipe = a.crafts?.[0] ? RECIPE_BY_NAME[a.crafts[0]] : undefined;
     const allowed = a.approval === "granted";

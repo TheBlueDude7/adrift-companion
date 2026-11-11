@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_DICE, type ShipboardTask } from "@/data/tasks";
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
-import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, salvageTarget, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
 import { operable } from "@/lib/surgery";
 import { sixes } from "@/lib/dice";
 import { findByLabel, findsWaiting, zoneOf } from "@/lib/expedition";
@@ -785,6 +785,55 @@ function TaskRollPanel({ a, c, onStep }: { a: SegmentAction; c: Character; onSte
   );
 }
 
+type Haul = { name: string; qty: number }[];
+
+/** The GM's pick of what Salvage Ship pulls off a wreck: anything in the catalog, in any amount. */
+function SalvagePicker({ value, onChange }: { value: Haul; onChange: (v: Haul) => void }) {
+  const game = useGame((s) => s.game);
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const matches = game.catalog.filter((t) => !needle || t.name.toLowerCase().includes(needle) || t.category.toLowerCase().includes(needle));
+  const add = (name: string) =>
+    onChange(value.some((p) => p.name === name) ? value.map((p) => (p.name === name ? { ...p, qty: p.qty + 1 } : p)) : [...value, { name, qty: 1 }]);
+  const setQty = (name: string, qty: number) => onChange(value.map((p) => (p.name === name ? { ...p, qty } : p)));
+  const remove = (name: string) => onChange(value.filter((p) => p.name !== name));
+
+  return (
+    <div className="grid gap-1.5">
+      <Label>What they strip from the wreck</Label>
+      {value.length > 0 && (
+        <div className="grid gap-1">
+          {value.map((p) => (
+            <div key={p.name} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-sm">
+              <span className="truncate">{p.name}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                <Stepper value={p.qty} onChange={(n) => setQty(p.name, n)} min={1} max={99} label={`${p.name} quantity`} />
+                <Button size="icon-xs" variant="ghost" onClick={() => remove(p.name)} aria-label={`Remove ${p.name}`}><XIcon /></Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <Input placeholder="Search the catalog…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <ScrollArea className="h-40 rounded-md border">
+        <div className="grid p-1">
+          {matches.map((t) => (
+            <button key={t.name} type="button" onClick={() => add(t.name)} className="flex items-center justify-between gap-2 rounded px-2 py-1 text-left text-sm hover:bg-primary/10">
+              <span className="truncate">{t.name}</span>
+              <span className="flex shrink-0 items-center gap-1">
+                {t.tier && <span className="text-[11px] text-muted-foreground">{t.tier}</span>}
+                <Pill>{t.category}</Pill>
+              </span>
+            </button>
+          ))}
+          {matches.length === 0 && <p className="p-3 text-center text-xs text-muted-foreground">Nothing in the catalog matches. Add it on the Inventory tab first.</p>}
+        </div>
+      </ScrollArea>
+      <p className="text-[11px] text-muted-foreground">Click an item to add one; click again for more. It all goes into ship storage on a success, and the log lists it for the crew.</p>
+    </div>
+  );
+}
+
 function ResolveDialog({ a }: { a: SegmentAction }) {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
@@ -799,6 +848,8 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   const [bundles, setBundles] = useState<string[]>([]);
   const [bundle, setBundle] = useState(SALVAGE_BUNDLES[0].label);
   const [finds, setFinds] = useState<string[]>([]);
+  const [haul, setHaul] = useState<Haul>([]);
+  const [stripped, setStripped] = useState(false);
   const c = game.characters.find((x) => x.id === a.characterId);
   const def = taskFor(a);
   const map = a.target ? game.maps.find((m): m is StarMap => m.id === a.target!.mapId && m.kind === "star") : undefined;
@@ -809,10 +860,11 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   // The room the searcher is standing in is the one whose finds a Search could turn up.
   const searching = game.expedition && def.effect === "search" ? zoneOf(game.expedition, a.characterId) : undefined;
   const waiting = searching ? findsWaiting(searching) : [];
+  const wreck = def.effect === "strip" ? salvageTarget(game) : null;
 
   function resolve(status: Resolution["status"]) {
     const ok = status === "success" || status === "strong";
-    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined, bundles: ok ? bundles : undefined, finds: ok ? finds : undefined }), status === "failed" ? "danger" : "info");
+    act(`Resolve ${a.task}`, (g) => resolveAction(g, a.id, { status, energy: status === "cancelled" ? 0 : energy, outcome: note, scan: scan === "none" ? null : scan, crafted: ok ? made : undefined, bundles: ok ? bundles : undefined, finds: ok ? finds : undefined, salvaged: ok ? haul : undefined, stripped: ok && stripped }), status === "failed" ? "danger" : "info");
     setOpen(false);
   }
 
@@ -823,7 +875,7 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); setBundles([]); setFinds([]); } }}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEnergy(terms.energy); setNote(""); setScan("none"); setMade(crafts.map(() => true)); setBundles([]); setFinds([]); setHaul([]); setStripped(false); } }}>
       <DialogTrigger render={<Button size="xs" variant="outline">Resolve</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -885,6 +937,17 @@ function ResolveDialog({ a }: { a: SegmentAction }) {
                 </SelectContent>
               </Select>
             </div>
+          )}
+          {def.effect === "strip" && isGM && (
+            <>
+              <SalvagePicker value={haul} onChange={setHaul} />
+              {wreck && (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={stripped} onCheckedChange={(v) => setStripped(!!v)} />
+                  Nothing left: mark {wreck.name} picked clean
+                </label>
+              )}
+            </>
           )}
           {def.effect === "search" && isGM && waiting.length > 0 && (
             <div className="grid gap-1.5">

@@ -285,8 +285,21 @@ function check(label: string, got: unknown, want: unknown) {
     chart.nodes.push({ id: uid(), x: at.x, y: at.y, name: "The Perihelion", type: "derelict", status: "visited", notes: "" });
     check("a derelict alongside can be stripped", salvage(g), null);
     check("and now it's on the menu", tasks(g).includes("Salvage Ship"), true);
-    chart.nodes[0].status = "looted";
-    check("but not twice", salvage(g), "The Perihelion has already been picked over");
+
+    // The GM decides what comes off it, and whether anything is left.
+    const stored = (x: GameState, name: string) => x.items.filter((i) => i.location === "ship" && i.name === name).reduce((s, i) => s + i.qty, 0);
+    const scrap = stored(g, "Scrap Metal");
+    const strip = (salvaged: { name: string; qty: number }[], stripped: boolean) => {
+      const a = newAction(g, g.characters[0], "Salvage Ship");
+      g.actions.push(a);
+      return resolveAction(g, a.id, { status: "success", energy: 0, outcome: "", salvaged, stripped });
+    };
+    const first = strip([{ name: "Scrap Metal", qty: 3 }, { name: "Basic Adhesive", qty: 1 }], false);
+    check("the GM's pick goes into ship storage", stored(g, "Scrap Metal") - scrap, 3);
+    check("and the log lists it for the crew", first.some((l) => typeof l === "string" && l.includes("3 Scrap Metal") && l.includes("The Perihelion")), true);
+    check("a wreck with more in it can be stripped again", salvage(g), null);
+    strip([], true);
+    check("marking it picked clean takes it off the menu", salvage(g), "The Perihelion has already been picked over");
     chart.nodes[0].type = "planet";
     chart.nodes[0].status = "visited";
     check("and a planet is not a hulk", salvage(g), "The Perihelion is a planet, not a hulk to strip");
