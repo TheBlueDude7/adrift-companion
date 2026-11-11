@@ -48,6 +48,7 @@ import { RulesTab } from "./rules";
 import { ShipTab } from "./ship";
 import { SiteTab } from "./site";
 import { StorageTab } from "./storage";
+import { ViewAsBanner, ViewAsMenu } from "./view-as";
 
 function Header() {
   const { game, act, undo, past, replace, session } = useGame();
@@ -160,6 +161,7 @@ function Header() {
 
         <div className="ml-auto flex items-center gap-1">
           <PlayTogether />
+          <ViewAsMenu />
           <ApplyConditionDialog trigger={<Button size="sm"><ActivityIcon /> <span className="hidden sm:inline">Condition</span></Button>} />
           <Button size="sm" variant="ghost" disabled={past.length === 0} onClick={() => { const label = past[0]?.label; undo(); toast(`Undid: ${label}`); }} title={past[0] ? `Undo: ${past[0].label}` : "Nothing to undo"}>
             <Undo2Icon /> <span className="hidden sm:inline">Undo</span>
@@ -187,6 +189,7 @@ function Header() {
           <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importJson(f); e.target.value = ""; }} />
         </div>
       </div>
+      <ViewAsBanner />
 
       <Dialog open={starting} onOpenChange={setStarting}>
         <DialogContent className="sm:max-w-md">

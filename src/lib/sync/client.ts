@@ -291,8 +291,9 @@ export type AttackRequest =
 
 /** Pick a character to play, or (as GM) assign one to another player. `null` releases it. */
 export async function claimCharacter(characterId: string | null, memberId?: string) {
-  const { session } = useGame.getState();
+  const { session, viewAs } = useGame.getState();
   if (!session) return;
+  if (viewAs) throw new Error("You're viewing as a player, so that would claim the character for you. Go back to the GM's view first.");
   const res = await fetch(`/api/campaigns/${session.code}/claim`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-adrift-key": keyFor() },

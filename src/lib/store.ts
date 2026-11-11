@@ -9,6 +9,7 @@ import { createInitialState } from "./seed";
 import { applyOps, diff, type Op } from "./sync/ops";
 import { outbox } from "./sync/outbox";
 import { denyReason, type Actor, type Role } from "./sync/permissions";
+import { playerView } from "./sync/redact";
 import { toast } from "sonner";
 import type { GameState, Line, LogEntry } from "./types";
 
@@ -36,17 +37,46 @@ type Store = {
    * a stale copy on disk would be a copy nobody checked the entitlement of.
    */
   bioCatalogue: BioDef[];
+  /**
+   * The GM looking at the campaign as a player would: as the player of this character, or of none
+   * yet. Never persisted, so a reload always comes back as the GM.
+   */
+  viewAs: { characterId: string | null } | null;
   /** Apply a change. The recipe mutates a draft copy; it may return log lines, some GM-only. */
   act: (label: string, recipe: (g: GameState) => void | string | (string | Line)[], kind?: LogEntry["kind"]) => void;
   undo: () => void;
   replace: (game: GameState, label: string) => void;
 };
 
-/** Who is acting. Offline, you are the GM of your own campaign. */
-export function actorOf(s: Pick<Store, "session" | "me" | "people">): Actor {
+/** Who this device really is, whoever the GM is viewing as. Offline, you are the GM of your own campaign. */
+export function realActorOf(s: Pick<Store, "session" | "me" | "people">): Actor {
   if (!s.session) return { role: "gm", characterId: null };
   const role = s.me?.role ?? (s.session.gmKey ? "gm" : "player");
   return { role, characterId: role === "gm" ? null : (s.people.find((p) => p.id === s.me?.id)?.characterId ?? null) };
+}
+
+/** Who is acting: the real actor, or the player a GM is viewing as, held to that player's permissions. */
+export function actorOf(s: Pick<Store, "session" | "me" | "people"> & Partial<Pick<Store, "viewAs">>): Actor {
+  const real = realActorOf(s);
+  return real.role === "gm" && s.viewAs ? { role: "player", characterId: s.viewAs.characterId } : real;
+}
+
+const views = new WeakMap<Store, Store>();
+
+/**
+ * The state as this client should show it. While the GM views as a player that's the redacted state
+ * the server would send that player, and only the biology their lab has grown or someone carries.
+ * Cached per state so selectors keep getting the same references.
+ */
+function shown(s: Store): Store {
+  if (!s.viewAs) return s;
+  let v = views.get(s);
+  if (!v) {
+    const known = new Set([...(s.game.research.biology ?? []), ...s.game.characters.flatMap((c) => (c.biology ?? []).map((i) => i.key))]);
+    v = { ...s, game: playerView(s.game), bioCatalogue: s.bioCatalogue.filter((d) => known.has(d.key)) };
+    views.set(s, v);
+  }
+  return v;
 }
 
 /**
@@ -55,7 +85,7 @@ export function actorOf(s: Pick<Store, "session" | "me" | "people">): Actor {
  * `.filter(...)`, or a helper returning `{ ... }` — re-renders until React gives up with "Maximum
  * update depth exceeded". Select the state you need and do the work outside the selector.
  */
-export const useGame = create<Store>()(
+const store = create<Store>()(
   persist(
     (set, get) => {
       function allowed(prev: GameState, ops: Op[]) {
@@ -80,6 +110,7 @@ export const useGame = create<Store>()(
         people: [],
         me: null,
         bioCatalogue: [],
+        viewAs: null,
         act: (label, recipe, kind = "info") => {
           const prev = get().game;
           const draft = structuredClone(prev);
@@ -122,3 +153,14 @@ export const useGame = create<Store>()(
     },
   ),
 );
+
+/**
+ * The store, as components read it: what `shown` gives them. `getState` and `setState` are the
+ * store's own and always see the whole state, which is what changes have to be made against.
+ */
+function useShown(): Store;
+function useShown<T>(selector: (s: Store) => T): T;
+function useShown<T>(selector?: (s: Store) => T) {
+  return store((s) => (selector ? selector(shown(s)) : shown(s)));
+}
+export const useGame = Object.assign(useShown, store);
