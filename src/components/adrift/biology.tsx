@@ -11,8 +11,6 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  BIOLOGY,
-  BIO_BY_KEY,
   BIO_MILESTONE,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
@@ -24,6 +22,7 @@ import {
   type BioTier,
   type BioTree,
 } from "@/data/biology";
+import { bioDef } from "@/lib/bio-catalogue";
 import {
   bioTempHp,
   bioTierReady,
@@ -45,8 +44,8 @@ import { EmptyState, Pill } from "./common";
 const char = (g: GameState, id: string) => g.characters.find((c) => c.id === id)!;
 
 /** What a project could still turn up in a tree, so the table has something to roll on. */
-export const cultivateCandidates = (g: GameState, tree: BioTree, tier: BioTier) =>
-  BIOLOGY.filter((d) => d.tree === tree && d.tier === tier && !isBioUnlocked(g, d));
+export const cultivateCandidates = (g: GameState, catalogue: BioDef[], tree: BioTree, tier: BioTier) =>
+  catalogue.filter((d) => d.tree === tree && d.tier === tier && !isBioUnlocked(g, d));
 
 function GrownRow({ x, c }: { x: ReturnType<typeof grown>[number]; c: Character }) {
   const act = useGame((s) => s.act);
@@ -124,6 +123,7 @@ export function BiologyPanel({ c }: { c: Character }) {
 
 function GraftDialog({ c }: { c: Character }) {
   const game = useGame((s) => s.game);
+  const catalogue = useGame((s) => s.bioCatalogue);
   const act = useGame((s) => s.act);
   const [open, setOpen] = useState(false);
   const [tree, setTree] = useState<BioTree>("adaptive");
@@ -131,9 +131,10 @@ function GraftDialog({ c }: { c: Character }) {
   const [choice, setChoice] = useState("");
   const { isGM } = usePerms();
 
-  const def = key ? BIO_BY_KEY[key] : null;
-  // A player picks from what the lab has actually grown. Naming the rest would hand them the tree.
-  const defs = BIOLOGY.filter((d) => d.tree === tree && (isGM || isBioUnlocked(game, d)));
+  const def = key ? bioDef(key) : null;
+  // A player's catalogue is already only what the lab has grown, so this filter is the GM's own view
+  // being narrowed rather than a secret being kept — the secret was kept before it reached them.
+  const defs = catalogue.filter((d) => d.tree === tree && (isGM || isBioUnlocked(game, d)));
   const blocker = def ? growBlocker(game, c, def) : null;
   const force = isGM && !!blocker;
 
@@ -232,9 +233,10 @@ function RecordCultivationDialog() {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const [open, setOpen] = useState(false);
+  const catalogue = useGame((s) => s.bioCatalogue);
   const [tier, setTier] = useState<BioTier>(1);
   const [tree, setTree] = useState<BioTree>("adaptive");
-  const candidates = useMemo(() => cultivateCandidates(game, tree, tier), [game, tree, tier]);
+  const candidates = useMemo(() => cultivateCandidates(game, catalogue, tree, tier), [game, catalogue, tree, tier]);
   const gated = !bioTierReady(game, tree, tier);
   const treeName = BIO_TREES.find((t) => t.key === tree)!.name;
 
@@ -295,7 +297,7 @@ export function BioResearchCard() {
   const game = useGame((s) => s.game);
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
-  const cultivated = (game.research.biology ?? []).map((k) => BIO_BY_KEY[k]).filter(Boolean);
+  const cultivated = (game.research.biology ?? []).map((k) => bioDef(k)).filter(Boolean);
   const lab = game.ship.rooms.some((r) => r.module === "Biological Lab" && r.condition !== "Destroyed");
 
   return (

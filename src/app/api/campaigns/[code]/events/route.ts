@@ -1,4 +1,4 @@
-import { actorFor, getRoom, join, leave, viewFor } from "@/lib/sync/rooms";
+import { actorFor, catalogueFor, getRoom, join, leave, viewFor } from "@/lib/sync/rooms";
 
 const encoder = new TextEncoder();
 
@@ -39,6 +39,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/campaigns/[c
       write("retry: 2000\n\n");
       const actor = actorFor(room, key);
       send("me", { id: actor.memberId, role: actor.role });
+      // Before the state, so nothing is ever rendered against a catalogue the client hasn't got.
+      send("catalogue", catalogueFor(room, key));
       send("snapshot", { version: room.version, game: viewFor(room, key) });
       conn = join(room, key, name, send, cleanup);
     },

@@ -1,6 +1,8 @@
 "use client";
 
 import { toast } from "sonner";
+import type { BioDef } from "@/data/biology";
+import { installBiology } from "../bio-catalogue";
 import { uid } from "../dice";
 import { normalizeGame } from "../maps";
 import { useGame, type Person } from "../store";
@@ -11,6 +13,33 @@ import { applyOps, type Op } from "./ops";
 import { outbox } from "./outbox";
 
 export const BACKUP_KEY = "adrift-companion-local-backup";
+
+/**
+ * Take delivery of a biological catalogue.
+ *
+ * It goes two places on purpose. The registry is what the game rules read — synchronously, from
+ * server and browser alike — and the store is what the interface watches, so a cultivation completing
+ * redraws the tree instead of leaving a stale page. One call site keeps them from drifting.
+ */
+export function receiveCatalogue(defs: BioDef[]) {
+  installBiology(defs);
+  useGame.setState({ bioCatalogue: defs });
+}
+
+/**
+ * Solo play has no server-side identity to check, so the catalogue is fetched whole.
+ *
+ * There is nobody to keep a secret from on a device playing alone: whoever is sitting there is the
+ * GM. In a shared campaign this is never called, because the catalogue arrives over the campaign's
+ * own authenticated channel instead.
+ */
+export async function loadSoloCatalogue() {
+  if (useGame.getState().session) return;
+  const res = await fetch("/api/biology").catch(() => null);
+  if (!res?.ok) return;
+  const data = (await res.json().catch(() => null)) as { biology?: BioDef[] } | null;
+  if (data?.biology) receiveCatalogue(data.biology);
+}
 
 /**
  * Keeps the local store in step with a shared campaign.
@@ -129,6 +158,12 @@ function open() {
 
   src.addEventListener("me", (e) => {
     useGame.setState({ me: JSON.parse((e as MessageEvent).data) as { id: string; role: "gm" | "player" } });
+  });
+
+  // The biological catalogue is server-held, so this is the only way a client in a shared campaign
+  // learns what exists. A player is sent what their lab has grown; a GM is sent all of it.
+  src.addEventListener("catalogue", (e) => {
+    receiveCatalogue((JSON.parse((e as MessageEvent).data) as { biology: BioDef[] }).biology);
   });
 
   src.addEventListener("kicked", () => {

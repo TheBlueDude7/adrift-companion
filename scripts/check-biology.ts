@@ -1,4 +1,11 @@
-import { BIOLOGY, BIO_BY_KEY, BIO_TEMP_HP, BIO_TIER_LABEL, STRESS_GATE, dampenSurge } from "../src/data/biology";
+import { BIO_TEMP_HP, BIO_TIER_LABEL, STRESS_GATE, dampenSurge } from "../src/data/biology";
+// Importing this installs the full catalogue into the registry, which is exactly what a server does.
+// Everything below then reads it the way the game rules do, through `biologyCatalogue`.
+import { allBiology, biologyFor } from "../src/lib/biology-server";
+import { bioDef, biologyCatalogue, biologyReady, installBiology } from "../src/lib/bio-catalogue";
+
+const BIOLOGY = biologyCatalogue();
+const BIO_BY_KEY = Object.fromEntries(BIOLOGY.map((d) => [d.key, d]));
 import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, certaintyLive, expressionsLive, grown, growBlocker, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
 import { PROJECT_TEMPLATE_BY_NAME } from "../src/lib/rules";
 import { CYBER_BY_KEY } from "../src/data/cybernetics";
@@ -202,6 +209,33 @@ const chrome = (c: Character, keys: string[]) => {
   const g = createInitialState();
   check("a seeded crew has no augmentations", g.characters.every((c) => grown(c).length === 0), true);
   check("nor any Temporary HP", g.characters.every((c) => !c.tempHp), true);
+}
+
+// What leaves the server for a client. This is the part that keeps the trees dark, so it is the part
+// worth being sure of: a player is handed strains, not a catalogue.
+{
+  const g = createInitialState();
+  check("the catalogue is installed where the rules can read it", [biologyReady(), BIOLOGY.length], [true, 74]);
+  check("a GM is sent all of it", biologyFor(g, true).length, 74);
+  check("a player of a crew that has grown nothing is sent nothing", biologyFor(g, false), []);
+
+  g.research.biology = ["redundant-tissue-mass", "hypercoagulation-mesh"];
+  check("and then exactly what the lab grew", biologyFor(g, false).map((d) => d.key), ["redundant-tissue-mass", "hypercoagulation-mesh"]);
+  check("which is not the tier, only the strain", biologyFor(g, false).length < BIOLOGY.filter((d) => d.tier === 1).length, true);
+
+  // A GM may force a graft of something the crew never cultivated. If that strain weren't sent, the
+  // player's copy of the sheet would quietly stop counting its Maximum HP, so it goes along too.
+  g.characters = [{ ...newCharacter("Vale", null, null, "gm"), biology: [{ id: "x", key: "apex-carapace", choice: "" }] }];
+  check("plus anything a survivor is actually carrying", biologyFor(g, false).map((d) => d.key).includes("apex-carapace"), true);
+  check("and no more than that", biologyFor(g, false).length, 3);
+
+  // The redacted catalogue has to be enough for a player's client to do its own arithmetic.
+  const asPlayer = biologyFor(g, false);
+  installBiology(asPlayer);
+  check("a player's client can still add up what it carries", grown(g.characters[0]).map((x) => x.def.name), ["Apex Carapace"]);
+  check("while the rest of the tree is simply not there", bioDef("survival-metamorphosis"), undefined);
+  installBiology(allBiology());
+  check("and the server is none the worse for having told them", biologyCatalogue().length, 74);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

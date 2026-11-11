@@ -28,7 +28,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
-  BIOLOGY,
   BIO_MILESTONE,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
@@ -43,6 +42,7 @@ import {
   type BioDef,
   type BioTree,
 } from "@/data/biology";
+import { biologyReady } from "@/lib/bio-catalogue";
 import { bioResearchBlocker, grown, isBioUnlocked } from "@/lib/biology";
 import { useGame } from "@/lib/store";
 import type { GameState } from "@/lib/types";
@@ -75,8 +75,8 @@ const searchable = (d: BioDef) => [d.name, ...d.categories, ...d.effects, d.expr
 
 type Node = { def: BioDef; unlocked: boolean; locked: string | null; carriers: string[] };
 
-function nodes(g: GameState): Node[] {
-  return BIOLOGY.map((def) => ({
+function nodes(g: GameState, catalogue: BioDef[]): Node[] {
+  return catalogue.map((def) => ({
     def,
     unlocked: isBioUnlocked(g, def),
     locked: bioResearchBlocker(g, def),
@@ -170,8 +170,9 @@ function TreePanel({ tree, list, isGM }: { tree: (typeof BIO_TREES)[number]; lis
 
 export function BioTreePanel() {
   const game = useGame((s) => s.game);
+  const catalogue = useGame((s) => s.bioCatalogue);
   const { isGM } = usePerms();
-  const all = useMemo(() => nodes(game), [game]);
+  const all = useMemo(() => nodes(game, catalogue), [game, catalogue]);
   const [q, setQ] = useState("");
   const [onlyOurs, setOnlyOurs] = useState(false);
 
@@ -188,7 +189,7 @@ export function BioTreePanel() {
         <CardContent className="grid gap-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h2 className="font-heading text-lg font-semibold">Biological augmentation</h2>
-            {isGM ? (
+            {isGM && all.length > 0 ? (
               <span className="flex items-center gap-2">
                 <span className="h-2 w-28 overflow-hidden rounded-full bg-muted">
                   <span className="block h-full rounded-full bg-primary" style={{ width: `${(unlocked / all.length) * 100}%` }} />
@@ -245,7 +246,14 @@ export function BioTreePanel() {
 
       {shown.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          {needle ? "Nothing the crew has grown matches that." : isGM ? "No augmentation matches that." : "The crew has grown nothing yet. The lab is where that changes."}
+          {/* The catalogue is fetched, not bundled, so "none" and "not yet" are different answers. */}
+          {!biologyReady() && !needle
+            ? "Fetching the catalogue from the ship's records…"
+            : needle
+              ? "Nothing the crew has grown matches that."
+              : isGM
+                ? "No augmentation matches that."
+                : "The crew has grown nothing yet. The lab is where that changes."}
         </p>
       )}
     </div>

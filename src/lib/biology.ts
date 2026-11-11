@@ -1,6 +1,4 @@
 import {
-  BIOLOGY,
-  BIO_BY_KEY,
   BIO_MILESTONE,
   BIO_TEMP_HP,
   BIO_TIER_LABEL,
@@ -12,13 +10,21 @@ import {
   type BioTier,
   type BioTree,
 } from "@/data/biology";
+import { bioDef, biologyCatalogue } from "./bio-catalogue";
 import { dampening } from "./cyber";
 import type { Character, GameState } from "./types";
 
 export type Grown = { inst: NonNullable<Character["biology"]>[number]; def: BioDef };
 
+/**
+ * What a survivor is carrying, as far as this side of the wire can name it.
+ *
+ * Anything unnameable is dropped rather than guessed at. On the server that never happens; in a
+ * player's browser it can only happen for a graft the GM forced of something the crew never
+ * cultivated, which `biologyFor` sends along for exactly this reason.
+ */
 export function grown(c: Character | undefined): Grown[] {
-  return (c?.biology ?? []).flatMap((inst) => (BIO_BY_KEY[inst.key] ? [{ inst, def: BIO_BY_KEY[inst.key] }] : []));
+  return (c?.biology ?? []).flatMap((inst) => (bioDef(inst.key) ? [{ inst, def: bioDef(inst.key) }] : []));
 }
 
 export const grownIn = (c: Character | undefined, tree: BioTree) => grown(c).filter((x) => x.def.tree === tree);
@@ -98,7 +104,7 @@ export const isBioUnlocked = (g: GameState, def: BioDef) => (g.research.biology 
 /** Two cultivations at the tier below open the next one, all the way up each tree. */
 export function bioTierReady(g: GameState, tree: BioTree, tier: BioTier) {
   if (tier === 1) return true;
-  return BIOLOGY.filter((d) => d.tree === tree && d.tier === tier - 1 && isBioUnlocked(g, d)).length >= 2;
+  return biologyCatalogue().filter((d) => d.tree === tree && d.tier === tier - 1 && isBioUnlocked(g, d)).length >= 2;
 }
 
 /** Why the crew hasn't got this augmentation to grow yet, or null. */
@@ -122,6 +128,6 @@ export function growBlocker(g: GameState, c: Character, def: BioDef): string | n
   return bioResearchBlocker(g, def);
 }
 
-/** Every augmentation, by tree and tier, for the catalogue. */
+/** Every augmentation this side knows about, by tree and tier, for the catalogue. */
 export const biologyByTier = (tree: BioTree) =>
-  ([1, 2, 3] as const).map((tier) => ({ tier, list: BIOLOGY.filter((d) => d.tree === tree && d.tier === tier) }));
+  ([1, 2, 3] as const).map((tier) => ({ tier, list: biologyCatalogue().filter((d) => d.tree === tree && d.tier === tier) }));

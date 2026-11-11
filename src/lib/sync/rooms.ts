@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { biologyFor } from "../biology-server";
 import { normalizeGame } from "../maps";
 import type { GameState } from "../types";
 import { applyOps, diff, type Op } from "./ops";
@@ -114,6 +115,7 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
   // identical to the "after" and every player would be sent an empty patch.
   const was = playerView(structuredClone(room.game));
   const before = new Set(room.game.characters.map((c) => c.id));
+  const bioWas = biologyFor(room.game, false).map((d) => d.key).join(",");
   room.game = applyOps(room.game, ops);
   room.version += 1;
   const lost = [...before].filter((id) => !room.game.characters.some((c) => c.id === id));
@@ -131,6 +133,12 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
     const gm = room.members[c.memberId]?.role === "gm";
     c.send("ops", { version: room.version, ops: gm ? ops : forPlayers, ...meta });
   }
+  // A cultivation completing is the moment a player's half of the catalogue grows, so the new strain
+  // goes out to them then. The GM was sent all of it when they connected and never needs more.
+  const bioNow = biologyFor(room.game, false);
+  if (bioNow.map((d) => d.key).join(",") !== bioWas) {
+    for (const c of room.conns) if (room.members[c.memberId]?.role !== "gm") c.send("catalogue", { biology: bioNow });
+  }
   if (lost.length || claimNewCharacter) announce(room);
   return room.version;
 }
@@ -138,6 +146,11 @@ export function applyToRoom(room: Room, ops: Op[], meta: { client: string; opId:
 /** The state as this key's holder may see it: whole for the GM, redacted for a player. */
 export function viewFor(room: Room, key: string): GameState {
   return isGm(room, key) ? room.game : playerView(room.game);
+}
+
+/** The biological augmentations this key's holder may be told about. The catalogue lives nowhere else. */
+export function catalogueFor(room: Room, key: string) {
+  return { biology: biologyFor(room.game, isGm(room, key)) };
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();

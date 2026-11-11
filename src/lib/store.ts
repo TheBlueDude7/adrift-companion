@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { BioDef } from "@/data/biology";
 import { pushLog } from "./log";
 import { normalizeGame } from "./maps";
 import { createInitialState } from "./seed";
@@ -29,6 +30,12 @@ type Store = {
   status: SyncStatus;
   people: Person[];
   me: { id: string; role: Role } | null;
+  /**
+   * The biological augmentations this client has been told about, which is all of them for a GM and
+   * only the crew's own cultivations for a player. Not persisted: the catalogue is the server's, and
+   * a stale copy on disk would be a copy nobody checked the entitlement of.
+   */
+  bioCatalogue: BioDef[];
   /** Apply a change. The recipe mutates a draft copy; it may return log lines, some GM-only. */
   act: (label: string, recipe: (g: GameState) => void | string | (string | Line)[], kind?: LogEntry["kind"]) => void;
   undo: () => void;
@@ -72,6 +79,7 @@ export const useGame = create<Store>()(
         status: "offline",
         people: [],
         me: null,
+        bioCatalogue: [],
         act: (label, recipe, kind = "info") => {
           const prev = get().game;
           const draft = structuredClone(prev);

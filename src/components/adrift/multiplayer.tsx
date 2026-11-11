@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useGame } from "@/lib/store";
 import { usePerms } from "@/lib/use-perms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BACKUP_KEY, claimCharacter, connect, forget, hostCampaign, joinCampaign, kickPlayer, leaveCampaign, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
+import { BACKUP_KEY, claimCharacter, connect, forget, hostCampaign, joinCampaign, kickPlayer, leaveCampaign, loadSoloCatalogue, lookupCampaign, reannounce, restoreBackup } from "@/lib/sync/client";
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Pill } from "./common";
@@ -211,6 +211,12 @@ export function PlayTogether() {
     // Only on first mount: resume the saved session and consume the invite link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A shared campaign sends its own catalogue down the event stream, entitled to the role that asked.
+  // A device playing alone has to go and get one, and gets all of it, because it has no players.
+  useEffect(() => {
+    if (!session) void loadSoloCatalogue();
+  }, [session]);
 
   function onOpenChange(o: boolean) {
     setOpen(o);
