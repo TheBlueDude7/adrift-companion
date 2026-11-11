@@ -3,7 +3,7 @@ import { CYBERNETICS, CYBER_SYSTEM_BY_KEY, IMPLANT_RECIPES, implantName, type Cy
 import { MECH_MODULES, MODULE_RECIPES, moduleItemName } from "@/data/mechs";
 import { ladderFor } from "@/data/ship-upgrades";
 import { SKILLS, type ItemTier, type SkillKey } from "./rules";
-import { recipeText, shortfalls, spend, stockItem } from "./stock";
+import { intoHold, recipeText, shortfalls, spend, stockItem, type Sink } from "./stock";
 import type { GameState } from "./types";
 
 export const STATION_MODULE: Record<Station, string> = {
@@ -62,8 +62,27 @@ export function craftBlocker(g: GameState, recipe: CraftRecipe): string | null {
 export const scaleRecipe = (recipe: Recipe, n: number): Recipe => recipe.map((p) => ({ ...p, qty: p.qty * n }));
 
 export function stockOutput(g: GameState, recipe: CraftRecipe, name: string, qty: number) {
-  stockItem(g, name, qty, { category: recipe.category, tier: recipe.tier, maxCharges: recipe.charges, armor: recipe.armor, heavy: recipe.heavy, notes: recipe.notes });
+  stockItem(g, name, qty, outputTemplate(recipe));
 }
+
+/** The catalog details a recipe's output carries, used whether it reaches the hold now or next segment. */
+export const outputTemplate = (recipe: CraftRecipe) => ({
+  category: recipe.category,
+  tier: recipe.tier,
+  maxCharges: recipe.charges,
+  armor: recipe.armor,
+  heavy: recipe.heavy,
+  notes: recipe.notes,
+});
+
+/**
+ * Where a finished item goes. The bench itself doesn't care: a GM crafting by hand puts it straight in
+ * the hold, where a task hands it to the pending queue so it arrives when the segment turns.
+ *
+ * Passed in rather than imported so this module stays free of the queue, which would otherwise close
+ * an import loop back through the biology catalogue.
+ */
+
 
 /** Recipes the Fabricate Common Item task can make. Kitchen recipes are cooked with Prepare Food instead. */
 export const FABRICATE_RECIPES = RECIPES.filter((r) => r.station !== "kitchen");
@@ -141,7 +160,7 @@ export const galleyPenalty = (level: number) => (level >= 3 ? 0 : level === 2 ? 
  * recipe lists for a failure, which for the better meals is a pair of Prepared Meals.
  * A Strong Result adds `extra` to the output.
  */
-export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra = 0, allowed = false): string {
+export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra = 0, allowed = false, into?: Sink): string {
   const blocker = craftBlocker(g, recipe);
   if (blocker && !allowed) return `⚠ ${recipe.name} wasn't cooked: ${blocker.toLowerCase()}.`;
   const short = shortfalls(g, recipe.inputs, recipe.toolkit);
@@ -150,8 +169,8 @@ export function cook(g: GameState, recipe: CraftRecipe, success: boolean, extra 
   const spent = `spent ${recipeText(recipe.inputs, recipe.toolkit)}${blocker || short.length ? "; the GM allowed it despite what was missing" : ""}`;
   const made = success ? { name: recipe.name, qty: recipe.output + extra } : (recipe.onFailure ?? { name: recipe.name, qty: 0 });
   if (made.qty <= 0) return `${recipe.name} is botched: nothing comes of it (${spent}).`;
-  stockOutput(g, RECIPE_BY_NAME[made.name] ?? recipe, made.name, made.qty);
-  return `${success ? "Cooked" : "Botched"} ${recipe.name}: ${made.qty}× ${made.name} added to ship storage (${spent}).`;
+  (into ?? intoHold(g))(made.name, made.qty, outputTemplate(RECIPE_BY_NAME[made.name] ?? recipe));
+  return `${success ? "Cooked" : "Botched"} ${recipe.name} (${spent}).`;
 }
 // Mech modules and implants are in the lookup but not in `FABRICATE_RECIPES`, so the bench knows how
 // to price one without the Fabricate menu growing by a hundred and fifty entries. They have their
@@ -210,15 +229,15 @@ export function fabricateCost(names: string[]) {
  * materials (rounded up); the rest go back to the hold. Refuses when the hold is short or the station is missing,
  * unless the GM allowed it, in which case it uses whatever the hold has.
  */
-export function fabricate(g: GameState, recipe: CraftRecipe, success: boolean, allowed = false): string {
+export function fabricate(g: GameState, recipe: CraftRecipe, success: boolean, allowed = false, into?: Sink): string {
   const blocker = craftBlocker(g, recipe);
   if (blocker && !allowed) return `⚠ ${recipe.name} wasn't made: ${blocker.toLowerCase()}.`;
   const short = shortfalls(g, recipe.inputs, recipe.toolkit);
   if (short.length && !allowed) return `⚠ ${recipe.name} wasn't made: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`;
   if (success) {
     spend(g, recipe.inputs, recipe.toolkit);
-    stockOutput(g, recipe, recipe.name, recipe.output);
-    return `${recipe.output}× ${recipe.name} added to ship storage (spent ${recipeText(recipe.inputs, recipe.toolkit)}${blocker || short.length ? "; the GM allowed it despite what was missing" : ""}).`;
+    (into ?? intoHold(g))(recipe.name, recipe.output, outputTemplate(recipe));
+    return `${recipe.output}× ${recipe.name} comes off the bench (spent ${recipeText(recipe.inputs, recipe.toolkit)}${blocker || short.length ? "; the GM allowed it despite what was missing" : ""}).`;
   }
   const lost = recipe.inputs.map((p) => ({ ...p, qty: Math.ceil(p.qty / 2) }));
   spend(g, lost, recipe.toolkit);

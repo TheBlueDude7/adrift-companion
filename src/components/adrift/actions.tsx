@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ClipboardListIcon, DicesIcon, FlameIcon, HandIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ClipboardListIcon, DicesIcon, FlameIcon, HandIcon, HourglassIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { EXPERT_MARGIN, FABRICATE_ITEMS, SHIPBOARD_TASKS, TASK_GROUPS, THOROUGH_
 import { FACILITY_BY_NAME } from "@/data/ship-upgrades";
 import { TRAINING_BANDS } from "@/data/training";
 import { actionsNow, assistEffect, canPush, surgeryOn, craftList, craftMargin, dropAction, fabricateLimit, fitOptions, redlineReady, extraTaskBlocker, masterPilotReady, taskAllowance, needsPermission, newAction, openProjects, overdueActions, pendingAssists, permissionReasons, playerResolves, restPushConflict, rolledStatus, salvageTarget, scanRadius, taskPool, trainingCost, resolveAction, targetName, taskFor, taskTerms, whenLabel, type Resolution } from "@/lib/actions";
+import { nextSegmentName, pendingForAction, pendingWork } from "@/lib/pending";
 import { BIO_TIER_LABEL } from "@/data/biology";
 import { CYBER_BY_KEY, TIER_LABEL } from "@/data/cybernetics";
 import { bioDef } from "@/lib/bio-catalogue";
@@ -1112,6 +1113,7 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
   const subject = game.characters.find((x) => x.id === a.subjectId);
   const where = targetName(game, a.target);
   const terms = taskTerms(game, a);
+  const queued = pendingForAction(game, a.id);
   const planned = a.status === "planned";
   const canEdit = planned && canEditCharacter(a.characterId) && (isGM || !a.roll);
   const canResolve = isGM || playerResolves(a, myCharacterId);
@@ -1204,7 +1206,15 @@ function ActionRow({ a, showWhen }: { a: SegmentAction; showWhen?: boolean }) {
           )}
         </div>
       ) : (
-        a.outcome && <p className="text-xs text-muted-foreground">{a.outcome}</p>
+        <>
+          {a.outcome && <p className="text-xs text-muted-foreground">{a.outcome}</p>}
+          {queued.length > 0 && (
+            <p className="flex flex-wrap items-baseline gap-1 text-xs text-sky-300/90">
+              <HourglassIcon className="size-3 shrink-0" />
+              {queued.map((w) => w.label).join("; ")} — reaches the ship at {nextSegmentName(game)}.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
@@ -1246,6 +1256,41 @@ function CrewPlanCard({ c }: { c: Character }) {
           ) : (
             busy === 1 && <p className="text-[11px] text-muted-foreground">{noExtra}.</p>
           ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Work the crew has finished that the ship hasn't felt yet.
+ *
+ * It matters that this is visible rather than quietly held: a survivor who spent their afternoon
+ * rebuilding the Workshop needs to see that the afternoon counted, and the next person planning a
+ * Tier II fabricate needs to know the bench they're counting on isn't there yet.
+ */
+function PendingCard() {
+  const game = useGame((s) => s.game);
+  const queue = pendingWork(game);
+  if (queue.length === 0) return null;
+  const landing = nextSegmentName(game);
+  return (
+    <Card size="sm" className="ring-sky-500/30">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm"><HourglassIcon className="size-4 text-sky-400" /> Landing at {landing}</CardTitle>
+        <CardDescription>
+          Finished work reaches the ship when the segment turns, so nothing anyone does this segment is standing on it yet.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-1.5">
+        {queue.map((w) => (
+          <div key={w.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+            <HourglassIcon className="size-3 shrink-0 text-sky-400/70" />
+            <span className="text-foreground/90">{w.label}</span>
+            <span className="text-muted-foreground">
+              {game.characters.find((c) => c.id === w.characterId)?.name ?? "The crew"} · {SEGMENTS[w.segment]}
+            </span>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -1298,6 +1343,8 @@ export function ActionsTab() {
           <PowerCells compact />
         </CardContent>
       </Card>
+
+      <PendingCard />
 
       {overdue.length > 0 && (
         <Card size="sm" className="ring-amber-500/30">

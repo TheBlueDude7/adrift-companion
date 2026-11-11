@@ -1,6 +1,6 @@
 import { moduleLevel } from "./crafting";
 import type { ItemCategory, ItemTier } from "./rules";
-import { stockItem } from "./stock";
+import { intoHold, stockItem, type Sink } from "./stock";
 import type { Crop, CropKind, GameState } from "./types";
 
 export const CROP_DAYS = 3;
@@ -236,7 +236,7 @@ export function growCrops(g: GameState, out: string[]) {
  * A successful Harvest Hydroponics: move everything that's ready into the hold, plus `bonus` of
  * whatever the largest pile is. Returns how much came out.
  */
-export function harvestCrops(g: GameState, out: string[], bonus = 0) {
+export function harvestCrops(g: GameState, out: string[], bonus = 0, into?: Sink) {
   const crop = cropOf(g);
   const piles = CROP_KINDS.map((k) => ({ kind: k, qty: crop.ready[k.key] ?? 0 })).filter((p) => p.qty > 0);
   if (!piles.length) {
@@ -245,8 +245,9 @@ export function harvestCrops(g: GameState, out: string[], bonus = 0) {
   }
   const main = piles.reduce((b, p) => (p.qty > b.qty ? p : b));
   main.qty += bonus;
-  for (const { kind, qty } of piles) stockItem(g, kind.item, qty, { category: kind.category, tier: kind.tier });
-  out.push(`🌾 Harvested ${piles.map((p) => `${p.qty} ${p.kind.item}`).join(" and ")} into ship storage.`);
+  const deposit = into ?? intoHold(g);
+  for (const { kind, qty } of piles) deposit(kind.item, qty, { category: kind.category, tier: kind.tier });
+  out.push(`🌾 Cut and carried: ${piles.map((p) => `${p.qty} ${p.kind.item}`).join(" and ")}.`);
   if (bonus > 0) out.push(`That includes ${bonus} extra ${main.kind.item} from careful harvesting.`);
   g.ship.crop = { ...crop, ready: {} };
   return piles.reduce((s, p) => s + p.qty, 0);

@@ -165,6 +165,8 @@ export function normalizeGame(g: GameState): GameState {
     m.plated = true;
   }
   if (!Array.isArray(g.actions)) g.actions = [];
+  // A campaign from before work was queued has nothing waiting: everything it did already landed.
+  if (!Array.isArray(g.pending)) g.pending = [];
   // An expedition that began before sites had zones is one unmapped room the crew is standing in.
   if (g.expedition) {
     if (!Array.isArray(g.expedition.zones)) g.expedition.zones = [];

@@ -10,6 +10,7 @@ The Adrift Companion is a web app that tracks a crew's survival: characters, shi
 
 ## The day
 - The header shows the day and segment (Morning, Afternoon, Evening, Night). **Next segment** advances it.
+- A segment happens all at once, so what a task makes for the ship arrives when the segment turns. The Tasks tab lists everything in hand under **Landing at …**, and the room or Project it belongs to is marked on the Ship tab. What a task does to a person — Energy, HP, Stress, Pressure, injuries, implants, an Assist's dice — applies straight away.
 - **End day** opens the End of Day check: who ate, drank, and rested, then applies starvation, dehydration, sleep, and untreated-injury effects, resets Pressure to the Stress floor, grows crops, collects solar Fuel, spends a day of the grid's Power Cell charge, and starts the next Morning.
 
 ## Tabs

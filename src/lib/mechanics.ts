@@ -9,6 +9,7 @@ import { attributeValue, maxEnergy, maxHp, maxWillpower, skillLevel } from "./de
 import { addInjuryFromRoll, canHealNaturally, effectiveSeverity, festerInjuries, type InjuryRoll } from "./injuries";
 import { noMarks, spendMarks, type Marks } from "./marks";
 import { runSolarPanels } from "./modules";
+import { applyPending } from "./pending";
 import { burnDailyPower } from "./power";
 import {
   MIND_BREAK_BY_NAME,
@@ -335,7 +336,8 @@ export function advanceSegment(g: GameState): string[] {
   if (g.segment < SEGMENTS.length - 1) {
     g.segment += 1;
     for (const c of g.characters) delete c.damagePressureRound;
-    return [`${SEGMENTS[g.segment]} begins.`];
+    // The last segment's work on the ship lands before anybody acts in this one.
+    return [`${SEGMENTS[g.segment]} begins.`, ...applyPending(g)];
   }
   return ["Night is over — run the End of Day procedure."];
 }
@@ -478,6 +480,8 @@ export function endOfDay(g: GameState, input: EndOfDayInput): string[] {
   g.day += 1;
   g.segment = 0;
   out.push(`Day ${g.day} begins. Morning.`);
+  // Night's work on the ship is there when the crew wakes up.
+  out.push(...applyPending(g));
   return out;
 }
 

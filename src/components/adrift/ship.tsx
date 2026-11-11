@@ -1,7 +1,7 @@
 "use client";
 
 import { READ_ONLY, usePerms } from "@/lib/use-perms";
-import { AlertTriangleIcon, ArchiveIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, PencilIcon, PlusIcon, PowerIcon, RotateCcwIcon, SproutIcon, Trash2Icon, ZapIcon } from "lucide-react";
+import { AlertTriangleIcon, ArchiveIcon, ArrowUpIcon, ChevronDownIcon, ChevronUpIcon, CrosshairIcon, HammerIcon, HourglassIcon, PencilIcon, PlusIcon, PowerIcon, RotateCcwIcon, SproutIcon, Trash2Icon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,7 @@ import { upgradeThreshold } from "@/data/tasks";
 import { advanceProject, openProjects, projectBill } from "@/lib/actions";
 import { CROP_DAYS, CROP_KINDS, CROP_KIND_BY_KEY, CROP_LEVEL_NAMES, XENO_STRAINS, type CropKindDef, cropKindOf, cropKindsFor, cropOf, cropStall, cropTending, cropYield, doseYield, growCrops, hydroponicsLevel, nextCropKind, readyTotal, strainLabel, strainOf } from "@/lib/crops";
 import { installLevels, moduleCost, nextRoomLevel, setRoomLevel, solarRooms } from "@/lib/modules";
+import { nextSegmentName, pendingForProject, pendingForRoom } from "@/lib/pending";
 import { roomFromPreset } from "@/lib/seed";
 import { recipeText, shortfalls, spend } from "@/lib/stock";
 import { useGame } from "@/lib/store";
@@ -550,6 +551,8 @@ function BuildFacilityDialog() {
 
 function RoomCard({ room }: { room: Room }) {
   const act = useGame((s) => s.act);
+  const game = useGame((s) => s.game);
+  const waiting = pendingForRoom(game, room.id);
   const { isGM } = usePerms();
   const edit = (label: string, fn: (r: Room) => void | string) =>
     act(label, (g) => {
@@ -619,6 +622,17 @@ function RoomCard({ room }: { room: Room }) {
         {room.fitting && <p className="text-[11px] text-muted-foreground">{FACILITY_BY_NAME[room.fitting]?.effect}</p>}
       </div>
       {room.notes && <p className="text-[11px] whitespace-pre-line text-muted-foreground">{room.notes}</p>}
+
+      {/* Work that's finished but hasn't reached this room yet, so nobody counts on it a segment early. */}
+      {waiting.length > 0 && (
+        <div className="grid gap-0.5 rounded-lg bg-sky-500/10 p-2 text-[11px] text-sky-200/90">
+          {waiting.map((w) => (
+            <p key={w.id} className="flex items-baseline gap-1">
+              <HourglassIcon className="size-3 shrink-0" /> {w.label} — lands at {nextSegmentName(game)}.
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
@@ -965,6 +979,7 @@ export function ProjectRow({ p }: { p: Project }) {
   // returns the same reference twice re-renders without end.
   const game = useGame((s) => s.game);
   const bill = projectBill(game, p);
+  const waiting = pendingForProject(game, p.id);
   const edit = (label: string, fn: (x: Project, g: GameState) => void | string | string[]) =>
     act(label, (g) => fn(g.ship.projects.find((x) => x.id === p.id)!, g));
 
@@ -977,6 +992,7 @@ export function ProjectRow({ p }: { p: Project }) {
         {room && <Pill>{room.name}</Pill>}
         {p.patientId && <Pill tone={patient ? "info" : "danger"}>{patient ? `Patient: ${patient.name} · Stress ${patient.stress}` : "Patient gone"}</Pill>}
         {p.done && <Pill tone="good">Complete</Pill>}
+        {waiting.length > 0 && <Pill tone="info">Comes online at {nextSegmentName(game)}</Pill>}
         <span className="tabular font-mono text-sm">{p.progress}/{p.required}</span>
       </div>
       <Meter value={p.progress} max={p.required} tone="progress" segmented />

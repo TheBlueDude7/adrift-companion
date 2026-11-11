@@ -40,6 +40,22 @@ export function stockItem(g: GameState, name: string, qty: number, fallback: Par
   else addItem(g, { ...base, id: uid(), qty });
 }
 
+/**
+ * Where something the crew produced ends up.
+ *
+ * The bench, the beds and the salvage torch all make things without caring where they land, so the
+ * destination is handed to them: straight into the hold when the GM is working by hand, or into the
+ * pending queue when a task made it, so it arrives as the next segment begins. Passing it rather than
+ * importing the queue also keeps these modules free of it, which would otherwise close an import loop.
+ */
+export type Sink = (name: string, qty: number, fallback?: Partial<ItemTemplate>) => void;
+
+/** The ordinary destination: ship storage, right now. */
+export const intoHold =
+  (g: GameState): Sink =>
+  (name, qty, fallback) =>
+    stockItem(g, name, qty, fallback ?? {});
+
 export const isToolkit = (i: Item) => /toolkit/i.test(i.name) && !i.broken;
 
 export function haveInStorage(g: GameState, name: string) {

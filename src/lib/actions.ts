@@ -10,12 +10,11 @@ import { conditionPenalty, type ConditionAsk } from "./conditions";
 import { buyTime, deadlineWhen, injuryPenalty } from "./injuries";
 import { operable, performSurgery, PREP_DICE, prepped, surgeryInjuryBlocker, surgeryInstallBlocker, surgicalToolsFor, theatreFor } from "./surgery";
 import { changeStress, gainXp, payPush, recoveredHp, rest } from "./mechanics";
-import { completeModuleWork } from "./modules";
+import { queueWork, stockLater } from "./pending";
 import { moveShip, shipMap } from "./power";
 import { FACILITY_BY_NAME, ROOM_FITTINGS } from "@/data/ship-upgrades";
-import { haveInStorage, recipeText, shortfalls, spend, spendUse, stockItem, takeOne } from "./stock";
-import { ATTRIBUTE_NAMES, ATTRIBUTES, HULL_TIERS, PROJECT_COSTS, MAX_SKILL_LEVEL, MODULE_CONDITIONS, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type SkillKey } from "./rules";
-import { roomFromPreset } from "./seed";
+import { haveInStorage, recipeText, shortfalls, spend, spendUse, takeOne, type Sink } from "./stock";
+import { ATTRIBUTE_NAMES, ATTRIBUTES, PROJECT_COSTS, MAX_SKILL_LEVEL, PRESSURE_STATES, pressureFloor, SEGMENTS, SKILL_BY_KEY, SKILLS, type Attribute, type ItemTemplate, type SkillKey } from "./rules";
 import type { CraftRecipe } from "@/data/crafting";
 import type { Recipe } from "@/data/cybernetics";
 import type { ActionStatus, Character, GameState, Line, Project, SegmentAction, SpaceTile, StarMap, StarNodeType } from "./types";
@@ -764,13 +763,6 @@ function cookTerms(g: GameState, c: Character, crafts: string[], energy: number,
   return terms;
 }
 
-function restore(g: GameState, roomId: string | null) {
-  const r = g.ship.rooms.find((x) => x.id === roomId);
-  if (!r || r.condition === "Destroyed") return null;
-  r.condition = MODULE_CONDITIONS[Math.max(0, MODULE_CONDITIONS.indexOf(r.condition) - 1)];
-  return `${r.name} restored to ${r.condition}.`;
-}
-
 /** Add Progress to a Project and apply what completing it does. */
 /**
  * What one contribution to a project takes out of the hold: the materials for the Progress it adds,
@@ -809,7 +801,11 @@ export function projectBill(g: GameState, p: Pick<Project, "name">) {
   return { text: lines.join(", "), short: shortfalls(g, parts, toolkit) };
 }
 
-export function advanceProject(g: GameState, projectId: string, amount = 1): string[] {
+/**
+ * `from` names the task the Progress came from, so queued work can say whose afternoon it was. The
+ * GM's manual +1 Progress button has no task behind it and passes nothing.
+ */
+export function advanceProject(g: GameState, projectId: string, amount = 1, from: { characterId?: string; actionId?: string } = {}): string[] {
   const x = g.ship.projects.find((p) => p.id === projectId);
   if (!x || x.done) return [];
   const added = Math.min(x.required, x.progress + amount) - x.progress;
@@ -823,20 +819,15 @@ export function advanceProject(g: GameState, projectId: string, amount = 1): str
     const bill = recipeText([...spent.parts, ...finishing], spent.toolkit);
     if (bill !== "Nothing") out.push(`The work takes ${bill} out of the hold.`);
   }
-  if (x.name === "Hull Repair") {
-    g.ship.hullHp = Math.min(HULL_TIERS[g.ship.hullTier].maxHp, g.ship.hullHp + amount);
-    if (g.ship.hullHp > 0) g.ship.catastrophicEvents = 0;
-    out.push(`Hull restored to ${g.ship.hullHp}.`);
-  }
+  if (x.name === "Hull Repair") out.push(queueWork(g, `Hull plate welded on (+${amount} Hull HP)`, { kind: "hull", amount }, from));
   if (x.progress >= x.required) {
     x.done = true;
     out.push(`✔ Project complete: ${x.name}.`);
-    if (x.name.startsWith("Repair")) {
-      const line = restore(g, x.roomId);
-      if (line) out.push(line);
+    if (x.name.startsWith("Repair") && x.roomId) {
+      const r = g.ship.rooms.find((y) => y.id === x.roomId);
+      if (r && r.condition !== "Destroyed") out.push(queueWork(g, `${r.name} repaired`, { kind: "restore", roomId: x.roomId }, from));
     }
-    const built = completeModuleWork(g, x);
-    if (built) out.push(built);
+    if (x.module) out.push(queueWork(g, `${x.name} finished`, { kind: "module", projectId: x.id }, from));
     const patient = x.patientId ? g.characters.find((c) => c.id === x.patientId) : undefined;
     if (x.patientId && patient) {
       const roll = d(4);
@@ -849,14 +840,8 @@ export function advanceProject(g: GameState, projectId: string, amount = 1): str
     } else if (x.patientId) {
       out.push("The patient is no longer aboard, so no Stress is recovered.");
     }
-    if (x.name === "Expand Ship") {
-      g.ship.rooms.push(roomFromPreset(null, "New Room"));
-      out.push("A new empty room is sealed and pressurized.");
-    }
-    if (x.name === "Xenoflora Cultivation" && !g.research.xenoflora) {
-      g.research.xenoflora = true;
-      out.push("☣ The strain takes to the nutrient bath. Hydroponics will now accept a Xenoflora sowing, tuned against one condition.");
-    }
+    if (x.name === "Expand Ship") out.push(queueWork(g, "A new room sealed and pressurized", { kind: "room" }, from));
+    if (x.name === "Xenoflora Cultivation" && !g.research.xenoflora) out.push(queueWork(g, "The Xenoflora strain taking to the bath", { kind: "research", key: "xenoflora" }, from));
   }
   return out;
 }
@@ -927,6 +912,13 @@ export function masterPilotReady(g: GameState, c: Character, a: SegmentAction) {
 export function resolveAction(g: GameState, id: string, r: Resolution): (string | Line)[] {
   const a = g.actions.find((x) => x.id === id);
   if (!a) return [];
+  // Where this task's output goes: into the queue, so it reaches the hold when the segment turns.
+  const from = { characterId: a.characterId, actionId: a.id };
+  const later = (items: { name: string; qty: number; fallback?: Partial<ItemTemplate> }[], label: string) => stockLater(g, label, items, from);
+  // One sink for everything this task produces, so the bench, the beds and the torch all queue alike.
+  const queued: Sink = (name, qty, fallback) => {
+    if (qty > 0) later([{ name, qty, fallback }], `${qty}× ${name}`);
+  };
   const c = g.characters.find((x) => x.id === a.characterId);
   const def = taskFor(a);
   a.status = r.status;
@@ -957,21 +949,20 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
       out.push(`${c.name} gets their breath back: Pressure eases to ${PRESSURE_STATES[c.pressure].name}.`);
     } else out.push(`${c.name} is already as settled as their Stress allows.`);
   }
-  if (ok && def.effect === "project" && a.projectId) out.push(...advanceProject(g, a.projectId, terms.progress));
+  if (ok && def.effect === "project" && a.projectId) out.push(...advanceProject(g, a.projectId, terms.progress, { characterId: a.characterId, actionId: a.id }));
   if (ok && def.effect === "tend") tendCrops(g, out);
-  if (ok && def.effect === "harvest") harvestCrops(g, out, Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0));
+  if (ok && def.effect === "harvest") harvestCrops(g, out, Math.floor(Math.max(0, terms.margin ?? 0) / 3) + (strong ? 1 : 0), queued);
   if (ok && def.effect === "yield" && def.yields) {
     const qty = def.yields.qty + (strong ? 1 : 0);
-    stockItem(g, def.yields.name, qty, { category: "Material", tier: "Tier I" });
-    out.push(`${qty}× ${def.yields.name} added to ship storage.`);
+    out.push(later([{ name: def.yields.name, qty, fallback: { category: "Material", tier: "Tier I" } }], `${qty}× ${def.yields.name}`));
   }
   if (ok && def.effect === "convert") {
     const [food, fuel] = c && skillLevel(c, "botany") >= 7 ? [3, 2] : [2, 1];
     if (haveInStorage(g, "Food Unit") < food) out.push(`⚠ Nothing converted: the hold needs ${food} Food Units.`);
     else {
       spend(g, [{ name: "Food Unit", qty: food }]);
-      stockItem(g, "Fuel Unit", fuel, { category: "Supply" });
-      out.push(`${food} Food Units become ${fuel} Fuel Unit${fuel > 1 ? "s" : ""}.`);
+      out.push(`${food} Food Units go into the press.`);
+      out.push(later([{ name: "Fuel Unit", qty: fuel, fallback: { category: "Supply" } }], `${fuel} Fuel Unit${fuel > 1 ? "s" : ""} pressed`));
     }
   }
   if (ok && def.effect === "purify") {
@@ -979,8 +970,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     if (!filter) out.push("⚠ No water filter in the hold, so nothing is purified.");
     else {
       spendUse(g, filter.name);
-      stockItem(g, "Water Unit", filter.units, { category: "Supply" });
-      out.push(`One charge of a ${filter.name} purifies ${filter.units} Water Units into ship storage.`);
+      out.push(`One charge of a ${filter.name} is run through.`);
+      out.push(later([{ name: "Water Unit", qty: filter.units, fallback: { category: "Supply" } }], `${filter.units} Water Units purified`));
     }
   }
   if (ok && def.effect === "reclaim") {
@@ -988,8 +979,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     else {
       const units = RECLAIMED_WATER + (strong ? 1 : 0);
       g.ship.reclaimed = true;
-      stockItem(g, "Water Unit", units, { category: "Supply" });
-      out.push(`${units} Water Units come out of Life Support's reclamation tanks, all it holds today.`);
+      out.push(`Life Support's reclamation tanks are drained, all they hold today.`);
+      out.push(later([{ name: "Water Unit", qty: units, fallback: { category: "Supply" } }], `${units} Water Units reclaimed`));
     }
   }
   if (ok && def.effect === "search") {
@@ -1005,8 +996,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     const wreck = salvageTarget(g);
     const from = wreck?.name ?? "the wreck";
     const parts = (r.salvaged ?? []).filter((p) => p.qty > 0);
-    for (const p of parts) stockItem(g, p.name, p.qty, { category: "Material" });
-    out.push(parts.length ? `Stripped from ${from}: ${recipeText(parts)}, added to ship storage.` : `Nothing worth hauling comes off ${from}.`);
+    if (parts.length) out.push(later(parts.map((p) => ({ ...p, fallback: { category: "Material" as const } })), `${recipeText(parts)} stripped from ${from}`));
+    else out.push(`Nothing worth hauling comes off ${from}.`);
     if (r.stripped && wreck) {
       wreck.status = "looted";
       out.push(`${wreck.name} is picked clean.`);
@@ -1019,8 +1010,8 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     else if (!takeOne(g, recipe.name) && !allowed) out.push(`⚠ No ${recipe.name} in the hold to take apart.`);
     else {
       const parts = salvageParts(recipe, strong);
-      for (const p of parts) stockItem(g, p.name, p.qty, { category: "Material" });
-      out.push(parts.length ? `${recipe.name} comes apart into ${recipeText(parts)}, added to ship storage.` : `${recipe.name} comes apart, but nothing usable survives.`);
+      if (parts.length) out.push(later(parts.map((p) => ({ ...p, fallback: { category: "Material" as const } })), `${recipe.name} broken down into ${recipeText(parts)}`));
+      else out.push(`${recipe.name} comes apart, but nothing usable survives.`);
     }
   }
   // Medicines and mech modules are both one recipe made at the bench, and a failure costs half the
@@ -1028,7 +1019,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
   if (def.effect === "medicine" || def.effect === "mechmod" || def.effect === "implant") {
     for (const name of a.crafts ?? []) {
       const recipe = RECIPE_BY_NAME[name];
-      if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted"));
+      if (recipe) out.push(fabricate(g, recipe, ok, a.approval === "granted", queued));
     }
   }
   if (def.effect === "surgery") performSurgery(g, a, ok, strong, out);
@@ -1061,13 +1052,11 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     else if (short.length && !allowed) out.push(`⚠ ${fitting.name} wasn't fitted: the hold is short ${short.map((s) => `${s.need - s.have} ${s.name}`).join(", ")}.`);
     else if (ok) {
       spend(g, fitting.cost, fitting.toolkit);
-      room.fitting = fitting.name;
+      out.push(`${fitting.name} is built in ${room.name}, from ${recipeText(fitting.cost, fitting.toolkit)}.`);
       // A fitting draws power of its own, on top of whatever the room's module already takes.
-      room.powerDraw += fitting.powerDraw;
+      out.push(queueWork(g, `${fitting.name} in ${room.name}`, { kind: "fitting", roomId: room.id, name: fitting.name, powerDraw: fitting.powerDraw }, from));
       const back = strong ? fitting.cost.flatMap((p) => (Math.floor(p.qty / 4) > 0 ? [{ name: p.name, qty: Math.floor(p.qty / 4) }] : [])) : [];
-      for (const p of back) stockItem(g, p.name, p.qty, { category: "Material" });
-      out.push(`🏗 ${fitting.name} fitted in ${room.name}, from ${recipeText(fitting.cost, fitting.toolkit)}${fitting.powerDraw ? `, drawing ${fitting.powerDraw} more Power` : ""}.`);
-      if (back.length) out.push(`The work goes cleanly: ${recipeText(back)} goes back to the hold.`);
+      if (back.length) out.push(later(back.map((p) => ({ ...p, fallback: { category: "Material" as const } })), `${recipeText(back)} left over`));
     } else {
       // Half the materials are gone whether or not the panels went up, as a botched craft loses half.
       const lost = fitting.cost.map((p) => ({ ...p, qty: Math.ceil(p.qty / 2) }));
@@ -1105,7 +1094,7 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
     const target = assistTarget(g, a);
     const effect = assistEffect(g, a);
     const who = g.characters.find((x) => x.id === target?.characterId)?.name ?? "them";
-    if (target && effect.progress > 0 && target.projectId) out.push(...advanceProject(g, target.projectId, effect.progress));
+    if (target && effect.progress > 0 && target.projectId) out.push(...advanceProject(g, target.projectId, effect.progress, { characterId: a.characterId, actionId: a.id }));
     else for (const warning of effect.warnings) out.push(`${c.name} helps, but ${warning.replace(/^[A-Z]/, (m) => m.toLowerCase())}.`);
     if (effect.dice > 0) out.push(`${c.name}'s help is ready: +${effect.dice}d6 on ${who}'s roll.`);
   }
@@ -1128,14 +1117,14 @@ export function resolveAction(g: GameState, id: string, r: Resolution): (string 
   if (def.effect === "craft") {
     (a.crafts ?? []).forEach((name, i) => {
       const recipe = RECIPE_BY_NAME[name];
-      if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted"));
+      if (recipe) out.push(fabricate(g, recipe, r.crafted?.[i] ?? ok, a.approval === "granted", queued));
     });
     if (c) redlineOverdrive(c, a.crafts ?? [], out);
   }
   if (def.effect === "cook") {
     for (const name of a.crafts ?? []) {
       const recipe = RECIPE_BY_NAME[name];
-      if (recipe) out.push(cook(g, recipe, ok, strong ? 1 : 0, a.approval === "granted"));
+      if (recipe) out.push(cook(g, recipe, ok, strong ? 1 : 0, a.approval === "granted", queued));
     }
   }
   if (def.effect === "scan" && a.target && r.scan !== undefined) {

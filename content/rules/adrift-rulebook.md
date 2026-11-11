@@ -492,6 +492,18 @@ Aboard the ship, play advances through four daily segments: Morning, Afternoon, 
 
 At the end of Night, complete the End of Day procedure.
 
+#### A Segment Is Simultaneous
+
+<!-- updated: segment-work -->
+
+Everyone acting in a segment acts at the same time, in whatever order the table finds convenient. What a task produces for the ship arrives when the next segment begins, not when the task resolves: crafted and cooked items, stripped and salvaged materials, a harvest, purified or reclaimed water, converted fuel, a completed module or facility, a repaired room, a fitting installed in a spare slot, a newly sealed room, a research unlock, and repaired Hull HP.
+
+What a task does to a person applies immediately: Energy, HP, Stress, Pressure, Injuries, Surgery, implants and grafts, training, and the bonus dice of an Assist.
+
+Materials leave the hold the moment the work happens, and a Project's Progress is recorded the moment it is earned. Only a Project's completion waits for the next segment.
+
+Work finished during Night arrives at the following Morning.
+
 ### Tasks
 
 A task is a meaningful use of one day segment. Unless a rule says otherwise, each character may perform one task per segment. Eating, drinking, brief conversation, and moving normally around a secure ship do not consume a task.

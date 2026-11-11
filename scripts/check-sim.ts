@@ -3,7 +3,7 @@
 // server-only modules:
 //   npx tsx --conditions react-server scripts/check-sim.ts
 import { advanceProject, extraTaskBlocker, fitOptions, newAction, openProjects, permissionReasons, projectBill, resolveAction, surgeryOn, taskTerms } from "../src/lib/actions";
-import { IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, RECIPE_BY_NAME } from "../src/lib/crafting";
+import { IMPLANT_ITEM_RECIPES, MECH_MODULE_RECIPES, moduleLevel, RECIPE_BY_NAME } from "../src/lib/crafting";
 import { CYBERNETICS, implantName } from "../src/data/cybernetics";
 import { MECH_MODULES } from "../src/data/mechs";
 import { FACILITY_BY_NAME } from "../src/data/ship-upgrades";
@@ -14,8 +14,10 @@ import { INJURY_TABLE } from "../src/data/injuries";
 import { SHIPBOARD_TASKS } from "../src/data/tasks";
 import { addInjury, injuryMaxHpSources, operate, overdueInjuries, segmentsLeft } from "../src/lib/injuries";
 import { normalizeGame } from "../src/lib/maps";
+import { advanceSegment, endOfDay } from "../src/lib/mechanics";
+import { nextSegmentName, pendingForRoom, pendingWork, stockLater } from "../src/lib/pending";
 import { POWER_CELLS, burnDailyPower, powerDaysLeft } from "../src/lib/power";
-import { PANICKED } from "../src/lib/rules";
+import { PANICKED, SEGMENTS } from "../src/lib/rules";
 import { createInitialState, newCharacter } from "../src/lib/seed";
 import { combineCrafts, legalOptions, projectAsk } from "../src/lib/sim/options";
 import { doctrine, pressing, projectAsks, site } from "../src/lib/sim/world";
@@ -296,8 +298,11 @@ function check(label: string, got: unknown, want: unknown) {
       return resolveAction(g, a.id, { status: "success", energy: 0, outcome: "", salvaged, stripped });
     };
     const first = strip([{ name: "Scrap Metal", qty: 3 }, { name: "Basic Adhesive", qty: 1 }], false);
-    check("the GM's pick goes into ship storage", stored(g, "Scrap Metal") - scrap, 3);
+    // Hauled, but not stowed: the segment has to turn before the hold has it.
+    check("the GM's pick doesn't reach the hold this segment", stored(g, "Scrap Metal") - scrap, 0);
     check("and the log lists it for the crew", first.some((l) => typeof l === "string" && l.includes("3 Scrap Metal") && l.includes("The Perihelion")), true);
+    advanceSegment(g);
+    check("the next segment finds it in ship storage", stored(g, "Scrap Metal") - scrap, 3);
     check("a wreck with more in it can be stripped again", salvage(g), null);
     strip([], true);
     check("marking it picked clean takes it off the menu", salvage(g), "The Perihelion has already been picked over");
@@ -441,10 +446,14 @@ function bench(components: number) {
   const won: GameState = structuredClone(g);
   const draw = won.ship.rooms.find((r) => r.id === room.id)!.powerDraw;
   const lines = run(won, fit(panels.name, room.id), "success");
+  // The materials go now; the panels are on the wall next segment.
+  check("the materials are spent at once", [supplyCount(won, "Scrap Metal"), supplyCount(won, "Scrap Components")], [0, 0]);
+  check("but the slot is still empty this segment", won.ship.rooms.find((r) => r.id === room.id)?.fitting, undefined);
+  check("the log says what it cost", lines.some((l) => typeof l === "string" && l.includes("is built in") && l.includes("10 Scrap Metal")), true);
+  check("and says when they go up", lines.some((l) => typeof l === "string" && l.includes("ready for")), true);
+  advanceSegment(won);
   check("the panels go up", won.ship.rooms.find((r) => r.id === room.id)?.fitting, "Makeshift Solar Panels");
-  check("the materials are spent", [supplyCount(won, "Scrap Metal"), supplyCount(won, "Scrap Components")], [0, 0]);
   check("and panels ask nothing of the grid", won.ship.rooms.find((r) => r.id === room.id)?.powerDraw, draw);
-  check("the log says what it cost", lines.some((l) => typeof l === "string" && l.includes("fitted in") && l.includes("10 Scrap Metal")), true);
 
   // A failure costs half, rounded up, and fits nothing.
   const lost: GameState = structuredClone(g);
@@ -456,6 +465,7 @@ function bench(components: number) {
   const armed: GameState = structuredClone(g);
   for (const [name, qty] of [["Scrap Metal", 6], ["Aluminum Alloy", 2], ["Scrap Components", 3]] as const) stockItem(armed, name, qty, { category: "Material" });
   run(armed, { ...newAction(armed, armed.characters[0], "Install Panels or Defenses"), fit: { name: "Defensive Gun", roomId: room.id } }, "success");
+  advanceSegment(armed);
   check("a gun adds its own draw to the room", armed.ship.rooms.find((r) => r.id === room.id)!.powerDraw - draw, 2);
 
   // One slot, one fitting: the room that already has panels is out of the running.
@@ -559,8 +569,10 @@ function bench(components: number) {
   check("stocked, the task is offered", tasks(g).includes("Fabricate Mech Module"), true);
   check("and clear to build", permissionReasons(g, build()), []);
   resolveAction(g, (g.actions.push(build()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the module isn't in the hold the segment it was built", supplyCount(g, rack.name), 0);
+  check("but the materials are gone", [supplyCount(g, "Scrap Metal"), supplyCount(g, "Basic Adhesive")], [2, 0]);
+  advanceSegment(g);
   check("the module lands in the hold", supplyCount(g, rack.name), 1);
-  check("and the materials are gone", [supplyCount(g, "Scrap Metal"), supplyCount(g, "Basic Adhesive")], [2, 0]);
 
   // A Tier III module needs the better bench and the better crafter, and costs an Energy more.
   const vault = MECH_MODULE_RECIPES.find((r) => r.tier === "Tier III")!;
@@ -592,8 +604,11 @@ function bench(components: number) {
   check("at the 2 Energy the cybernetics rules ask", taskTerms(g, build()).energy, 2);
   check("and clear to build", permissionReasons(g, build()), []);
   resolveAction(g, (g.actions.push(build()), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the Core is spent at once", supplyCount(g, "Cybernetic Core"), 0);
+  // Nobody is cut open with an implant that's still being built this segment.
+  check("and the implant can't be installed the same segment", taskTerms(g, { ...newAction(g, medic, "Surgery"), subjectId: patient.id, install: { kind: "cyber", key: limb.key } }).blocker?.startsWith("No "), true);
+  advanceSegment(g);
   check("the implant lands in the hold", supplyCount(g, item), 1);
-  check("and the Core is spent", supplyCount(g, "Cybernetic Core"), 0);
 
   // Nobody fits it by hand: it's a Surgery, with a patient, a theatre, and tools.
   stockItem(g, "Surgical Tools", 1);
@@ -736,6 +751,76 @@ function bench(components: number) {
   check("so the hold still has the spare", supplyCount(g, "Power Cell"), 1);
   check("the third night loads it", night().startsWith("🔌 A Power Cell is loaded"), true);
   check("and that's the hold empty", supplyCount(g, "Power Cell"), 0);
+}
+
+// A segment is simultaneous: everyone in it is working at the same time, so one survivor's work on
+// the ship can't be the thing another survivor's work in the same segment stands on. The bench
+// somebody rebuilt this afternoon is a better bench this evening.
+{
+  const g = world();
+  const [wright, crafter] = g.characters;
+  wright.skills.mechTech = 6;
+  wright.skills.engineering = 6;
+  crafter.skills.engineering = 6;
+  const bench = g.ship.rooms.find((r) => r.module === "Workshop / Fabrication Bay")!;
+  bench.level = 0;
+  const upgrade: Project = {
+    id: "bench", name: "Upgrade Workshop", skill: "Mechanical Technician", threshold: 4,
+    progress: 4, required: 5, contributorLimit: 2, energy: 2, facility: "", materials: "",
+    roomId: bench.id, notes: "", done: false, module: { name: "Workshop / Fabrication Bay", level: 1 },
+  };
+  g.ship.projects.push(upgrade);
+  for (const [name, qty] of [["Scrap Metal", 20], ["Scrap Components", 10], ["Basic Adhesive", 10]] as const) stockItem(g, name, qty, { category: "Material" });
+  stockItem(g, "Improvised Toolkit", 1, { category: "Equipment", maxCharges: 5 });
+
+  const before = moduleLevel(g, "Workshop / Fabrication Bay");
+  const lines = resolveAction(g, (g.actions.push({ ...newAction(g, wright, "Work on a project"), projectId: upgrade.id }), g.actions.at(-1)!.id), { status: "success", energy: 0, outcome: "" });
+  check("the project reads as finished right away", g.ship.projects.find((p) => p.id === "bench")?.done, true);
+  check("and the crew is told the room is coming", lines.some((l) => typeof l === "string" && l.includes("ready for Afternoon")), true);
+  check("but the bench is no better this segment", moduleLevel(g, "Workshop / Fabrication Bay"), before);
+  check("the queue says who it was and what's coming", pendingWork(g).map((w) => [w.characterId === wright.id, w.label]), [[true, "Upgrade Workshop finished"]]);
+  check("and the Ship tab can mark the room", pendingForRoom(g, bench.id).length, 1);
+
+  // Which is the whole point: the next person's Tier II work waits for the evening, not the afternoon.
+  advanceSegment(g);
+  check("the next segment brings it online", moduleLevel(g, "Workshop / Fabrication Bay"), before + 1);
+  check("and the queue is empty again", pendingWork(g).length, 0);
+
+  // Night's work is there when the crew wakes up, rather than being lost to the end of the day.
+  const overnight: GameState = structuredClone(g);
+  overnight.segment = SEGMENTS.length - 1;
+  stockLater(overnight, "3× Scrap Metal", [{ name: "Scrap Metal", qty: 3 }]);
+  const held = supplyCount(overnight, "Scrap Metal");
+  check("night's work names tomorrow", nextSegmentName(overnight), `Day ${overnight.day + 1}`);
+  check("and the last segment holds it", supplyCount(overnight, "Scrap Metal"), held);
+  endOfDay(overnight, Object.fromEntries(overnight.characters.map((c) => [c.id, { food: "full" as const, water: true, slept: true }])));
+  check("the morning finds it in the hold", supplyCount(overnight, "Scrap Metal") - held, 3);
+
+  // A campaign saved before any of this existed has nothing waiting: everything it did already landed.
+  const old = structuredClone(g) as GameState & { pending?: unknown };
+  delete old.pending;
+  check("an old save loads with an empty queue", normalizeGame(old).pending, []);
+}
+
+// Assists are the other half of the rule: people change at once, so a helper standing at your elbow
+// counts in the same segment. Queuing the ship's work mustn't have quietly broken that.
+{
+  const g = world();
+  const [digger, helper] = g.characters;
+  digger.skills.engineering = 4;
+  helper.skills.engineering = 4;
+  const job: Project = {
+    id: "job", name: "Stress Recovery", skill: "Engineering", threshold: 4, progress: 0, required: 6,
+    contributorLimit: 3, energy: 2, facility: "", materials: "", roomId: null, notes: "", done: false,
+  };
+  g.ship.projects.push(job);
+  const main = { ...newAction(g, digger, "Work on a project"), projectId: job.id };
+  g.actions.push(main);
+  const hand = { ...newAction(g, helper, "Assist"), assists: main.id };
+  g.actions.push(hand);
+  resolveAction(g, hand.id, { status: "success", energy: 0, outcome: "" });
+  check("an Assist's Progress lands in the same segment", g.ship.projects.find((p) => p.id === "job")?.progress, 1);
+  check("and nothing about it is held back", pendingWork(g).length, 0);
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall good");

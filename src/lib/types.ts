@@ -642,7 +642,49 @@ export type GameState = {
   doctrine?: Lesson[];
   /** Tasks the crew has committed to, by day and segment. */
   actions: SegmentAction[];
+  /** Work that is finished but hasn't reached the ship yet. It lands when the next segment begins. */
+  pending?: PendingWork[];
 };
+
+/**
+ * A task's effect on the ship, held back until the segment turns.
+ *
+ * Everyone in a segment works at the same time, so one survivor's afternoon can't be the reason
+ * another survivor's afternoon went better. The crew changes at once — Energy, wounds, Stress, and
+ * the Assist somebody is standing there giving you — but the ship changes between segments: a bench
+ * that got rebuilt this afternoon is a better bench this evening.
+ *
+ * Materials are still spent the moment the work happens, so two people can't pay with the same
+ * scrap. It is only what the work *produces* that waits.
+ */
+export type PendingWork = {
+  id: string;
+  /** The day and segment the work was finished in, which is what makes it due in the next one. */
+  day: number;
+  segment: number;
+  /** Who did it and which task it was, so the crew can see where a queued change came from. */
+  characterId?: string;
+  actionId?: string;
+  /** What the crew is told is coming, written when the work finished rather than when it lands. */
+  label: string;
+  effect: PendingEffect;
+};
+
+export type PendingEffect =
+  /** Something made, grown, or hauled, going into ship storage. */
+  | { kind: "stock"; items: { name: string; qty: number; fallback?: Partial<ItemTemplate> }[] }
+  /** A module project's room work: the install or the upgrade coming online. */
+  | { kind: "module"; projectId: string }
+  /** A repair raising a room's condition one notch. */
+  | { kind: "restore"; roomId: string }
+  /** A fitting going into a room's spare slot, with the power it then draws. */
+  | { kind: "fitting"; roomId: string; name: string; powerDraw: number }
+  /** Expand Ship: a new empty room sealed and pressurized. */
+  | { kind: "room" }
+  /** A research project's unlock reaching the crew. */
+  | { kind: "research"; key: "xenoflora" }
+  /** Hull Repair, in points of Hull HP. */
+  | { kind: "hull"; amount: number };
 
 /**
  * One thing the crew learned, in the words of whoever learned it.
