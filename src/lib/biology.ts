@@ -11,6 +11,7 @@ import {
   type BioTree,
 } from "@/data/biology";
 import { bioDef, biologyCatalogue } from "./bio-catalogue";
+import { moduleLevel } from "./crafting";
 import { dampening } from "./cyber";
 import type { Character, GameState } from "./types";
 
@@ -90,6 +91,22 @@ export const bioTempHp = (c: Character) => grown(c).length * BIO_TEMP_HP;
 
 /** The integrated attacks an augmented body has of its own, needing no weapon in hand. */
 export const bioAttacks = (c: Character) => grown(c).filter((x) => x.def.attack);
+
+/** Whether anything aboard can grow a strain. A Destroyed lab grows nothing. */
+export const hasBiologicalLab = (g: GameState) => moduleLevel(g, "Biological Lab") >= 0;
+
+/**
+ * Whether the crew has any business with the biological path at all.
+ *
+ * Without a Biological Lab the path doesn't exist for them: there is no way to cultivate, nothing to
+ * read, and a tab full of empty trees only advertises that the dark has something in it. So the tab
+ * arrives with the lab.
+ *
+ * It does not leave with the lab, though. A crew who cultivated strains and then lost the room still
+ * carries what they grew, and still needs to read what it does.
+ */
+export const biologyInPlay = (g: GameState) =>
+  hasBiologicalLab(g) || (g.research.biology?.length ?? 0) > 0 || g.characters.some((c) => (c.biology ?? []).length > 0);
 
 /**
  * Nothing biological is known until the lab grows it.

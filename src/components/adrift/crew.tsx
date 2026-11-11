@@ -74,6 +74,7 @@ import { attrHue, EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip
 import { GlossaryText, GlossaryTip } from "./glossary";
 import { DiceRoller } from "./dice-roller";
 import { AddItemDialog, ItemList } from "./inventory";
+import { biologyInPlay } from "@/lib/biology";
 import { BiologyPanel } from "./biology";
 import { CyberneticsPanel } from "./cybernetics";
 import { ContingencyPanel, SharedPoolPanel } from "./quartermaster";
@@ -698,12 +699,16 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent>
-          <SectionTitle>Biology</SectionTitle>
-          <BiologyPanel c={c} />
-        </CardContent>
-      </Card>
+      {/* Same rule as the Biology tab: the path shows up with the lab that can grow it, and stays for
+          anyone carrying what it grew. */}
+      {biologyInPlay(game) && (
+        <Card>
+          <CardContent>
+            <SectionTitle>Biology</SectionTitle>
+            <BiologyPanel c={c} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent>

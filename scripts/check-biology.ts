@@ -6,7 +6,7 @@ import { bioDef, biologyCatalogue, biologyReady, installBiology } from "../src/l
 
 const BIOLOGY = biologyCatalogue();
 const BIO_BY_KEY = Object.fromEntries(BIOLOGY.map((d) => [d.key, d]));
-import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, certaintyLive, expressionsLive, grown, growBlocker, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
+import { bioMaxEnergy, bioMaxHp, bioResearchBlocker, bioTempHp, bioTierReady, biologyInPlay, certaintyLive, expressionsLive, grown, growBlocker, hasBiologicalLab, isBioUnlocked, milestones, surgeDice, surgePool, tierThreeSurge } from "../src/lib/biology";
 import { PROJECT_TEMPLATE_BY_NAME } from "../src/lib/rules";
 import { CYBER_BY_KEY, DAMPENING_STRESS_COST, dampeningForLoad } from "../src/data/cybernetics";
 import { cyberLoad, dampening, dampeningLeft } from "../src/lib/cyber";
@@ -256,6 +256,21 @@ const chrome = (c: Character, keys: string[]) => {
   const g = createInitialState();
   check("a seeded crew has no augmentations", g.characters.every((c) => grown(c).length === 0), true);
   check("nor any Temporary HP", g.characters.every((c) => !c.tempHp), true);
+  check("and no Biological Lab, so the path isn't in play at all", [hasBiologicalLab(g), biologyInPlay(g)], [false, false]);
+
+  // The tab arrives with the room that can grow something.
+  g.ship.rooms.push({ ...g.ship.rooms[0], id: "lab", name: "Biological Lab", module: "Biological Lab", condition: "Operational" });
+  check("building the lab puts it in play", [hasBiologicalLab(g), biologyInPlay(g)], [true, true]);
+  g.ship.rooms = g.ship.rooms.map((r) => (r.id === "lab" ? { ...r, condition: "Destroyed" } : r));
+  check("and a destroyed lab grows nothing", hasBiologicalLab(g), false);
+  check("so a crew who never cultivated loses the tab with the room", biologyInPlay(g), false);
+
+  // But it doesn't leave with the room, for a crew carrying what the room grew.
+  g.research.biology = ["redundant-tissue-mass"];
+  check("a crew who cultivated keeps it", biologyInPlay(g), true);
+  g.research.biology = [];
+  g.characters = [{ ...newCharacter("Vale", null, null, "gm"), biology: [{ id: "x", key: "apex-carapace", choice: "" }] }];
+  check("and so does one still carrying a graft", biologyInPlay(g), true);
 }
 
 // What leaves the server for a client. This is the part that keeps the trees dark, so it is the part

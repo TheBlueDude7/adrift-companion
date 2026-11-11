@@ -27,6 +27,7 @@ import { endExpedition, markExpeditionTurn, startExpedition, TURNS_PER_SEGMENT, 
 import { advanceSegment, completeAct, previousSegment } from "@/lib/mechanics";
 import { SEGMENTS } from "@/lib/rules";
 import { createInitialState } from "@/lib/seed";
+import { biologyInPlay } from "@/lib/biology";
 import { useGame } from "@/lib/store";
 import { leaveCampaign } from "@/lib/sync/client";
 import type { GameState } from "@/lib/types";
@@ -343,7 +344,7 @@ function Header() {
  * they're the one who moves the crew through a derelict and decides what each room gives up, and a
  * player has no use for a map of a ship they're being told about room by room.
  */
-const TABS = [
+const TABS: { value: string; label: string; expedition?: true; gm?: true; show?: (g: GameState) => boolean }[] = [
   { value: "overview", label: "Overview" },
   { value: "actions", label: "Actions" },
   { value: "site", label: "Site", expedition: true, gm: true },
@@ -351,7 +352,9 @@ const TABS = [
   { value: "ship", label: "Ship" },
   { value: "mechs", label: "Mechs" },
   { value: "cyber", label: "Cybernetics" },
-  { value: "bio", label: "Biology" },
+  // Biology arrives with the lab that can grow it: before that the path doesn't exist for this crew,
+  // and an empty tab only advertises that the dark has something in it.
+  { value: "bio", label: "Biology", show: biologyInPlay },
   { value: "storage", label: "Storage" },
   { value: "map", label: "Map" },
   { value: "log", label: "Log" },
@@ -362,7 +365,8 @@ const subscribeNoop = () => () => {};
 
 export function AdriftApp() {
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
-  const away = useGame((s) => !!s.game.expedition);
+  const game = useGame((s) => s.game);
+  const away = !!game.expedition;
   const { isGM } = usePerms();
   const [tab, setTab] = useState("overview");
   const [selected, setSelected] = useState<string | null>(null);
@@ -374,7 +378,7 @@ export function AdriftApp() {
       </div>
     );
 
-  const shown = TABS.filter((t) => (!t.expedition || away) && (!t.gm || isGM));
+  const shown = TABS.filter((t) => (!t.expedition || away) && (!t.gm || isGM) && (!t.show || t.show(game)));
   // A tab can go away underneath whoever is reading it: the Site goes when the crew comes aboard.
   const open = shown.some((t) => t.value === tab) ? tab : "overview";
 
@@ -397,7 +401,7 @@ export function AdriftApp() {
           <TabsContent value="ship" className="pt-3"><ShipTab /></TabsContent>
           <TabsContent value="mechs" className="pt-3"><MechsTab /></TabsContent>
           <TabsContent value="cyber" className="pt-3"><CyberTreePanel /></TabsContent>
-          <TabsContent value="bio" className="pt-3"><BioTreePanel /></TabsContent>
+          {biologyInPlay(game) && <TabsContent value="bio" className="pt-3"><BioTreePanel /></TabsContent>}
           <TabsContent value="storage" className="pt-3"><StorageTab /></TabsContent>
           <TabsContent value="map" className="pt-3"><MapTab /></TabsContent>
           <TabsContent value="log" className="pt-3"><LogTab /></TabsContent>

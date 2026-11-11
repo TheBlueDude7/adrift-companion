@@ -30,6 +30,7 @@ import {
   expressionsLive,
   grown,
   growBlocker,
+  hasBiologicalLab,
   isBioUnlocked,
   milestones,
   surgePool,
@@ -298,7 +299,7 @@ export function BioResearchCard() {
   const act = useGame((s) => s.act);
   const { isGM } = usePerms();
   const cultivated = (game.research.biology ?? []).map((k) => bioDef(k)).filter(Boolean);
-  const lab = game.ship.rooms.some((r) => r.module === "Biological Lab" && r.condition !== "Destroyed");
+  const lab = hasBiologicalLab(game);
 
   return (
     <Card>
