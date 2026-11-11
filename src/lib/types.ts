@@ -111,6 +111,24 @@ export type Character = {
   /** Loadmaster's shared pool: the characters on the expedition, including the Quartermaster. */
   pool?: string[];
   cybernetics?: InstalledCyber[];
+  biology?: InstalledBio[];
+  /**
+   * Temporary HP, which every biological augmentation is worth a couple of at the start of a combat.
+   * It is spent before ordinary HP and never repaired, only granted again.
+   */
+  tempHp?: number;
+};
+
+/**
+ * One biological augmentation grown into a survivor. Unlike an implant it has no location and no
+ * Load — what it costs is written into the upgrade, as a Backlash and usually as a hungrier body.
+ */
+export type InstalledBio = {
+  id: string;
+  /** Key into BIOLOGY. */
+  key: string;
+  /** Choices made as it was grown, like which three organ Injuries a Redundant Organ Cluster covers. */
+  choice: string;
 };
 
 export type InstalledCyber = {
@@ -203,6 +221,12 @@ export type Mech = {
 export type Research = {
   /** Tier II and III cybernetics the crew has unlocked. Tier I is always available. */
   cybernetics: string[];
+  /**
+   * Tier II and III biological augmentations the crew has cultivated. Tier I is always available, as
+   * with cybernetics: the document calls those common or relatively simple traits. Optional so a save
+   * made before the path existed still loads.
+   */
+  biology?: string[];
   /** The GM has put a viable alien specimen in the crew's hands, so they may attempt the project. */
   xenofloraAllowed?: boolean;
   /** The Xenoflora Cultivation project is finished, so the beds will take an alien strain. */

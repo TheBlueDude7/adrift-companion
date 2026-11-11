@@ -37,6 +37,7 @@ import type { Crop, GameState, Project, ProjectRequest, Room } from "@/lib/types
 import { cn } from "@/lib/utils";
 import { CommitInput } from "./commit-input";
 import { Dice, EmptyState, Meter, Pill, SectionTitle, Stepper } from "./common";
+import { BioResearchCard } from "./biology";
 import { CyberResearchCard } from "./cybernetics";
 import { PowerCells } from "./power";
 
@@ -1058,6 +1059,8 @@ export function ShipTab() {
       <ProjectsSection />
 
       <CyberResearchCard />
+
+      <BioResearchCard />
     </div>
   );
 }

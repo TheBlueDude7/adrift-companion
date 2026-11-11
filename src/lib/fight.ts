@@ -1,3 +1,4 @@
+import { bioTempHp } from "./biology";
 import { d } from "./dice";
 import { hazardToll, tickHazards } from "./hazards";
 import { applyCondition, endRound } from "./mechanics";
@@ -77,6 +78,14 @@ export function startFight(g: GameState, start: FightStart): (string | Line)[] {
     const said: string[] = [];
     for (const c of crew) applyCondition(g, c, "Surprised", "Brief", said);
     out.push("The crew is caught out, and whatever found them acts first.", ...said);
+  }
+  // Grown flesh braces itself as the fight opens. It is granted fresh rather than topped up, so a
+  // fight that ends with Temporary HP left over doesn't carry it into the next one.
+  for (const c of crew) {
+    const temp = bioTempHp(c);
+    if (!temp) continue;
+    c.tempHp = temp;
+    out.push(`${c.name}'s grown flesh braces: ${temp} Temporary HP.`);
   }
   out.push(...upLine(g, f));
   return out;
@@ -255,5 +264,11 @@ export function endFight(g: GameState): (string | Line)[] {
   if (!g.fight) return ["No fight is under way."];
   const rounds = g.fight.round;
   delete g.fight;
-  return [`The fighting stops after ${rounds} Round${rounds === 1 ? "" : "s"}. Initiative no longer applies.`];
+  const out: (string | Line)[] = [`The fighting stops after ${rounds} Round${rounds === 1 ? "" : "s"}. Initiative no longer applies.`];
+  // Temporary HP was for this fight. What's left of it doesn't bank.
+  for (const c of g.characters.filter((x) => x.tempHp)) {
+    delete c.tempHp;
+    out.push(`${c.name}'s Temporary HP is spent or gone.`);
+  }
+  return out;
 }

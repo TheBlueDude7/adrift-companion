@@ -72,6 +72,7 @@ import { ApplyConditionDialog, ConditionChips, conditionTip, QuickConditions, Sc
 import { attrHue, EmptyState, Meter, Pill, SectionTitle, StatBlock, Stepper, Tip } from "./common";
 import { DiceRoller } from "./dice-roller";
 import { AddItemDialog, ItemList } from "./inventory";
+import { BiologyPanel } from "./biology";
 import { CyberneticsPanel } from "./cybernetics";
 import { ContingencyPanel, SharedPoolPanel } from "./quartermaster";
 
@@ -679,6 +680,13 @@ function CharacterSheet({ c, onDeleted }: { c: Character; onDeleted: () => void 
         <CardContent>
           <SectionTitle>Cybernetics</SectionTitle>
           <CyberneticsPanel c={c} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <SectionTitle>Biology</SectionTitle>
+          <BiologyPanel c={c} />
         </CardContent>
       </Card>
 

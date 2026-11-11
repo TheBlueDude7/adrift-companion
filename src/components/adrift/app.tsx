@@ -33,6 +33,7 @@ import type { GameState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActionsTab } from "./actions";
 import { ApplyConditionDialog } from "./conditions";
+import { BioTreePanel } from "./bio-tree";
 import { CyberTreePanel } from "./cyber-tree";
 import { CrewTab } from "./crew";
 import { usePerms } from "@/lib/use-perms";
@@ -350,6 +351,7 @@ const TABS = [
   { value: "ship", label: "Ship" },
   { value: "mechs", label: "Mechs" },
   { value: "cyber", label: "Cybernetics" },
+  { value: "bio", label: "Biology" },
   { value: "storage", label: "Storage" },
   { value: "map", label: "Map" },
   { value: "log", label: "Log" },
@@ -395,6 +397,7 @@ export function AdriftApp() {
           <TabsContent value="ship" className="pt-3"><ShipTab /></TabsContent>
           <TabsContent value="mechs" className="pt-3"><MechsTab /></TabsContent>
           <TabsContent value="cyber" className="pt-3"><CyberTreePanel /></TabsContent>
+          <TabsContent value="bio" className="pt-3"><BioTreePanel /></TabsContent>
           <TabsContent value="storage" className="pt-3"><StorageTab /></TabsContent>
           <TabsContent value="map" className="pt-3"><MapTab /></TabsContent>
           <TabsContent value="log" className="pt-3"><LogTab /></TabsContent>

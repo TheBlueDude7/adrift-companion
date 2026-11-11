@@ -152,7 +152,7 @@ export type AssistEffect = {
  * Projects where there is nothing to carry, lift, or hold steady, so a strong back is no use. Anything
  * else builds, moves, or repairs something physical and can take a Labor Assist.
  */
-const DESK_WORK = ["Stress Recovery", "Affliction Treatment", "Cybernetic Research", "Xenoflora Cultivation"];
+const DESK_WORK = ["Stress Recovery", "Affliction Treatment", "Cybernetic Research", "Xenoflora Cultivation", "Biological Cultivation"];
 
 const physicalProject = (p: Project) => !DESK_WORK.some((n) => p.name.startsWith(n));
 

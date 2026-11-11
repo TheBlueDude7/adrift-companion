@@ -13,6 +13,7 @@ import {
   type DamageType,
   type SkillKey,
 } from "./rules";
+import { bioMaxEnergy, bioMaxHp } from "./biology";
 import { cyberAttack, cyberAttr, cyberMaxEnergy, cyberMaxHp, cyberResists } from "./cyber";
 import { deadlineWhen, injuryMaxHp, injuryPenalty, segmentsLeft } from "./injuries";
 import { mechModules, mechStats, pilotedMech, portedImplants } from "./mechs";
@@ -56,7 +57,7 @@ export function rollBreakdown(c: Character, skill: SkillKey | null, attr: Attrib
 export function maxHp(c: Character) {
   const str = attributeValue(c, "STR");
   const con = attributeValue(c, "CON");
-  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c) + injuryMaxHp(c));
+  return Math.max(0, 8 + (str - 1) + 2 * (con - 1) + c.maxHpMod + cyberMaxHp(c) + bioMaxHp(c) + injuryMaxHp(c));
 }
 
 export function baseMaxEnergy(c: Character) {
@@ -65,7 +66,7 @@ export function baseMaxEnergy(c: Character) {
 }
 
 export function maxEnergy(c: Character) {
-  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) - c.survival.energyPenalty);
+  return Math.max(0, baseMaxEnergy(c) + c.maxEnergyMod + cyberMaxEnergy(c) + bioMaxEnergy(c) - c.survival.energyPenalty);
 }
 
 export function maxWillpower(c: Character) {
