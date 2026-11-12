@@ -42,6 +42,18 @@ export async function loadSoloCatalogue() {
 }
 
 /**
+ * The rulebook and its updates, asked for as whoever this device is.
+ *
+ * In a shared campaign the campaign code and this device's key go along, so the server can tell the
+ * GM from a player and send the GM's own rule updates only to the GM. A device playing alone sends
+ * neither, and is answered as the GM it is.
+ */
+export function fetchRules() {
+  const code = useGame.getState().session?.code;
+  return fetch(code ? `/api/rules?code=${encodeURIComponent(code)}` : "/api/rules", code ? { headers: { "x-adrift-key": keyFor() } } : undefined);
+}
+
+/**
  * Keeps the local store in step with a shared campaign.
  *
  * `confirmed` mirrors the server exactly (every broadcast applied in server order). What the

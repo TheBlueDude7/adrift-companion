@@ -35,6 +35,7 @@ import {
   MODULE_CRAFT_TASK,
 } from "@/data/mechs";
 import type { MechChassis } from "@/lib/types";
+import { usePerms } from "@/lib/use-perms";
 import { Pill, RuleTable } from "./common";
 import { GlossaryText } from "./glossary";
 
@@ -243,6 +244,8 @@ function FrameRules() {
 }
 
 export function CyberRules() {
+  // What Dampening does to biology is the GM's to know: players learn the path only by growing it.
+  const { isGM } = usePerms();
   const [q, setQ] = useState("");
   const n = q.trim().toLowerCase();
   const matches = (s: string) => !n || s.toLowerCase().includes(n);
@@ -265,7 +268,7 @@ export function CyberRules() {
         </Note>
         <Lines
           items={[
-            "Known technology. Unlike alien biology, the crew start knowing the whole tree — Tier I needs no research at all. What stops them is materials, a Workshop, a Medical Bay, and a surgeon.",
+            "Known technology. The crew start knowing the whole tree — Tier I needs no research at all. What stops them is materials, a Workshop, a Medical Bay, and a surgeon.",
             "Load is the price. Each system contributes its deepest Tier, and the total is what the body is carrying.",
             "Load is also what buys Dampening, so depth pays for itself in a way breadth doesn't.",
           ]}
@@ -301,10 +304,12 @@ export function CyberRules() {
               "The pool refills when the Scene ends, and at no other time. A Rest in the middle of a Scene does not restore it.",
             ]}
           />
-          <Note>
-            Half of a character&apos;s Dampening, rounded down, also comes off their Surge Dice: the Surge the flesh feeds on is the same Pressure the wiring is
-            filtering out.
-          </Note>
+          {isGM && (
+            <Note>
+              Half of a character&apos;s Dampening, rounded down, also comes off their Surge Dice: the Surge the flesh feeds on is the same Pressure the wiring is
+              filtering out.
+            </Note>
+          )}
         </Panel>
       )}
 

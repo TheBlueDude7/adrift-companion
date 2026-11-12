@@ -11,6 +11,9 @@ import { INJURY_BY_CODE, INJURY_LOCATIONS, INJURY_TABLE } from "@/data/injuries"
 import { RULE_UPDATES, type RuleUpdate } from "@/data/rule-updates";
 import { EXPERT_MARGIN, PRACTICED_MARGIN, PROJECT_MARGIN } from "@/data/tasks";
 import { MEDKITS } from "@/lib/actions";
+import { fetchRules } from "@/lib/sync/client";
+import { useGame } from "@/lib/store";
+import { usePerms } from "@/lib/use-perms";
 import { MIND_BREAKS, PRESSURE_STATES, severityFromRoll, STRESS_BANDS } from "@/lib/rules";
 import { cn } from "@/lib/utils";
 import { RuleTable } from "./common";
@@ -109,21 +112,28 @@ function Mark({ text, q }: { text: string; q: string }) {
   return parts.map((p, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-primary/30 text-foreground">{p}</mark> : <Fragment key={i}>{p}</Fragment>));
 }
 
-/** `rulings` are updates approved through the Discord bot that aren't written into the rulebook yet. */
-type RulesData = { markdown: string; rulings: RuleUpdate[] };
+/**
+ * `rulings` are updates approved through the Discord bot that aren't written into the rulebook yet.
+ * `gmUpdates` are the GM's own, which the server sends only to the GM.
+ */
+type RulesData = { markdown: string; rulings: RuleUpdate[]; gmUpdates?: RuleUpdate[] };
 
 export function RulesTab() {
   const [data, setData] = useState<RulesData | null>(null);
   const [error, setError] = useState(false);
+  // Who the server answers depends on the campaign, so a device that joins or leaves one asks again.
+  const code = useGame((s) => s.session?.code);
+  // The GM viewing as a player sees the Rules tab as that player would, without the GM's updates.
+  const { isGM } = usePerms();
 
   useEffect(() => {
-    fetch("/api/rules")
+    fetchRules()
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError(true));
-  }, []);
+  }, [code]);
 
-  const updates = [...RULE_UPDATES, ...(data?.rulings ?? [])];
+  const updates = [...RULE_UPDATES, ...(isGM ? (data?.gmUpdates ?? []) : []), ...(data?.rulings ?? [])];
 
   return (
     <Tabs defaultValue="quick">
