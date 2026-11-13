@@ -351,7 +351,10 @@ function AddModuleDialog({ mech }: { mech: Mech }) {
   const [source, setSource] = useState<ModuleSource>("craft");
   const [expedition, setExpedition] = useState(false);
   const s = mechStats(game, mech);
-  const list = MECH_MODULES.filter((m) => category === "all" || m.category === category);
+  const held = (def: MechModule) => haveInStorage(game, moduleItemName(def));
+  const inHold = MECH_MODULES.filter((m) => held(m) > 0).length;
+  // From the hold means only what's actually in it, rather than the whole catalogue greyed out.
+  const list = MECH_MODULES.filter((m) => (category === "all" || m.category === category) && (source !== "storage" || held(m) > 0));
 
   function install(def: MechModule, from: ModuleSource) {
     act(`Install ${def.name}`, (g) => {
@@ -368,7 +371,14 @@ function AddModuleDialog({ mech }: { mech: Mech }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // A crew with modules waiting in the hold usually means to fit one of those.
+        if (next) setSource(inHold > 0 ? "storage" : "craft");
+        setOpen(next);
+      }}
+    >
       <DialogTrigger render={<Button size="xs" variant="outline"><PlusIcon /> Module</Button>} />
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
@@ -386,10 +396,10 @@ function AddModuleDialog({ mech }: { mech: Mech }) {
             </SelectContent>
           </Select>
           <Select value={source} onValueChange={(v) => setSource(v as ModuleSource)}>
-            <SelectTrigger size="sm" className="w-56"><SelectValue>{source === "craft" ? "Craft it from ship storage" : source === "storage" ? "Use a module from the hold" : "Don't track materials"}</SelectValue></SelectTrigger>
+            <SelectTrigger size="sm" className="w-56"><SelectValue>{source === "craft" ? "Craft it from ship storage" : source === "storage" ? `Only from the hold (${inHold})` : "Don't track materials"}</SelectValue></SelectTrigger>
             <SelectContent>
               <SelectItem value="craft">Craft it from ship storage</SelectItem>
-              <SelectItem value="storage">Use a module from the hold</SelectItem>
+              <SelectItem value="storage">Only from the hold ({inHold})</SelectItem>
               <SelectItem value="untracked">Don&apos;t track materials</SelectItem>
             </SelectContent>
           </Select>
@@ -398,9 +408,14 @@ function AddModuleDialog({ mech }: { mech: Mech }) {
         {expedition && <p className="text-xs text-amber-200/90">Expedition installs take one Expedition Turn and 2 Energy, need a Toolkit, and are Skilled Mechanical Technician or Engineering Tasks at −3d6 without a berth or portable Workshop.</p>}
         <ScrollArea className="h-[55vh] pr-3">
           <div className="grid gap-1.5">
+            {source === "storage" && !list.length && (
+              <p className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
+                {inHold ? "No module in the hold matches this filter." : "There are no mech modules in the hold. Build one with the Fabricate Mech Module task, or pick another source."}
+              </p>
+            )}
             {list.map((def) => {
               const why = moduleBlocker(game, mech, def);
-              const stored = haveInStorage(game, moduleItemName(def));
+              const stored = held(def);
               const short = shortfalls(game, MODULE_RECIPES[def.tier], 1);
               const missing = source === "storage" ? (stored === 0 ? "None in the hold" : null) : source === "craft" && short.length ? `Missing ${short.map((x) => x.name).join(", ")}` : null;
               return (
